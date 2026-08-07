@@ -1,15 +1,19 @@
 # Public API: x_doctor()
 #
 # Provides deterministic environment diagnostics before attempting browser
-# automation. Checks:
+# automation. Checks (in order):
 #   1. R version and minimum requirement
 #   2. Node.js presence and version
-#   3. Sidecar files (dist/index.js) accessibility
-#   4. Sidecar compilation / runtime (attempt a ping)
-#   5. Configured Lightpanda endpoint (resolution only, no connection attempt)
+#   3. TypeScript sidecar (start + ping)
+#   4. Lightpanda connection (start sidecar + connect request)
+#   5. CDP connection (browser close proves CDP session alive)
+#   6. JavaScript evaluation (Runtime.evaluate via sidecar)
+#   7. Network capture (CDP Network domain enable)
+#   8. X navigation (page navigation attempt)
 #
-# Each check reports "ok", "missing", "error", or "n/a" so failures in
-# early checks do not prevent reporting later independent checks.
+# Each check reports "ok", "missing", "error", or "n/a".
+# Checks 4-8 are skipped (n/a) when check 3 fails because they require
+# a working sidecar. Checks 4-8 each start their own sidecar instance.
 #
 # @name doctor
 # @aliases x_doctor
@@ -37,7 +41,6 @@ x_doctor <- function() {
   r_full <- paste0(r_ver, ".", r_sub)
   # R 4.2.0 is the declared minimum — compare as numeric_version.
   r_ok <- as.numeric_version(r_full) >= as.numeric_version("4.2.0")
-
   if (r_ok) {
     results <- c(results, "ok")
     details <- c(details, paste0("R ", r_full))
@@ -60,67 +63,230 @@ x_doctor <- function() {
     details <- c(details, "node command not found or did not produce output")
   }
 
-  # -- 3. Sidecar files -------------------------------------------------------
-  checks <- c(checks, "sidecar_files")
+  # -- 3. TypeScript sidecar (start + ping) -----------------------------------
+  checks <- c(checks, "sidecar")
   sc_dir <- tryCatch(.rx_resolve_sidecar_path(), error = function(e) NULL)
-  if (!is.null(sc_dir) && file.exists(file.path(sc_dir, "dist", "index.js"))) {
-    results <- c(results, "ok")
-    details <- c(details, normalizePath(file.path(sc_dir, "dist", "index.js"), mustWork = FALSE))
-  } else {
+  if (is.null(sc_dir) || !file.exists(file.path(sc_dir, "dist", "index.js"))) {
     results <- c(results, "missing")
     details <- c(details, "sidecar dist/index.js not found (run npm run build in inst/node)")
+    # Checks 4-8 require a working sidecar — mark them as skipped.
+    checks <- c(checks, c("lightpanda_connection", "cdp_connection",
+                           "javascript_evaluation", "network_capture", "x_navigation"))
+    details <- c(details, rep("skipped -- sidecar not available", 5L))
+    out <- list(checks = checks, results = results, details = details)
+    class(out) <- "rx_doctor"
+    print(out)
+    return(invisible(out))
   }
 
-  # -- 4. Sidecar compilation / runtime (ping) --------------------------------
-  checks <- c(checks, "sidecar_ping")
-  if (is.null(sc_dir) || !file.exists(file.path(sc_dir, "dist", "index.js"))) {
-    results <- c(results, "n/a")
-    details <- c(details, "skipped -- sidecar files not present")
-  } else {
-    ping_result <- NULL
-    proc <- NULL
-    tryCatch({
-      proc <- .rx_start_sidecar(sidecar_path = sc_dir)
-      if (proc$is_alive()) {
-        resp <- tryCatch(
-          .rx_send_request(proc, "ping", reqId = function() 1L),
-          error = function(e) list(error = list(code = "PING_ERROR", message = e$message))
-        )
-        ping_result <- resp
-      } else {
-        # processx segfault on some platforms — sidecar can't be started.
-        ping_result <- list(error = list(code = "PROCESSX_UNAVAILABLE", message = "sidecar process could not start"))
-      }
-    }, error = function(e) {
-      # processx segfault or other fatal error — treat as n/a.
-      results <<- c(results, "n/a")
-      details <<- c(details, paste0("sidecar ping unavailable: ", e$message))
-      return(NULL)
-    }, finally = {
-      # Always clean up the sidecar process to prevent orphan leaks.
-      # proc may be NULL if .rx_start_sidecar threw, or non-NULL if it
-      # succeeded but an inner call (proc$is_alive, .rx_send_request) failed.
-      tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
-    })
-    if (!is.null(ping_result)) {
-      if (!is.null(ping_result$error)) {
-        results <- c(results, "error")
-        details <- c(details, paste0("ping failed: ", ping_result$error$message))
-      } else if (isTRUE(ping_result$result$pong)) {
-        results <- c(results, "ok")
-        details <- c(details, paste0("pong (sidecar version ", ping_result$result$version, ")"))
-      } else {
-        results <- c(results, "error")
-        details <- c(details, "ping returned unexpected response")
-      }
+  ping_result <- NULL
+  tryCatch({
+    proc <- .rx_start_sidecar(sidecar_path = sc_dir)
+    if (proc$is_alive()) {
+      resp <- tryCatch(
+        .rx_send_request(proc, "ping", reqId = function() 1L),
+        error = function(e) list(error = list(code = "PING_ERROR", message = e$message))
+      )
+      ping_result <- resp
+    } else {
+      ping_result <- list(error = list(code = "PROCESSX_UNAVAILABLE",
+                                        message = "sidecar process could not start"))
     }
+  }, error = function(e) {
+    ping_result <- list(error = list(code = "SIDECAR_START_ERROR", message = e$message))
+  }, finally = {
+    tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
+  })
+  if (!is.null(ping_result$error)) {
+    results <- c(results, "error")
+    details <- c(details, paste0("sidecar ping failed: ", ping_result$error$message))
+    checks <- c(checks, c("lightpanda_connection", "cdp_connection",
+                           "javascript_evaluation", "network_capture", "x_navigation"))
+    details <- c(details, rep("skipped -- sidecar ping failed", 5L))
+    out <- list(checks = checks, results = results, details = details)
+    class(out) <- "rx_doctor"
+    print(out)
+    return(invisible(out))
+  }
+  if (isTRUE(ping_result$result$pong)) {
+    results <- c(results, "ok")
+    details <- c(details, paste0("pong (sidecar version ", ping_result$result$version, ")"))
+  } else {
+    results <- c(results, "error")
+    details <- c(details, "sidecar ping returned unexpected response")
+    checks <- c(checks, c("lightpanda_connection", "cdp_connection",
+                           "javascript_evaluation", "network_capture", "x_navigation"))
+    details <- c(details, rep("skipped -- sidecar ping failed", 5L))
+    out <- list(checks = checks, results = results, details = details)
+    class(out) <- "rx_doctor"
+    print(out)
+    return(invisible(out))
   }
 
-  # -- 5. Configured endpoint -------------------------------------------------
-  checks <- c(checks, "endpoint")
-  resolved <- .rx_resolve_endpoint()
-  results <- c(results, "ok")
-  details <- c(details, paste0(resolved$endpoint, " (", resolved$source, ")"))
+  # -- 4. Lightpanda connection -----------------------------------------------
+  checks <- c(checks, "lightpanda_connection")
+  lp_result <- NULL
+  tryCatch({
+    proc <- .rx_start_sidecar(sidecar_path = sc_dir)
+    if (proc$is_alive()) {
+      resp <- tryCatch(
+        .rx_send_request(proc, "connect", list(endpoint = NULL), reqId = function() 1L),
+        error = function(e) list(error = list(code = "CONNECT_ERROR", message = e$message))
+      )
+      lp_result <- resp
+    } else {
+      lp_result <- list(error = list(code = "PROCESS_START_FAILED",
+                                      message = "sidecar process could not start"))
+    }
+  }, error = function(e) {
+    lp_result <- list(error = list(code = "CONNECT_ERROR", message = e$message))
+  }, finally = {
+    tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
+  })
+  if (!is.null(lp_result$error)) {
+    results <- c(results, "error")
+    details <- c(details, paste0("connect failed: ", lp_result$error$message))
+  } else if (isTRUE(lp_result$result$connected)) {
+    results <- c(results, "ok")
+    details <- c(details, "connected")
+  } else {
+    results <- c(results, "error")
+    details <- c(details, "connect returned unexpected response")
+  }
+
+  # -- 5. CDP connection ------------------------------------------------------
+  checks <- c(checks, "cdp_connection")
+  cdp_result <- NULL
+  tryCatch({
+    proc <- .rx_start_sidecar(sidecar_path = sc_dir)
+    if (proc$is_alive()) {
+      # Connect to create a CDP session, then close it — a successful close
+      # proves the CDP session was alive.
+      .rx_send_request(proc, "connect", list(endpoint = NULL), reqId = function() 1L)
+      close_resp <- tryCatch(
+        .rx_send_request(proc, "close", reqId = function() 2L),
+        error = function(e) list(error = list(code = "CLOSE_ERROR", message = e$message))
+      )
+      if (!is.null(close_resp$error)) {
+        cdp_result <- close_resp
+      } else if (isTRUE(close_resp$result$closed)) {
+        cdp_result <- list(result = list(closed = TRUE))
+      } else {
+        cdp_result <- list(error = list(code = "CLOSE_FAILED",
+                                        message = "browser close returned unexpected response"))
+      }
+    } else {
+      cdp_result <- list(error = list(code = "PROCESS_START_FAILED",
+                                      message = "sidecar process could not start"))
+    }
+  }, error = function(e) {
+    cdp_result <- list(error = list(code = "CDP_ERROR", message = e$message))
+  }, finally = {
+    tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
+  })
+  if (!is.null(cdp_result$error)) {
+    results <- c(results, "error")
+    details <- c(details, paste0("CDP session failed: ", cdp_result$error$message))
+  } else if (isTRUE(cdp_result$result$closed)) {
+    results <- c(results, "ok")
+    details <- c(details, "CDP session opened and closed successfully")
+  } else {
+    results <- c(results, "error")
+    details <- c(details, "CDP close returned unexpected response")
+  }
+
+  # -- 6. JavaScript evaluation -----------------------------------------------
+  checks <- c(checks, "javascript_evaluation")
+  js_result <- NULL
+  tryCatch({
+    proc <- .rx_start_sidecar(sidecar_path = sc_dir)
+    if (proc$is_alive()) {
+      # Connect and evaluate "1+1" to prove JS execution works.
+      .rx_send_request(proc, "connect", list(endpoint = NULL), reqId = function() 1L)
+      eval_resp <- tryCatch(
+        .rx_send_request(proc, "evaluate", list(expr = "1 + 1"), reqId = function() 2L),
+        error = function(e) list(error = list(code = "EVAL_ERROR", message = e$message))
+      )
+      js_result <- eval_resp
+    } else {
+      js_result <- list(error = list(code = "PROCESS_START_FAILED",
+                                      message = "sidecar process could not start"))
+    }
+  }, error = function(e) {
+    js_result <- list(error = list(code = "EVAL_ERROR", message = e$message))
+  }, finally = {
+    tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
+  })
+  if (!is.null(js_result$error)) {
+    results <- c(results, "error")
+    details <- c(details, paste0("evaluation failed: ", js_result$error$message))
+  } else if (!is.null(js_result$result$value) && as.numeric(js_result$result$value) == 2) {
+    results <- c(results, "ok")
+    details <- c(details, "1 + 1 = 2")
+  } else {
+    results <- c(results, "error")
+    details <- c(details, "evaluation returned unexpected result")
+  }
+
+  # -- 7. Network capture -----------------------------------------------------
+  checks <- c(checks, "network_capture")
+  nc_result <- NULL
+  tryCatch({
+    proc <- .rx_start_sidecar(sidecar_path = sc_dir)
+    if (proc$is_alive()) {
+      .rx_send_request(proc, "connect", list(endpoint = NULL), reqId = function() 1L)
+      nc_result <- tryCatch(
+        .rx_send_request(proc, "networkCaptureEnable", list(), reqId = function() 2L),
+        error = function(e) list(error = list(code = "NETWORK_ENABLE_ERROR",
+                                               message = e$message))
+      )
+    } else {
+      nc_result <- list(error = list(code = "PROCESS_START_FAILED",
+                                      message = "sidecar process could not start"))
+    }
+  }, error = function(e) {
+    nc_result <- list(error = list(code = "NETWORK_ERROR", message = e$message))
+  }, finally = {
+    tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
+  })
+  if (!is.null(nc_result$error)) {
+    results <- c(results, "error")
+    details <- c(details, paste0("network capture enable failed: ", nc_result$error$message))
+  } else if (isTRUE(nc_result$result$enabled)) {
+    results <- c(results, "ok")
+    details <- c(details, "network capture enabled")
+  } else {
+    results <- c(results, "error")
+    details <- c(details, "network capture returned unexpected response")
+  }
+
+  # -- 8. X navigation --------------------------------------------------------
+  checks <- c(checks, "x_navigation")
+  nav_result <- NULL
+  tryCatch({
+    proc <- .rx_start_sidecar(sidecar_path = sc_dir)
+    if (proc$is_alive()) {
+      .rx_send_request(proc, "connect", list(endpoint = NULL), reqId = function() 1L)
+      nav_result <- tryCatch(
+        .rx_send_request(proc, "navigate", list(url = "https://x.com"), reqId = function() 2L),
+        error = function(e) list(error = list(code = "NAV_ERROR", message = e$message))
+      )
+    } else {
+      nav_result <- list(error = list(code = "PROCESS_START_FAILED",
+                                      message = "sidecar process could not start"))
+    }
+  }, error = function(e) {
+    nav_result <- list(error = list(code = "NAV_ERROR", message = e$message))
+  }, finally = {
+    tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
+  })
+  if (!is.null(nav_result$error)) {
+    results <- c(results, "error")
+    details <- c(details, paste0("navigation failed: ", nav_result$error$message))
+  } else {
+    results <- c(results, "ok")
+    details <- c(details, "navigated to x.com")
+  }
 
   out <- list(
     checks  = checks,

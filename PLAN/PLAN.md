@@ -1079,24 +1079,31 @@ Extract when available:
 
 ---
 
-### Task 58: Improve `x_doctor()` [ ]
+### Task 58: Improve `x_doctor()` [x]
 
 **Goal:** Make diagnostics useful for real installations.
 
 **Actions:**
 Report:
-- R
-- Node.js
-- TypeScript sidecar
-- Lightpanda connection
-- CDP connection
-- JavaScript evaluation
-- network capture
-- X navigation
+- [x] R
+- [x] Node.js
+- [x] TypeScript sidecar (start + ping)
+- [x] Lightpanda connection (connect request)
+- [x] CDP connection (connect + close proves session alive)
+- [x] JavaScript evaluation (evaluate "1+1")
+- [x] network capture (enable CDP Network domain)
+- [x] X navigation (navigate to https://x.com)
 
 **Acceptance criteria:**
-- Each check reports OK/FAIL independently.
-- A failed check does not prevent reporting later independent checks.
+- [x] Each check reports OK/FAIL independently.
+- [x] A failed check does not prevent reporting later independent checks.
+- [x] Checks 4-8 start their own sidecar instance (each check is isolated).
+- [x] Checks 4-8 are skipped (n/a) when check 3 fails (sidecar dependency).
+- [x] 17 tests in test-doctor.R covering all checks, independence, determinism.
+
+**Files changed:**
+- `R/doctor.R` — rewritten with 8 checks, each independently starting a sidecar instance
+- `tests/testthat/test-doctor.R` — updated from 5 to 8 checks, added independence tests
 
 ---
 

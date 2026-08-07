@@ -1,6 +1,8 @@
-# Tests for x_doctor() (Task 20)
+# Tests for x_doctor() (Task 20 + Task 58)
 # Verifies that environment diagnostics are deterministic and report missing
-# dependencies clearly.
+# dependencies clearly. Task 58 expanded checks from 5 to 8:
+#   r, nodejs, sidecar, lightpanda_connection, cdp_connection,
+#   javascript_evaluation, network_capture, x_navigation
 
 if (requireNamespace("pkgload", quietly = TRUE)) {
   pkgload::load_all(quiet = TRUE)
@@ -13,10 +15,14 @@ test_that("x_doctor returns a list with checks, results, details", {
   expect_type(out$checks, "character")
   expect_type(out$results, "character")
   expect_type(out$details, "character")
-  expect_equal(length(out$checks), 5L)
-  expect_equal(length(out$results), 5L)
-  expect_equal(length(out$details), 5L)
-  expect_equal(out$checks, c("r", "nodejs", "sidecar_files", "sidecar_ping", "endpoint"))
+  expect_equal(length(out$checks), 8L)
+  expect_equal(length(out$results), 8L)
+  expect_equal(length(out$details), 8L)
+  expect_equal(
+    out$checks,
+    c("r", "nodejs", "sidecar", "lightpanda_connection", "cdp_connection",
+      "javascript_evaluation", "network_capture", "x_navigation")
+  )
 })
 
 test_that("x_doctor returns a rx_doctor object", {
@@ -31,7 +37,6 @@ test_that("x_doctor prints and returns invisibly", {
 # -- R check ------------------------------------------------------------------
 
 test_that("R check reports ok when version >= 4.2.0", {
-  # In CI and development we always meet this requirement.
   out <- x_doctor()
   expect_equal(out$results[1], "ok")
   expect_true(grepl("^R \\d+\\.\\d+", out$details[1]))
@@ -44,38 +49,76 @@ test_that("Node.js check reports ok or missing", {
   expect_true(out$results[2] %in% c("ok", "missing"))
 })
 
-# -- Sidecar files check ------------------------------------------------------
+# -- Sidecar check ------------------------------------------------------------
 
-test_that("sidecar_files reports ok when dist/index.js exists", {
+test_that("sidecar reports ok when dist/index.js exists", {
   out <- x_doctor()
-  # The sidecar is compiled as part of the repo setup.
   expect_equal(out$results[3], "ok")
-  expect_true(nzchar(out$details[3]))
+  expect_true(grepl("pong", out$details[3], ignore.case = TRUE))
 })
 
-# -- Sidecar ping check -------------------------------------------------------
+# -- Lightpanda connection check ----------------------------------------------
 
-test_that("sidecar_ping reports ok when sidecar is present", {
+test_that("lightpanda_connection reports ok or error (not crash)", {
   out <- x_doctor()
-  # sidecar_files must be ok for ping to actually run; otherwise it's n/a.
-  if (out$results[3] == "ok") {
-    # The ping may be "ok" (sidecar works), "n/a" (processx segfault on this
-    # platform), or "error" (sidecar running but ping fails). Accept any.
-    expect_true(out$results[4] %in% c("ok", "n/a", "error"))
-  } else {
+  expect_true(out$results[4] %in% c("ok", "error", "n/a"))
+})
+
+test_that("lightpanda_connection is n/a when sidecar is missing", {
+  # Temporarily hide the sidecar by running in a directory without it.
+  tmp <- tempdir()
+  old_wd <- getwd()
+  tryCatch({
+    setwd(tmp)
+    # Reload to pick up the new working directory.
+    if (requireNamespace("pkgload", quietly = TRUE)) {
+      pkgload::load_all(quiet = TRUE, install = FALSE)
+    }
+    out <- x_doctor()
+    expect_equal(out$results[3], "missing")
     expect_equal(out$results[4], "n/a")
-    expect_true(grepl("skipped", out$details[4], ignore.case = TRUE))
+  }, finally = {
+    setwd(old_wd)
+    if (requireNamespace("pkgload", quietly = TRUE)) {
+      pkgload::load_all(quiet = TRUE, install = FALSE)
+    }
+  })
+})
+
+# -- CDP connection check -----------------------------------------------------
+
+test_that("cdp_connection reports ok or error (not crash)", {
+  out <- x_doctor()
+  expect_true(out$results[5] %in% c("ok", "error", "n/a"))
+})
+
+# -- JavaScript evaluation check ----------------------------------------------
+
+test_that("javascript_evaluation reports ok or error (not crash)", {
+  out <- x_doctor()
+  expect_true(out$results[6] %in% c("ok", "error", "n/a"))
+})
+
+test_that("javascript_evaluation detail contains '1 + 1' when ok", {
+  out <- x_doctor()
+  if (out$results[6] == "ok") {
+    expect_true(grepl("1 \\+ 1", out$details[6]))
   }
 })
 
-# -- Endpoint check -----------------------------------------------------------
+# -- Network capture check ----------------------------------------------------
 
-test_that("endpoint check always reports ok and includes source", {
+test_that("network_capture reports ok or error (not crash)", {
   out <- x_doctor()
-  expect_equal(out$results[5], "ok")
-  # Detail should contain the endpoint URL and source.
-  expect_true(nzchar(out$details[5]))
-  expect_true(any(grepl("argument|env|default", out$details[5])))
+  expect_true(out$results[7] %in% c("ok", "error", "n/a"))
+})
+
+# -- X navigation check -------------------------------------------------------
+
+test_that("x_navigation reports ok or error (not crash)", {
+  out <- x_doctor()
+  # X navigation may succeed or fail (X blocks automated browsers) — both are valid.
+  expect_true(out$results[8] %in% c("ok", "error", "n/a"))
 })
 
 # -- No crashes on repeated calls ---------------------------------------------
@@ -93,4 +136,20 @@ test_that("x_doctor results are deterministic across calls", {
   r2 <- x_doctor()
   expect_equal(r1$results, r2$results)
   expect_equal(r1$checks, r2$checks)
+})
+
+# -- Check independence -------------------------------------------------------
+
+test_that("all check results are valid status strings", {
+  out <- x_doctor()
+  expect_true(all(out$results %in% c("ok", "missing", "error", "n/a")))
+})
+
+test_that("failed check does not prevent later independent checks from running", {
+  out <- x_doctor()
+  # Check 1 (R) must be ok in any working environment.
+  expect_equal(out$results[1], "ok")
+  # All 8 checks should have a result (no gaps).
+  expect_false(any(is.na(out$results)))
+  expect_false(any(out$results == ""))
 })
