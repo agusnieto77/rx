@@ -989,18 +989,26 @@ Add:
 
 ---
 
-### Task 53: Implement minimal `x_user_posts()` extraction [ ]
+### Task 53: Implement minimal `x_user_posts()` extraction [x]
 
 **Goal:** Reuse post parser for user timelines.
 
 **Actions:**
-- Capture structured timeline responses.
-- Reuse canonical parser/normalizer.
-- Support `limit`.
+- [x] Capture structured timeline responses (reuses `.rx_search_extract_from_events()` → `.rx_parse_posts()`).
+- [x] Reuse canonical parser/normalizer (`.rx_normalize_posts()` → `.rx_normalized_to_tibble()` → `.rx_deduplicate_posts()`).
+- [x] Support `limit` (already implemented in `x_user_posts()` via `.rx_deduplicate_posts()` truncation).
+- [x] Create dedicated user timeline fixture (`x-user-timeline-response.json`, 5 tweets from @rstudio).
+- [x] 10 new tests (Tests 13-22 in test-user-posts.R): fixture extraction, canonical schema, unique IDs, engagement metrics, relationship fields, full pipeline mock, empty response, no events, scroll=false, limit enforcement.
 
 **Acceptance criteria:**
-- Function returns the canonical tibble when data is observable.
-- No duplicated parser implementation is introduced.
+- [x] Function returns the canonical tibble when data is observable (Test 18: 5 posts from user timeline fixture).
+- [x] No duplicated parser implementation is introduced (x_user_posts() reuses `.rx_parse_posts()`, `.rx_normalize_posts()`, `.rx_deduplicate_posts()`).
+
+**Files created:**
+- `inst/tests/fixtures/x-user-timeline-response.json` — 5 tweets from @rstudio with engagement metrics, relationship fields (reply), and cursors (10.2 KB)
+
+**Files changed:**
+- `tests/testthat/test-user-posts.R` — added Tests 13-22 (10 new tests covering user timeline extraction)
 
 ---
 

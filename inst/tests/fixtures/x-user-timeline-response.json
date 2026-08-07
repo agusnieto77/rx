@@ -1,0 +1,259 @@
+{
+  "data": {
+    "timeline": {
+      "instructions": [
+        {
+          "type": "TimelineAddEntries",
+          "entries": [
+            {
+              "entryId": "tweet-1800000000000000001",
+              "sortIndex": "1800000000000000001",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1800000000000000001",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMDE=",
+                            "legacy": {
+                              "screen_name": "rstudio",
+                              "name": "RStudio"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Mon Jul 28 10:00:00 +0000 2026",
+                        "full_text": "Announcing the new version of {tidyverse} with improved data frame performance!",
+                        "conversation_id_str": "1800000000000000001",
+                        "reply_count": 24,
+                        "retweet_count": 89,
+                        "favorite_count": 456,
+                        "quote_count": 7,
+                        "bookmark_count": 32,
+                        "views": { "count": "45200" },
+                        "entities": {
+                          "hashtags": [
+                            { "text": "RStats" }
+                          ],
+                          "user_mentions": [],
+                          "urls": [
+                            { "url": "https://t.co/xyz789", "expanded_url": "https://posit.co/blog/tidyverse-new-release" }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "user_timeline", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1800000000000000002",
+              "sortIndex": "1800000000000000002",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1800000000000000002",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMDAy",
+                            "legacy": {
+                              "screen_name": "rstudio",
+                              "name": "RStudio"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Tue Jul 29 14:30:00 +0000 2026",
+                        "full_text": "Join us for the upcoming R Conference 2026. Early bird registration is open!",
+                        "conversation_id_str": "1800000000000000002",
+                        "reply_count": 3,
+                        "retweet_count": 45,
+                        "favorite_count": 178,
+                        "quote_count": 2,
+                        "bookmark_count": 67,
+                        "views": { "count": "32100" },
+                        "entities": {
+                          "hashtags": [
+                            { "text": "RConf2026" },
+                            { "text": "rstudioconf" }
+                          ],
+                          "user_mentions": [],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "user_timeline", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1800000000000000003",
+              "sortIndex": "1800000000000000003",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1800000000000000003",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMDAy",
+                            "legacy": {
+                              "screen_name": "rstudio",
+                              "name": "RStudio"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Wed Jul 30 09:15:00 +0000 2026",
+                        "full_text": "New blog post: Building production-ready Shiny apps with modular architecture.\n\nhttps://t.co/blog123",
+                        "conversation_id_str": "1800000000000000003",
+                        "reply_count": 8,
+                        "retweet_count": 22,
+                        "favorite_count": 95,
+                        "quote_count": 1,
+                        "bookmark_count": 41,
+                        "views": { "count": "18900" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [],
+                          "urls": [
+                            { "url": "https://t.co/blog123", "expanded_url": "https://posit.co/blog/shiny-modular-architecture" }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "user_timeline", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1800000000000000004",
+              "sortIndex": "1800000000000000004",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1800000000000000004",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMDAy",
+                            "legacy": {
+                              "screen_name": "rstudio",
+                              "name": "RStudio"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Thu Jul 31 16:45:00 +0000 2026",
+                        "full_text": "Quick tip: Use {purrr} map functions instead of for loops when transforming lists.\n\nHere is a comparison:",
+                        "conversation_id_str": "1800000000000000004",
+                        "in_reply_to_status_id_str": "1800000000000000003",
+                        "reply_count": 15,
+                        "retweet_count": 67,
+                        "favorite_count": 312,
+                        "quote_count": 4,
+                        "bookmark_count": 88,
+                        "views": { "count": "52400" },
+                        "entities": {
+                          "hashtags": [
+                            { "text": "RStats" },
+                            { "text": "purrr" }
+                          ],
+                          "user_mentions": [],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "user_timeline", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1800000000000000005",
+              "sortIndex": "1800000000000000005",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1800000000000000005",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMDAy",
+                            "legacy": {
+                              "screen_name": "rstudio",
+                              "name": "RStudio"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Fri Aug 01 11:00:00 +0000 2026",
+                        "full_text": "Happy Friday! What are you building with R this weekend?",
+                        "conversation_id_str": "1800000000000000005",
+                        "reply_count": 42,
+                        "retweet_count": 12,
+                        "favorite_count": 201,
+                        "quote_count": 18,
+                        "bookmark_count": 5,
+                        "views": { "count": "27800" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "user_timeline", "section": "timeline" }
+              }
+            }
+          ]
+        },
+        {
+          "type": "TimelineAddToModule",
+          "moduleItems": [
+            {
+              "entryId": "cursor-bottom-1800000000000000005",
+              "item": {
+                "content": {
+                  "cursorType": "Bottom",
+                  "value": "TCaAgICwlb6rsKwKFAgAEg8IABIACAIC"
+                }
+              }
+            },
+            {
+              "entryId": "cursor-top-1800000000000000000",
+              "item": {
+                "content": {
+                  "cursorType": "Top",
+                  "value": "TCaAgICwlb6rsKwKFAgAEg8IABIACAAD"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
