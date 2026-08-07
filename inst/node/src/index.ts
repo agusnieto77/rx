@@ -78,7 +78,6 @@ function handleClose(id: unknown): void {
   connecting = false;
 
   if (cdpConnection === null || !cdpConnection.isConnected) {
-    cdpConnection?.close();
     cdpConnection = null;
     cdpEndpointUrl = null;
     respond(id, { closed: false, reason: "not_connected" });
@@ -142,52 +141,35 @@ function handleConnect(id: unknown, params?: unknown): void {
     return;
   }
 
+  // Validate params: must be null, undefined, or an object (not a non-empty array).
+  // R NULL serialises as {}, so allow both null and empty objects.
+  const isInvalidParams = params === undefined || params === null
+    ? false
+    : typeof params !== "object"
+      || (Array.isArray(params) && params.length > 0);
+  if (isInvalidParams) {
+    respondError(id, "INVALID_REQUEST", "params must be a JSON object or omitted");
+    return;
+  }
+
   let endpointUrl: string | undefined;
   if (typeof params === "object" && params !== null) {
     const p = params as Record<string, unknown>;
-    // Reject endpoint values that look like caller typos (e.g. {endpoint:{a:1}},
-    // {endpoint:["ws://..."]}) — null, undefined, {}, and [] are valid "not
-    // provided" values (R NULL serialises as {}).
     const ep = p.endpoint;
-    if (
-      typeof ep !== "string" &&
-      ep !== null &&
-      ep !== undefined &&
-      !(typeof ep === "object" && Object.keys(ep).length === 0) &&
-      !(Array.isArray(ep) && ep.length === 0)
-    ) {
-      respondError(id, "INVALID_REQUEST", "endpoint must be a string");
-      return;
-    }
-    if (typeof p.endpoint === "string" && p.endpoint.length > 0) {
-      endpointUrl = p.endpoint;
+
+    // endpoint must be a non-empty string, or absent/nullish.
+    if (typeof ep === "string" && ep.length > 0) {
       // Validate endpoint to prevent SSRF — only allow ws: and wss: schemes.
-      if (!isValidWsUrl(endpointUrl)) {
+      if (!isValidWsUrl(ep)) {
         respondError(id, "INVALID_REQUEST", "endpoint must be a ws: or wss: URL");
         return;
       }
-    } else if ("endpoint" in p) {
-      // endpoint key present but not a string.
-      // null, undefined, {}, [] are all valid "not provided" (R NULL serialises as {}).
-      // Reject non-null primitives like 123 or true — they mask caller typos.
-      if (p.endpoint != null && typeof p.endpoint !== "object") {
-        respondError(id, "INVALID_REQUEST", "endpoint must be a string");
-        return;
-      }
-      // null, undefined, {}, [] → treat as "not provided", fall through to default.
+      endpointUrl = ep;
+    } else if (ep !== undefined && ep !== null) {
+      // Non-string, non-nullish endpoint value — caller typo.
+      respondError(id, "INVALID_REQUEST", "endpoint must be a string");
+      return;
     }
-  }
-
-  // Reject non-object, non-null params — they bypass all validation.
-  if (params !== undefined && params !== null && typeof params !== "object") {
-    respondError(id, "INVALID_REQUEST", "params must be a JSON object or omitted");
-    return;
-  }
-
-  // Reject non-empty arrays — only plain objects (or null/undefined/empty) are valid.
-  if (Array.isArray(params) && params.length > 0) {
-    respondError(id, "INVALID_REQUEST", "params must be a JSON object or omitted");
-    return;
   }
 
   if (!endpointUrl) {

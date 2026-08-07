@@ -43,33 +43,14 @@ NULL
 #
 # Request IDs are monotonic integers to prevent collisions between
 # consecutive calls with the same method name.
-#
-# Response buffer — stores unmatched responses from the sidecar's stdout
-# so that rapid fire-and-forget sequences (e.g. connect immediately followed
-# by close) don't lose the non-matching response in a shared poll batch.
-# Each entry is a list(id = ..., parsed = ...).
-# Bounded to MAX_ENTRIES entries; oldest are evicted first to prevent unbounded
-# growth from orphaned responses (e.g. stale sidecar messages).
-.rx_response_buffer <- new.env(parent = emptyenv())
-.rx_response_buffer$max_entries <- 50L
-.rx_response_buffer$items <- list()
-
-.rx_response_buffer$trim <- function() {
-  while (length(.rx_response_buffer$items) > .rx_response_buffer$max_entries) {
-    .rx_response_buffer$items <- .rx_response_buffer$items[-1]
-  }
-}
 
 #' Start the TypeScript sidecar process.
 #'
+#' @param sidecar_path Optional explicit path to the sidecar directory.
+#' @param reqId A function returning the next request ID (per-backend counter).
 #' @return A `processx::process` object representing the running sidecar.
 #' @noRd
-.rx_request_id <- new.env(parent = emptyenv())
-# Use numeric (double) instead of integer to avoid overflow at 2^31-1.
-.rx_request_id$value <- 0
-
-#' @noRd
-.rx_start_sidecar <- function(sidecar_path = NULL) {
+.rx_start_sidecar <- function(sidecar_path = NULL, reqId = NULL) {
   sidecar_dir <- .rx_resolve_sidecar_path(sidecar_path)
 
   if (is.null(sidecar_dir)) {
@@ -149,11 +130,11 @@ NULL
 #' @param proc A `processx::process` object (the running sidecar).
 #' @param method Character string, the method name (e.g. `"ping"`).
 #' @param params Optional list, the request parameters.
+#' @param reqId A function returning the next request ID (per-backend counter).
 #' @return A list with either `$result` (success) or `$error` (failure).
 #' @noRd
-.rx_send_request <- function(proc, method, params = NULL) {
-  .rx_request_id$value <- .rx_request_id$value + 1
-  id <- .rx_request_id$value
+.rx_send_request <- function(proc, method, params = NULL, reqId = NULL) {
+  id <- if (!is.null(reqId)) reqId() else 1L
 
   if (!proc$is_alive()) {
     stop("Sidecar process is not running.", call. = FALSE)
@@ -171,19 +152,7 @@ NULL
   }
 
   # Read the response line from stdout, matching by request `id`.
-  # This is important because async handlers (connect, navigate, evaluate)
-  # may send responses out of order relative to the request dispatch.
   # Timeout after 30 seconds.
-  # Check the buffered responses before reading new output.
-  for (i in seq_along(.rx_response_buffer$items)) {
-    buf_entry <- .rx_response_buffer$items[[i]]
-    if (isTRUE(buf_entry$id == id)) {
-      # Remove from buffer and return.
-      .rx_response_buffer$items <- .rx_response_buffer$items[-i]
-      return(buf_entry$parsed)
-    }
-  }
-
   timeout <- 30
   start <- Sys.time()
   while (Sys.time() - start < timeout) {
@@ -201,18 +170,6 @@ NULL
           )
           if (!is.null(parsed) && isTRUE(parsed$id == id)) {
             return(parsed)
-          }
-          # Store unmatched responses in the buffer for future requests.
-          # This prevents rapid fire-and-forget sequences from losing responses.
-          # Skip entries with NULL id (e.g., PARSE_ERROR from sidecar's
-          # respondError(null, ...)) — they can never match a real request
-          # and would cause unbounded buffer growth if buffered.
-          if (!is.null(parsed) && !is.null(parsed$id)) {
-            .rx_response_buffer$items <- append(
-              .rx_response_buffer$items,
-              list(list(id = parsed$id, parsed = parsed))
-            )
-            .rx_response_buffer$trim()
           }
         }
       }

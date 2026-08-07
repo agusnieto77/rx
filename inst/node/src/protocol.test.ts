@@ -73,7 +73,7 @@ function sendRequest(
   params?: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
-    const id = method;
+    const id = ++testId;
     const req = JSON.stringify({ id, method, ...(params ? { params } : {}) });
     if (proc.stdin) proc.stdin.write(req + "\n");
 
@@ -109,7 +109,7 @@ describe("sidecar protocol", () => {
     const { proc: p } = await startSidecar();
     proc = p;
     const resp = await sendRequest(p, "ping");
-    assert.strictEqual(resp.id, "ping");
+    assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.result as { pong: boolean }).pong, true);
     assert.strictEqual(typeof (resp.result as { version: string }).version, "string");
   });
@@ -117,7 +117,7 @@ describe("sidecar protocol", () => {
   it("unknown method returns structured error", async () => {
     const { proc: p } = await startSidecar();
     const resp = await sendRequest(p, "nonexistent_method");
-    assert.strictEqual(resp.id, "nonexistent_method");
+    assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "UNKNOWN_METHOD");
     assert.strictEqual(typeof (resp.error as { message: string }).message, "string");
   });
@@ -146,14 +146,14 @@ describe("sidecar protocol", () => {
   it("request with params echoes in result", async () => {
     const { proc: p } = await startSidecar();
     const resp = await sendRequest(p, "ping", { extra: "data" });
-    assert.strictEqual(resp.id, "ping");
+    assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.result as { pong: boolean }).pong, true);
   });
 
   it("connect to unreachable endpoint returns LPD_CONNECTION_ERROR", async () => {
     const { proc: p } = await startSidecar();
     const resp = await sendRequest(p, "connect", { endpoint: "ws://127.0.0.1:1" });
-    assert.strictEqual(resp.id, "connect");
+    assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "LPD_CONNECTION_ERROR");
     assert.strictEqual(typeof (resp.error as { message: string }).message, "string");
     assert.ok((resp.error as { message: string }).message.includes("Failed to connect to CDP endpoint"));
@@ -162,21 +162,28 @@ describe("sidecar protocol", () => {
   it("connect with no endpoint falls back to default and returns LPD_CONNECTION_ERROR", async () => {
     const { proc: p } = await startSidecar();
     const resp = await sendRequest(p, "connect", {});
-    assert.strictEqual(resp.id, "connect");
+    assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "LPD_CONNECTION_ERROR");
   });
 
-  it("connect with invalid endpoint format returns LPD_CONNECTION_ERROR", async () => {
+  it("connect with invalid endpoint format returns INVALID_REQUEST", async () => {
     const { proc: p } = await startSidecar();
     const resp = await sendRequest(p, "connect", { endpoint: "not-a-url" });
-    assert.strictEqual(resp.id, "connect");
-    assert.strictEqual((resp.error as { code: string }).code, "LPD_CONNECTION_ERROR");
+    assert.strictEqual(typeof resp.id, "number");
+    assert.strictEqual((resp.error as { code: string }).code, "INVALID_REQUEST");
+  });
+
+  it("connect with non-string non-null endpoint returns INVALID_REQUEST", async () => {
+    const { proc: p } = await startSidecar();
+    const resp = await sendRequest(p, "connect", { endpoint: 123 });
+    assert.strictEqual(typeof resp.id, "number");
+    assert.strictEqual((resp.error as { code: string }).code, "INVALID_REQUEST");
   });
 
   it("close when not connected returns not_connected", async () => {
     const { proc: p } = await startSidecar();
     const resp = await sendRequest(p, "close");
-    assert.strictEqual(resp.id, "close");
+    assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.result as { closed: boolean }).closed, false);
     assert.strictEqual((resp.result as { reason: string }).reason, "not_connected");
   });
@@ -201,14 +208,14 @@ describe("sidecar protocol", () => {
     assert.strictEqual((connectResp.error as { code: string }).code, "LPD_CONNECTION_ERROR");
     // Close after failed connect — should be safe (not_connected).
     const closeResp = await sendRequest(p, "close");
-    assert.strictEqual(closeResp.id, "close");
+    assert.strictEqual(typeof closeResp.id, "number");
     assert.strictEqual((closeResp.result as { closed: boolean }).closed, false);
   });
 
   it("navigate without connection returns PAGE_LOAD_ERROR", async () => {
     const { proc: p } = await startSidecar();
     const resp = await sendRequest(p, "navigate", { url: "http://example.com" });
-    assert.strictEqual(resp.id, "navigate");
+    assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "PAGE_LOAD_ERROR");
     assert.ok((resp.error as { message: string }).message.includes("CDP connection not active"));
   });
@@ -216,14 +223,14 @@ describe("sidecar protocol", () => {
   it("navigate with missing url returns INVALID_REQUEST", async () => {
     const { proc: p } = await startSidecar();
     const resp = await sendRequest(p, "navigate", {});
-    assert.strictEqual(resp.id, "navigate");
+    assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "INVALID_REQUEST");
   });
 
   it("evaluate without connection returns CDP_ERROR", async () => {
     const { proc: p } = await startSidecar();
     const resp = await sendRequest(p, "evaluate", { expr: "1+1" });
-    assert.strictEqual(resp.id, "evaluate");
+    assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "CDP_ERROR");
     assert.ok((resp.error as { message: string }).message.includes("CDP connection not active"));
   });
@@ -231,21 +238,21 @@ describe("sidecar protocol", () => {
   it("evaluate with missing expr returns INVALID_REQUEST", async () => {
     const { proc: p } = await startSidecar();
     const resp = await sendRequest(p, "evaluate", {});
-    assert.strictEqual(resp.id, "evaluate");
+    assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "INVALID_REQUEST");
   });
 
   it("navigate with empty url returns INVALID_REQUEST", async () => {
     const { proc: p } = await startSidecar();
     const resp = await sendRequest(p, "navigate", { url: "" });
-    assert.strictEqual(resp.id, "navigate");
+    assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "INVALID_REQUEST");
   });
 
   it("evaluate with empty expr returns INVALID_REQUEST", async () => {
     const { proc: p } = await startSidecar();
     const resp = await sendRequest(p, "evaluate", { expr: "" });
-    assert.strictEqual(resp.id, "evaluate");
+    assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "INVALID_REQUEST");
   });
 });

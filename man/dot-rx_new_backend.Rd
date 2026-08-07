@@ -12,7 +12,7 @@ directory (the one containing \code{dist/index.js}). If \code{NULL}, the
 installed package's sidecar is used.}
 }
 \value{
-A list with \verb{$connected} (logical) and the four contract methods.
+An environment with \verb{$connected} (logical) and the four contract methods.
 }
 \description{
 Create a backend object that manages the sidecar process and provides browser

@@ -13,20 +13,16 @@ if (tolower(Sys.getenv("SKIP_PROTOCOL_TESTS", unset = "false")) == "true") {
 # is installed so `system.file` works. During `devtools::test` we
 # point to the source tree's `inst/node/`.
 .sidecar_path <- function() {
-  dev_path <- file.path(dirname(dirname(getwd())), "inst", "node")
-  if (file.exists(file.path(dev_path, "dist", "index.js"))) {
-    return(dev_path)
-  }
-  system.file("node", package = "xtweetsR")
+  xtweetsR:::.rx_resolve_sidecar_path()
 }
 
 # Try to start the sidecar. Returns NULL if it cannot start (e.g.
 # processx segfaults on this platform).  Tests that need the sidecar
 # call `skip_if_no_sidecar()` first.
-.try_start_sidecar <- function() {
+.try_start_sidecar <- function(reqId = NULL) {
   tryCatch(
     {
-      p <- xtweetsR:::.rx_start_sidecar(sidecar_path = .sidecar_path())
+      p <- xtweetsR:::.rx_start_sidecar(sidecar_path = .sidecar_path(), reqId = reqId)
       if (p$is_alive()) {
         return(p)
       }
@@ -47,16 +43,23 @@ if (tolower(Sys.getenv("SKIP_PROTOCOL_TESTS", unset = "false")) == "true") {
   invisible(proc)
 }
 
+# Create a per-test request ID counter so tests don't share global state.
+.make_req_id <- function() {
+  count <- 0L
+  function() {
+    count <<- count + 1L
+    count
+  }
+}
+
 # --- Test 1: valid ping request ---
 test_that("valid ping request returns expected response", {
-  proc <- .try_start_sidecar()
+  reqId <- .make_req_id()
+  proc <- .try_start_sidecar(reqId = reqId)
   testthat::skip_if(is.null(proc), "sidecar process cannot start")
   on.exit(xtweetsR:::.rx_stop_sidecar(proc))
 
-  # Capture the request ID before sending so we can verify the echo.
-  pre_id <- xtweetsR:::.rx_request_id$value
-
-  resp <- xtweetsR:::.rx_send_request(proc, "ping")
+  resp <- xtweetsR:::.rx_send_request(proc, "ping", reqId = reqId)
 
   testthat::expect_true(
     is.list(resp),
@@ -74,21 +77,20 @@ test_that("valid ping request returns expected response", {
     is.character(resp$result$version),
     info = "result.version is a character string"
   )
-
-  # id should be echoed back
   testthat::expect_equal(
-    resp$id, as.numeric(pre_id + 1L),
+    resp$id, 1L,
     info = "id is echoed back"
   )
 })
 
 # --- Test 2: unknown method returns structured error ---
 test_that("unknown method returns structured error", {
-  proc <- .try_start_sidecar()
+  reqId <- .make_req_id()
+  proc <- .try_start_sidecar(reqId = reqId)
   testthat::skip_if(is.null(proc), "sidecar process cannot start")
   on.exit(xtweetsR:::.rx_stop_sidecar(proc))
 
-  resp <- xtweetsR:::.rx_send_request(proc, "nonexistent_method")
+  resp <- xtweetsR:::.rx_send_request(proc, "nonexistent_method", reqId = reqId)
 
   testthat::expect_true(
     is.list(resp),
@@ -198,7 +200,8 @@ test_that("close_browser when not connected returns not_connected", {
 
 # --- Test 6: browser close twice is safe ---
 test_that("close_browser twice does not crash the sidecar", {
-  proc <- .try_start_sidecar()
+  reqId <- .make_req_id()
+  proc <- .try_start_sidecar(reqId = reqId)
   testthat::skip_if(is.null(proc), "sidecar process cannot start")
   on.exit(xtweetsR:::.rx_stop_sidecar(proc))
 
@@ -211,7 +214,7 @@ test_that("close_browser twice does not crash the sidecar", {
   testthat::expect_false(r2$closed, info = "second close returns closed=FALSE")
 
   # Sidecar is still alive and responsive.
-  ping_resp <- xtweetsR:::.rx_send_request(proc, "ping")
+  ping_resp <- xtweetsR:::.rx_send_request(proc, "ping", reqId = reqId)
   testthat::expect_true(
     ping_resp$result$pong == TRUE,
     info = "sidecar is still responsive after two closes"
@@ -220,13 +223,14 @@ test_that("close_browser twice does not crash the sidecar", {
 
 # --- Test 7: browser close after failed connect ---
 test_that("close_browser after failed connect is safe", {
-  proc <- .try_start_sidecar()
+  reqId <- .make_req_id()
+  proc <- .try_start_sidecar(reqId = reqId)
   testthat::skip_if(is.null(proc), "sidecar process cannot start")
   on.exit(xtweetsR:::.rx_stop_sidecar(proc))
 
   # Attempt to connect to an unreachable endpoint.
   # This returns an error because no server is listening.
-  conn_resp <- xtweetsR:::.rx_send_request(proc, "connect", list(endpoint = "ws://127.0.0.1:1"))
+  conn_resp <- xtweetsR:::.rx_send_request(proc, "connect", list(endpoint = "ws://127.0.0.1:1"), reqId = reqId)
 
   testthat::expect_true(
     !is.null(conn_resp$error),

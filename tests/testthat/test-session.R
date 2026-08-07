@@ -137,3 +137,73 @@ test_that("x_close(NULL) returns invisibly without error", {
   result <- xtweetsR::x_close(NULL)
   testthat::expect_null(result)
 })
+
+# --- Test 10: x_session() → x_close() succeeds end-to-end ---
+test_that("x_session() then x_close() completes without error", {
+  sess <- .try_create_session()
+  testthat::expect_true(isTRUE(sess$connected))
+
+  result <- xtweetsR::x_close(sess)
+  testthat::expect_null(result)
+  testthat::expect_false(sess$connected)
+})
+
+# --- Test 11: x_close() is idempotent (repeated calls do not crash) ---
+test_that("x_close() can be called multiple times safely", {
+  sess <- .try_create_session()
+
+  # First close via x_close.
+  xtweetsR::x_close(sess)
+  testthat::expect_false(sess$connected)
+
+  # Second close — should not error.
+  r2 <- xtweetsR::x_close(sess)
+  testthat::expect_null(r2)
+
+  # Third close — still safe.
+  r3 <- xtweetsR::x_close(sess)
+  testthat::expect_null(r3)
+})
+
+# --- Test 12: x_close() leaves no child process ---
+test_that("x_close() terminates the sidecar process", {
+  sess <- .try_create_session()
+  proc <- sess$backend$.proc
+  testthat::expect_true(!is.null(proc))
+  testthat::expect_true(proc$is_alive())
+
+  xtweetsR::x_close(sess)
+
+  # Give the process a moment to terminate.
+  Sys.sleep(0.2)
+  testthat::expect_false(
+    proc$is_alive(),
+    info = "sidecar process should be dead after x_close()"
+  )
+})
+
+# --- Test 13: x_close() on a session already closed via $close() ---
+test_that("x_close() on an already-closed session is safe", {
+  sess <- .try_create_session()
+
+  # Close via the session's own $close() method.
+  sess$close()
+  testthat::expect_false(sess$connected)
+
+  # Now call x_close — should not error.
+  result <- xtweetsR::x_close(sess)
+  testthat::expect_null(result)
+  testthat::expect_false(sess$connected)
+})
+
+# --- Test 14: x_close() on a session with NULL backend ---
+test_that("x_close() on a session with NULL backend returns invisibly", {
+  sess <- .try_create_session()
+  sess$close()
+
+  # Manually set backend to NULL (simulates double-close state).
+  sess$backend <- NULL
+
+  result <- xtweetsR::x_close(sess)
+  testthat::expect_null(result)
+})

@@ -5,4 +5,4 @@
 ^\.gitignore$
 ^xtweetsR_.*\.tar\.gz$
 ^.*\.Rproj$
-^inst/node/node_modules$
+^inst/node/node_modules/

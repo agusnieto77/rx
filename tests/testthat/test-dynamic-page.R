@@ -81,8 +81,8 @@ test_that("test server serves the dynamic fixture with 200", {
     info = "fixture directory exists"
   )
 
-  # Start the server on a random high port.
-  port <- 19876L
+  # Start the server on a random high port to avoid collisions.
+  port <- sample(20000:65535, 1)
   proc <- processx::process$new(
     command = "node",
     args    = c(server_script, fixture_dir, as.character(port)),
@@ -173,7 +173,7 @@ test_that("dynamically inserted DOM content is observable after load", {
     "inst", "tests", "fixtures"
   )
 
-  port <- 19877L
+  port <- sample(20000:65535, 1)
   server_proc <- processx::process$new(
     command = "node",
     args    = c(server_script, fixture_dir, as.character(port)),

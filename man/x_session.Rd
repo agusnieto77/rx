@@ -24,26 +24,24 @@ the installed package's sidecar is used.}
 \item{...}{Ignored.}
 }
 \value{
-A list with class \code{"xtweetsR_session"} containing:
+An environment with class \code{"xtweetsR_session"} containing:
 \itemize{
 \item \code{backend} - the backend object
 \item \code{endpoint} - the resolved endpoint URL
 \item \code{connected} - logical, whether connected
 \item \code{close} - method to clean up resources
 }
-The object has a \code{print} method that displays backend and
-connection status.
 }
 \description{
-Close the session, releasing all resources.
-
-Displays the backend type, resolved endpoint, and connection status.
-}
-\details{
 Starts the TypeScript sidecar process, resolves the Lightpanda CDP
 endpoint, and connects the backend. Returns a session object that
 holds the connection state and provides a \code{close()} method for
 cleanup.
+}
+\details{
+The returned session object has a \code{close()} method to release all
+resources, and a \code{print} method that displays backend type,
+resolved endpoint, and connection status.
 }
 \examples{
 \dontrun{
@@ -52,6 +50,5 @@ cleanup.
   # ... use the session ...
   sess$close()
 }
-
 }
 \keyword{internal}

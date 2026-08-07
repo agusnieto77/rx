@@ -1,5 +1,6 @@
 .env
 inst/node/node_modules/
+inst/node/dist/
 .ralphex/
 inst/secrets.env
 *.rds
@@ -7,3 +8,4 @@ inst/secrets.env
 .Rproj.user
 .rvc/
 *.tar.gz
+.Rcheck/

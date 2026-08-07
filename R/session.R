@@ -27,7 +27,7 @@
 #'   directory (the one containing \code{dist/index.js}). If \code{NULL},
 #'   the installed package's sidecar is used.
 #'
-#' @return A list with class \code{"xtweetsR_session"} containing:
+#' @return An environment with class \code{"xtweetsR_session"} containing:
 #'   \itemize{
 #'     \item \code{backend} - the backend object
 #'     \item \code{endpoint} - the resolved endpoint URL
@@ -35,7 +35,7 @@
 #'     \item \code{close} - method to clean up resources
 #'   }
 #'   The object has a \code{print} method that displays backend and
-#'   connection status.
+#'   connection status, and a \code{close} method to clean up resources.
 #'
 #' @examples
 #' \dontrun{
@@ -58,23 +58,35 @@ x_session <- function(endpoint = NULL, sidecar_path = NULL) {
   backend$connect(endpoint = resolved$endpoint)
 
   # Build the session object.
-  session <- list(
-    backend    = backend,
-    endpoint   = resolved$endpoint,
-    connected  = backend$connected,
+  # Use an environment so that $<- mutations inside close() propagate to the
+  # caller-visible reference. A list would copy-on-modify and the caller's
+  # sess$backend / sess$connected would never change after close().
+  session <- new.env(parent = emptyenv())
+  session$backend <- backend
+  session$endpoint <- resolved$endpoint
+  session$connected <- backend$connected
 
-    #' @description Close the session, releasing all resources.
-    close = function() {
-      if (is.null(session$backend)) {
-        return(invisible(NULL))
-      }
-      session$backend$close()
-      session$backend <- NULL
-      session$connected <- FALSE
-      invisible(NULL)
+  # Attach a finalizer to catch the case where the user's R session exits
+  # without calling session$close() — this prevents orphaned sidecar processes.
+  finalizer <- function(env) {
+    if (!is.null(env$backend) && !is.null(env$backend$close)) {
+      tryCatch(env$backend$close(), error = function(e) NULL)
     }
-  )
+  }
+  reg.finalizer(session, finalizer, onexit = TRUE)
 
+  session$close <- function() {
+    if (is.null(session$backend)) {
+      return(invisible(NULL))
+    }
+    session$backend$close()
+    session$backend <- NULL
+    session$connected <- FALSE
+    invisible(NULL)
+  }
+
+  # Attach class for print method dispatch.
+  # session is an env, so we set the class on the underlying environment.
   class(session) <- "xtweetsR_session"
   session
 }
@@ -98,6 +110,9 @@ x_session <- function(endpoint = NULL, sidecar_path = NULL) {
 #'
 #' @export
 x_close <- function(session) {
+  if (is.null(session)) {
+    return(invisible(NULL))
+  }
   if (is.null(session$backend)) {
     return(invisible(NULL))
   }
@@ -113,7 +128,6 @@ x_close <- function(session) {
 #' @param ... Ignored.
 #'
 #' @exportS3Method base::print
-#' @rdname x_session
 #' @keywords internal
 print.xtweetsR_session <- function(x, ...) {
   cat("<xtweetsR_session>\n")

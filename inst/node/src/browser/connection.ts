@@ -39,10 +39,15 @@ export class DefaultCdpConnection {
   private pending = new Map<number, { resolve: (v: Record<string, unknown>) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private eventListeners = new Map<string, Set<(params: Record<string, unknown>) => void>>();
   private _isConnected = false;
-  private commandTimeoutMs = 15_000;
+  private commandTimeoutMs = 30_000;
+  // Rejected when close() is called while connect() is still pending.
+  private connectReject: ((e: Error) => void) | null = null;
+  // Guard to prevent double-dispatch of "close" events (close() dispatches
+  // listeners, then ws.close() triggers the same "close" event).
+  private dispatchingClose = false;
 
   constructor() {
-    // No options parameter — the timeout is a fixed default.
+    // Timeout is fixed at 30 seconds to match NAVIGATE_TIMEOUT_MS in index.ts.
   }
 
   get isConnected(): boolean {
@@ -57,19 +62,30 @@ export class DefaultCdpConnection {
     }
 
     return new Promise((resolve, reject) => {
+      // Track this reject so close() can abort a pending connect() immediately.
+      this.connectReject = reject;
+
       try {
         const ws = new WebSocket(endpointUrl);
         this.ws = ws;
 
         const timeout = setTimeout(() => {
+          // Null connectReject so close() / ws.on("close") know connect has
+          // already been resolved (one way or another).
+          this.connectReject = null;
           if (this.ws !== null) {
-            this.ws.close();
+            try {
+              this.ws.close();
+            } catch {
+              // WebSocket may already be closing/closed — safe to ignore.
+            }
           }
           reject(new Error(`CDP connection timeout after 30s to ${endpointUrl}`));
         }, 30_000);
 
         ws.on("open", () => {
           clearTimeout(timeout);
+          this.connectReject = null;
           this._isConnected = true;
           log("info", "CDP connected to", endpointUrl);
           resolve();
@@ -80,8 +96,15 @@ export class DefaultCdpConnection {
         });
 
         ws.on("error", (err: Error) => {
+          clearTimeout(timeout);
+          this.connectReject = null;
           // Only reject if we haven't already resolved.
           if (this.ws !== null && !this._isConnected) {
+            try {
+              this.ws.close();
+            } catch {
+              // WebSocket may already be closing/closed — safe to ignore.
+            }
             reject(new Error(`CDP WebSocket error: ${err.message}`));
           }
         });
@@ -90,14 +113,36 @@ export class DefaultCdpConnection {
           this._isConnected = false;
           const msg = `CDP connection closed (code=${code}, reason=${reason.toString()})`;
           log("warn", msg);
+          // If connect() is still pending (no open/error yet), reject it now
+          // so callers don't wait for the full 30s timeout.
+          if (this.ws === ws && this.connectReject !== null) {
+            clearTimeout(timeout);
+            this.connectReject(new Error("Connection closed before handshake completed"));
+            this.connectReject = null;
+          }
           // Reject all pending commands.
           for (const [id, { reject, timer }] of this.pending) {
             clearTimeout(timer);
             reject(new Error(msg));
           }
           this.pending.clear();
+          // Dispatch "close" event listeners so callers (e.g. navPromise)
+          // that registered conn.on("close", ...) are notified immediately.
+          // Guard prevents double dispatch when close() already dispatched
+          // and ws.close() triggers the same "close" event.
+          if (this.dispatchingClose) return;
+          this.dispatchingClose = true;
+          for (const fn of this.eventListeners.get("close") ?? []) {
+            try {
+              fn({});
+            } catch {
+              // Listener errors should not kill the connection.
+            }
+          }
+          this.dispatchingClose = false;
         });
       } catch (err) {
+        this.connectReject = null;
         reject(new Error(`Failed to create CDP WebSocket: ${(err as Error).message}`));
       }
     });
@@ -155,13 +200,35 @@ export class DefaultCdpConnection {
   close(): void {
     if (this.ws !== null) {
       const wasConnected = this._isConnected;
+      // Reject the connect promise if a connect() is still pending.
+      if (this.connectReject !== null) {
+        this.connectReject(new Error("Connection closed before handshake completed"));
+        this.connectReject = null;
+      }
       // Reject all pending commands.
       for (const [, { reject, timer }] of this.pending) {
         clearTimeout(timer);
         reject(new Error("Connection closed"));
       }
       this.pending.clear();
-      this.ws.close();
+      // Dispatch "close" event listeners so callers (e.g. navPromise)
+      // that registered conn.on("close", ...) are notified immediately.
+      // Set guard before dispatch to prevent double-dispatch: close() dispatches,
+      // then ws.close() triggers the same "close" event.
+      this.dispatchingClose = true;
+      for (const fn of this.eventListeners.get("close") ?? []) {
+        try {
+          fn({});
+        } catch {
+          // Listener errors should not kill the connection.
+        }
+      }
+      this.dispatchingClose = false;
+      try {
+        this.ws.close();
+      } catch {
+        // WebSocket may already be closing/closed — safe to ignore.
+      }
       this.ws = null;
       this._isConnected = false;
       if (wasConnected) {

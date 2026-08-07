@@ -23,7 +23,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 1: Inspect the repository [x]
+### Task 1: Inspect the repository [DONE]
 
 **Goal:** Determine the current repository state before changing anything.
 
@@ -46,7 +46,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 2: Initialize the R package skeleton [x]
+### Task 2: Initialize the R package skeleton [DONE]
 
 **Goal:** Ensure the repository is a valid minimal R package.
 
@@ -64,7 +64,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 3: Define package metadata [x]
+### Task 3: Define package metadata [DONE]
 
 **Goal:** Make `DESCRIPTION` minimally correct.
 
@@ -82,7 +82,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 4: Add the first package smoke test [x]
+### Task 4: Add the first package smoke test [DONE]
 
 **Goal:** Verify the test infrastructure itself works.
 
@@ -96,7 +96,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 5: Add package-level documentation [x]
+### Task 5: Add package-level documentation [DONE]
 
 **Goal:** Avoid missing package documentation later.
 
@@ -110,7 +110,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 6: Create the TypeScript sidecar skeleton [x]
+### Task 6: Create the TypeScript sidecar skeleton [DONE]
 
 **Goal:** Create the minimal Node/TypeScript component without browser logic.
 
@@ -128,7 +128,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 7: Define the R-to-sidecar protocol [x]
+### Task 7: Define the R-to-sidecar protocol [DONE]
 
 **Goal:** Establish one tiny request/response contract.
 
@@ -147,7 +147,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 8: Add a `ping` sidecar method [x]
+### Task 8: Add a `ping` sidecar method [DONE]
 
 **Goal:** Prove bidirectional protocol behavior.
 
@@ -161,7 +161,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 9: Add the minimal R sidecar client [x]
+### Task 9: Add the minimal R sidecar client [DONE]
 
 **Goal:** Allow R to start the sidecar and issue one request.
 
@@ -179,7 +179,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 10: Add sidecar protocol tests [x]
+### Task 10: Add sidecar protocol tests [DONE]
 
 **Goal:** Lock down the R ↔ TypeScript boundary.
 
@@ -195,7 +195,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 11: Create the browser backend interface [x]
+### Task 11: Create the browser backend interface [DONE]
 
 **Goal:** Separate the public R API from Lightpanda-specific implementation.
 
@@ -214,7 +214,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 12: Add Lightpanda configuration discovery [x]
+### Task 12: Add Lightpanda configuration discovery [DONE]
 
 **Goal:** Resolve how the package finds Lightpanda.
 
@@ -231,7 +231,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 13: Implement Lightpanda connection in the sidecar [x]
+### Task 13: Implement Lightpanda connection in the sidecar [DONE]
 
 **Goal:** Connect the sidecar to an already-running Lightpanda CDP endpoint.
 
@@ -245,7 +245,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 14: Implement browser close [x]
+### Task 14: Implement browser close [DONE]
 
 **Goal:** Cleanly release Lightpanda-related resources.
 
@@ -259,7 +259,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 15: Add a local dynamic test page [x]
+### Task 15: Add a local dynamic test page [DONE]
 
 **Goal:** Test browser automation without depending on X.
 
@@ -273,7 +273,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 16: Implement browser navigation [x]
+### Task 16: Implement browser navigation [DONE]
 
 **Goal:** Navigate Lightpanda to the local dynamic test page.
 
@@ -287,7 +287,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 17: Implement JavaScript evaluation [x]
+### Task 17: Implement JavaScript evaluation [DONE]
 
 **Goal:** Execute JavaScript in the loaded page.
 
@@ -302,7 +302,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 18: Create `x_session()` [x]
+### Task 18: Create `x_session()` [DONE]
 
 **Goal:** Expose the first public R API.
 
@@ -319,7 +319,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 19: Create `x_close()` [ ]
+### Task 19: Create `x_close()`
 
 **Goal:** Add public session cleanup.
 
@@ -335,7 +335,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 20: Create `x_doctor()` basic diagnostics [ ]
+### Task 20: Create `x_doctor()` basic diagnostics
 
 **Goal:** Provide immediate environment diagnostics.
 
@@ -353,7 +353,7 @@ Check only:
 
 ---
 
-### Task 21: Add CDP network event capture [ ]
+### Task 21: Add CDP network event capture
 
 **Goal:** Observe page network traffic.
 
@@ -368,7 +368,7 @@ Check only:
 
 ---
 
-### Task 22: Add a local JSON network fixture [ ]
+### Task 22: Add a local JSON network fixture
 
 **Goal:** Prove structured network-response extraction.
 
@@ -382,7 +382,7 @@ Check only:
 
 ---
 
-### Task 23: Capture response bodies [ ]
+### Task 23: Capture response bodies
 
 **Goal:** Read JSON bodies from selected network responses.
 
@@ -396,7 +396,7 @@ Check only:
 
 ---
 
-### Task 24: Add network capture tests [ ]
+### Task 24: Add network capture tests
 
 **Goal:** Stabilize network-first infrastructure.
 
@@ -413,7 +413,7 @@ Test:
 
 ---
 
-### Task 25: Create `x_debug_network()` [ ]
+### Task 25: Create `x_debug_network()`
 
 **Goal:** Expose network inspection for development.
 
@@ -427,7 +427,7 @@ Test:
 
 ---
 
-### Task 26: Create `x_debug_dom()` [ ]
+### Task 26: Create `x_debug_dom()`
 
 **Goal:** Expose DOM inspection separately from network capture.
 
@@ -441,7 +441,7 @@ Test:
 
 ---
 
-### Task 27: Navigate to X [ ]
+### Task 27: Navigate to X
 
 **Goal:** Prove Lightpanda can load X/Twitter.
 
@@ -456,7 +456,7 @@ Test:
 
 ---
 
-### Task 28: Open an X search URL [ ]
+### Task 28: Open an X search URL
 
 **Goal:** Reach a search results page.
 
@@ -471,7 +471,7 @@ Test:
 
 ---
 
-### Task 29: Capture X search network traffic [ ]
+### Task 29: Capture X search network traffic
 
 **Goal:** Identify candidate structured responses containing posts.
 
@@ -487,7 +487,7 @@ Test:
 
 ---
 
-### Task 30: Add minimal X network fixtures [ ]
+### Task 30: Add minimal X network fixtures
 
 **Goal:** Turn observed X response structures into offline parser inputs.
 
@@ -503,7 +503,7 @@ Test:
 
 ---
 
-### Task 31: Implement minimal post discovery parser [ ]
+### Task 31: Implement minimal post discovery parser
 
 **Goal:** Locate post objects inside one known X fixture.
 
@@ -520,7 +520,7 @@ Test:
 
 ---
 
-### Task 32: Extend parser with author fields [ ]
+### Task 32: Extend parser with author fields
 
 **Goal:** Add author identity fields.
 
@@ -536,7 +536,7 @@ Extract when available:
 
 ---
 
-### Task 33: Extend parser with timestamps [ ]
+### Task 33: Extend parser with timestamps
 
 **Goal:** Add time information.
 
@@ -550,7 +550,7 @@ Extract:
 
 ---
 
-### Task 34: Extend parser with engagement metrics [ ]
+### Task 34: Extend parser with engagement metrics
 
 **Goal:** Add post metrics.
 
@@ -569,7 +569,7 @@ Extract when available:
 
 ---
 
-### Task 35: Extend parser with relationship fields [ ]
+### Task 35: Extend parser with relationship fields
 
 **Goal:** Represent replies and quotes.
 
@@ -588,7 +588,7 @@ Extract when available:
 
 ---
 
-### Task 36: Add canonical post normalization [ ]
+### Task 36: Add canonical post normalization
 
 **Goal:** Convert parsed raw posts to one stable schema.
 
@@ -602,7 +602,7 @@ Create a normalizer that returns the canonical fields implemented so far.
 
 ---
 
-### Task 37: Return posts as a tibble [ ]
+### Task 37: Return posts as a tibble
 
 **Goal:** Make parsed output idiomatic for R.
 
@@ -617,7 +617,7 @@ Create a normalizer that returns the canonical fields implemented so far.
 
 ---
 
-### Task 38: Implement deduplication by `post_id` [ ]
+### Task 38: Implement deduplication by `post_id`
 
 **Goal:** Remove duplicates safely.
 
@@ -631,7 +631,7 @@ Create a normalizer that returns the canonical fields implemented so far.
 
 ---
 
-### Task 39: Create minimal `x_search()` [ ]
+### Task 39: Create minimal `x_search()`
 
 **Goal:** Connect the pieces into one end-to-end search path.
 
@@ -650,7 +650,7 @@ Create a normalizer that returns the canonical fields implemented so far.
 
 ---
 
-### Task 40: Add one-scroll collection [ ]
+### Task 40: Add one-scroll collection
 
 **Goal:** Collect beyond the initially visible result set.
 
@@ -666,7 +666,7 @@ Create a normalizer that returns the canonical fields implemented so far.
 
 ---
 
-### Task 41: Add a scroll state object [ ]
+### Task 41: Add a scroll state object
 
 **Goal:** Stop relying on implicit loop state.
 
@@ -687,7 +687,7 @@ Track:
 
 ---
 
-### Task 42: Add repeated scrolling with termination [ ]
+### Task 42: Add repeated scrolling with termination
 
 **Goal:** Support bounded repeated collection.
 
@@ -702,7 +702,7 @@ Track:
 
 ---
 
-### Task 43: Enforce `limit` [ ]
+### Task 43: Enforce `limit`
 
 **Goal:** Make result count deterministic.
 
@@ -714,7 +714,7 @@ Track:
 
 ---
 
-### Task 44: Detect pagination cursors [ ]
+### Task 44: Detect pagination cursors
 
 **Goal:** Extract cursors from known structured responses when present.
 
@@ -728,7 +728,7 @@ Track:
 
 ---
 
-### Task 45: Store collection provenance in memory [ ]
+### Task 45: Store collection provenance in memory
 
 **Goal:** Track how a search result was created.
 
@@ -748,7 +748,7 @@ Create collection metadata containing at least:
 
 ---
 
-### Task 46: Add `collected_at` and query metadata [ ]
+### Task 46: Add `collected_at` and query metadata
 
 **Goal:** Add observation-level provenance.
 
@@ -764,7 +764,7 @@ Add:
 
 ---
 
-### Task 47: Add JSONL incremental persistence [ ]
+### Task 47: Add JSONL incremental persistence
 
 **Goal:** Avoid losing all progress when collection is interrupted.
 
@@ -780,7 +780,7 @@ Add:
 
 ---
 
-### Task 48: Add checkpoint state persistence [ ]
+### Task 48: Add checkpoint state persistence
 
 **Goal:** Save collection state separately from post data.
 
@@ -799,7 +799,7 @@ Persist:
 
 ---
 
-### Task 49: Add resume support [ ]
+### Task 49: Add resume support
 
 **Goal:** Continue from a saved checkpoint.
 
@@ -814,7 +814,7 @@ Persist:
 
 ---
 
-### Task 50: Add Parquet export [ ]
+### Task 50: Add Parquet export
 
 **Goal:** Provide modern columnar output.
 
@@ -828,7 +828,7 @@ Persist:
 
 ---
 
-### Task 51: Add DuckDB export [ ]
+### Task 51: Add DuckDB export
 
 **Goal:** Support large local research collections.
 
@@ -844,7 +844,7 @@ Persist:
 
 ---
 
-### Task 52: Implement `x_user_posts()` URL/navigation layer [ ]
+### Task 52: Implement `x_user_posts()` URL/navigation layer
 
 **Goal:** Add user timeline navigation without duplicating search architecture.
 
@@ -859,7 +859,7 @@ Persist:
 
 ---
 
-### Task 53: Implement minimal `x_user_posts()` extraction [ ]
+### Task 53: Implement minimal `x_user_posts()` extraction
 
 **Goal:** Reuse post parser for user timelines.
 
@@ -874,7 +874,7 @@ Persist:
 
 ---
 
-### Task 54: Implement `x_post()` navigation [ ]
+### Task 54: Implement `x_post()` navigation
 
 **Goal:** Support individual post URLs.
 
@@ -889,7 +889,7 @@ Persist:
 
 ---
 
-### Task 55: Implement minimal `x_post()` extraction [ ]
+### Task 55: Implement minimal `x_post()` extraction
 
 **Goal:** Return one canonical post.
 
@@ -903,7 +903,7 @@ Persist:
 
 ---
 
-### Task 56: Add hashtag, mention, and URL parsing [ ]
+### Task 56: Add hashtag, mention, and URL parsing
 
 **Goal:** Extend structured post content.
 
@@ -921,7 +921,7 @@ Use list-columns initially.
 
 ---
 
-### Task 57: Add media parsing [ ]
+### Task 57: Add media parsing
 
 **Goal:** Represent attached media.
 
@@ -936,7 +936,7 @@ Extract when available:
 
 ---
 
-### Task 58: Improve `x_doctor()` [ ]
+### Task 58: Improve `x_doctor()`
 
 **Goal:** Make diagnostics useful for real installations.
 
@@ -957,7 +957,7 @@ Report:
 
 ---
 
-### Task 59: Add structured error classes [ ]
+### Task 59: Add structured error classes
 
 **Goal:** Replace generic failures with actionable errors.
 
@@ -977,7 +977,7 @@ Introduce only errors currently needed, such as:
 
 ---
 
-### Task 60: Add CLI progress output [ ]
+### Task 60: Add CLI progress output
 
 **Goal:** Make long collections understandable.
 
@@ -997,7 +997,7 @@ Add `quiet = TRUE`.
 
 ---
 
-### Task 61: Add a richer local infinite-scroll mock [ ]
+### Task 61: Add a richer local infinite-scroll mock
 
 **Goal:** Test collection logic without X.
 
@@ -1014,7 +1014,7 @@ The mock must simulate:
 
 ---
 
-### Task 62: Add cursor behavior to the local mock [ ]
+### Task 62: Add cursor behavior to the local mock
 
 **Goal:** Test cursor-aware parsing independently.
 
@@ -1028,7 +1028,7 @@ The mock must simulate:
 
 ---
 
-### Task 63: Add parser schema-change detection [ ]
+### Task 63: Add parser schema-change detection
 
 **Goal:** Fail clearly when expected X structures change.
 
@@ -1044,7 +1044,7 @@ Detect:
 
 ---
 
-### Task 64: Add parser and schema versions [ ]
+### Task 64: Add parser and schema versions
 
 **Goal:** Make collection provenance auditable.
 
@@ -1061,7 +1061,7 @@ Add both to collection metadata.
 
 ---
 
-### Task 65: Add README quickstart [ ]
+### Task 65: Add README quickstart
 
 **Goal:** Document the working MVP.
 
@@ -1081,7 +1081,7 @@ README should include:
 
 ---
 
-### Task 66: Add architecture documentation [ ]
+### Task 66: Add architecture documentation
 
 **Goal:** Explain the implementation that actually exists.
 
@@ -1101,7 +1101,7 @@ Create `docs/architecture.md` covering:
 
 ---
 
-### Task 67: Add a getting-started vignette [ ]
+### Task 67: Add a getting-started vignette
 
 **Goal:** Provide an end-to-end R workflow.
 
@@ -1118,7 +1118,7 @@ Document:
 
 ---
 
-### Task 68: Add large-collection documentation [ ]
+### Task 68: Add large-collection documentation
 
 **Goal:** Document checkpoints and resume.
 
@@ -1134,7 +1134,7 @@ Show:
 
 ---
 
-### Task 69: Add GitHub Actions for R [ ]
+### Task 69: Add GitHub Actions for R
 
 **Goal:** Automate package checks.
 
@@ -1148,7 +1148,7 @@ Show:
 
 ---
 
-### Task 70: Add GitHub Actions for TypeScript [ ]
+### Task 70: Add GitHub Actions for TypeScript
 
 **Goal:** Automate sidecar checks.
 
@@ -1164,7 +1164,7 @@ Run:
 
 ---
 
-### Task 71: Run full R package check [ ]
+### Task 71: Run full R package check
 
 **Goal:** Stabilize the package after MVP implementation.
 
@@ -1181,7 +1181,7 @@ Run:
 
 ---
 
-### Task 72: Run full TypeScript checks [ ]
+### Task 72: Run full TypeScript checks
 
 **Goal:** Stabilize the sidecar.
 
@@ -1196,7 +1196,7 @@ Run:
 
 ---
 
-### Task 73: Add a minimal benchmark harness [ ]
+### Task 73: Add a minimal benchmark harness
 
 **Goal:** Measure instead of assuming performance.
 
@@ -1213,7 +1213,7 @@ Measure at least:
 
 ---
 
-### Task 74: Add optional Chromium backend spike [ ]
+### Task 74: Add optional Chromium backend spike
 
 **Goal:** Verify that the backend abstraction is real.
 
@@ -1227,7 +1227,7 @@ Measure at least:
 
 ---
 
-### Task 75: Compare Lightpanda and Chromium on the local fixture [ ]
+### Task 75: Compare Lightpanda and Chromium on the local fixture
 
 **Goal:** Produce a basic empirical comparison.
 
@@ -1243,7 +1243,7 @@ Compare:
 
 ---
 
-### Task 76: Final MVP regression run [ ]
+### Task 76: Final MVP regression run
 
 **Goal:** Verify the entire implemented system before declaring MVP complete.
 
@@ -1268,7 +1268,7 @@ Run:
 
 ---
 
-### Task 77: Final repository cleanup [ ]
+### Task 77: Final repository cleanup
 
 **Goal:** Remove development debris without changing behavior.
 
@@ -1285,7 +1285,7 @@ Run:
 
 ---
 
-### Task 78: Produce MVP status summary [ ]
+### Task 78: Produce MVP status summary
 
 **Goal:** Leave a machine- and human-readable completion record.
 
@@ -1330,71 +1330,71 @@ Update `RALPH_PROGRESS.md` with:
 
 Do not execute these until Tasks 1–78 are complete unless a previous task explicitly requires one as a dependency.
 
-### Iteration 79: Add date-range query helpers [ ]
+### Iteration 79: Add date-range query helpers
 
 Add `since` and `until` query helpers with unit tests.
 
-### Iteration 80: Add language query helper [ ]
+### Iteration 80: Add language query helper
 
 Add `lang` handling with unit tests.
 
-### Iteration 81: Add search mode [ ]
+### Iteration 81: Add search mode
 
 Add `latest` and `top` where technically supported.
 
-### Iteration 82: Add thread extraction [ ]
+### Iteration 82: Add thread extraction
 
 Implement `x_thread()` by reusing the canonical parser.
 
-### Iteration 83: Add replies extraction [ ]
+### Iteration 83: Add replies extraction
 
 Implement `x_replies()` without creating a second post schema.
 
-### Iteration 84: Add quote-post extraction [ ]
+### Iteration 84: Add quote-post extraction
 
 Implement `x_quotes()`.
 
-### Iteration 85: Normalize users into a separate table [ ]
+### Iteration 85: Normalize users into a separate table
 
 Add a relational users representation while preserving the simple tibble API.
 
-### Iteration 86: Normalize media into a separate table [ ]
+### Iteration 86: Normalize media into a separate table
 
 Add relational media output.
 
-### Iteration 87: Add collection/post relation table [ ]
+### Iteration 87: Add collection/post relation table
 
 Represent posts appearing in multiple queries or collection runs.
 
-### Iteration 88: Add Arrow dataset partitioning [ ]
+### Iteration 88: Add Arrow dataset partitioning
 
 Support optional partitioning by collection/date.
 
-### Iteration 89: Improve DuckDB schema [ ]
+### Iteration 89: Improve DuckDB schema
 
 Add collections and post-collection relation tables.
 
-### Iteration 90: Add bounded concurrency experiments [ ]
+### Iteration 90: Add bounded concurrency experiments
 
 Experiment with multiple independent queries only after single-session collection is stable.
 
-### Iteration 91: Add recovery tests for sidecar crashes [ ]
+### Iteration 91: Add recovery tests for sidecar crashes
 
 Verify state persistence and restart behavior.
 
-### Iteration 92: Add recovery tests for Lightpanda disconnects [ ]
+### Iteration 92: Add recovery tests for Lightpanda disconnects
 
 Verify failure classification and session cleanup.
 
-### Iteration 93: Add response fixture refresh tooling [ ]
+### Iteration 93: Add response fixture refresh tooling
 
 Create developer tooling for updating parser fixtures after frontend changes.
 
-### Iteration 94: Add parser diagnostics export [ ]
+### Iteration 94: Add parser diagnostics export
 
 Export minimal diagnostic artifacts for debugging schema changes.
 
-### Iteration 95: Add package website [ ]
+### Iteration 95: Add package website
 
 Configure pkgdown after the public API stabilizes.
 

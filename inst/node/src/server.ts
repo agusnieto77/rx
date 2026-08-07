@@ -6,8 +6,8 @@
 // Defaults: port 8765
 
 import { createServer } from "node:http";
-import { readFileSync, statSync } from "node:fs";
-import { extname, join, relative } from "node:path";
+import { readFileSync, statSync, realpathSync } from "node:fs";
+import { extname, relative, resolve, isAbsolute, sep } from "node:path";
 
 const EXT_CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -24,12 +24,12 @@ const EXT_CONTENT_TYPES: Record<string, string> = {
 };
 
 function serveFile(dir: string, pathname: string): { status: number; body?: Buffer; contentType?: string } {
-  // Prevent path traversal: resolve the canonical absolute path and
+  // Prevent path traversal: resolve to an absolute canonical path and
   // verify it is inside the serving directory (or equals it).
-  const resolved = join(dir, pathname);
-  const normalized = resolved.replace(/\\/g, "/").replace(/\/+/g, "/");
-  const baseNormalized = dir.replace(/\\/g, "/").replace(/\/+/g, "/");
-  if (!normalized.startsWith(baseNormalized + "/") && normalized !== baseNormalized) {
+  const resolved = resolve(dir, "." + pathname);
+  const baseResolved = resolve(dir);
+  const relativePath = relative(baseResolved, resolved);
+  if (relativePath === ".." || relativePath.startsWith(".." + sep) || isAbsolute(relativePath)) {
     return { status: 403 };
   }
 
@@ -38,8 +38,15 @@ function serveFile(dir: string, pathname: string): { status: number; body?: Buff
     if (!stat.isFile()) {
       return { status: 404 };
     }
-    const data = readFileSync(resolved);
-    const ct = EXT_CONTENT_TYPES[extname(resolved).toLowerCase()] || "application/octet-stream";
+    // Verify symlinks do not escape the base directory.
+    const realPath = realpathSync(resolved);
+    const realBase = realpathSync(baseResolved);
+    const realRelative = relative(realBase, realPath);
+    if (realRelative === ".." || realRelative.startsWith(".." + sep) || isAbsolute(realRelative)) {
+      return { status: 403 };
+    }
+    const data = readFileSync(realPath);
+    const ct = EXT_CONTENT_TYPES[extname(realPath).toLowerCase()] || "application/octet-stream";
     return { status: 200, body: data, contentType: ct };
   } catch {
     return { status: 404 };
@@ -50,8 +57,22 @@ function main(): void {
   const dir = process.argv[2] ?? ".";
   const port = parseInt(process.argv[3] ?? "8765", 10);
 
+  if (Number.isNaN(port) || port < 1 || port > 65535) {
+    process.stderr.write("Error: invalid port. Must be 1-65535.\n");
+    process.exit(1);
+  }
+
   const server = createServer((req, res) => {
-    const pathname = new URL(req.url!, `http://localhost:${port}`).pathname;
+    let pathname: string;
+    try {
+      pathname = decodeURIComponent(
+        new URL(req.url!, `http://localhost:${port}`).pathname
+      );
+    } catch {
+      res.writeHead(400, { "Content-Type": "text/plain" });
+      res.end("Bad Request");
+      return;
+    }
     const result = serveFile(dir, pathname);
 
     res.writeHead(result.status, {
