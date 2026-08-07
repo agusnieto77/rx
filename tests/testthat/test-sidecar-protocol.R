@@ -19,10 +19,10 @@ if (tolower(Sys.getenv("SKIP_PROTOCOL_TESTS", unset = "false")) == "true") {
 # Try to start the sidecar. Returns NULL if it cannot start (e.g.
 # processx segfaults on this platform).  Tests that need the sidecar
 # call `skip_if_no_sidecar()` first.
-.try_start_sidecar <- function(reqId = NULL) {
+.try_start_sidecar <- function() {
   tryCatch(
     {
-      p <- xtweetsR:::.rx_start_sidecar(sidecar_path = .sidecar_path(), reqId = reqId)
+      p <- xtweetsR:::.rx_start_sidecar(sidecar_path = .sidecar_path())
       if (p$is_alive()) {
         return(p)
       }
@@ -55,7 +55,7 @@ if (tolower(Sys.getenv("SKIP_PROTOCOL_TESTS", unset = "false")) == "true") {
 # --- Test 1: valid ping request ---
 test_that("valid ping request returns expected response", {
   reqId <- .make_req_id()
-  proc <- .try_start_sidecar(reqId = reqId)
+  proc <- .try_start_sidecar()
   testthat::skip_if(is.null(proc), "sidecar process cannot start")
   on.exit(xtweetsR:::.rx_stop_sidecar(proc))
 
@@ -86,7 +86,7 @@ test_that("valid ping request returns expected response", {
 # --- Test 2: unknown method returns structured error ---
 test_that("unknown method returns structured error", {
   reqId <- .make_req_id()
-  proc <- .try_start_sidecar(reqId = reqId)
+  proc <- .try_start_sidecar()
   testthat::skip_if(is.null(proc), "sidecar process cannot start")
   on.exit(xtweetsR:::.rx_stop_sidecar(proc))
 
@@ -201,7 +201,7 @@ test_that("close_browser when not connected returns not_connected", {
 # --- Test 6: browser close twice is safe ---
 test_that("close_browser twice does not crash the sidecar", {
   reqId <- .make_req_id()
-  proc <- .try_start_sidecar(reqId = reqId)
+  proc <- .try_start_sidecar()
   testthat::skip_if(is.null(proc), "sidecar process cannot start")
   on.exit(xtweetsR:::.rx_stop_sidecar(proc))
 
@@ -224,7 +224,7 @@ test_that("close_browser twice does not crash the sidecar", {
 # --- Test 7: browser close after failed connect ---
 test_that("close_browser after failed connect is safe", {
   reqId <- .make_req_id()
-  proc <- .try_start_sidecar(reqId = reqId)
+  proc <- .try_start_sidecar()
   testthat::skip_if(is.null(proc), "sidecar process cannot start")
   on.exit(xtweetsR:::.rx_stop_sidecar(proc))
 

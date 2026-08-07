@@ -100,7 +100,7 @@ NULL
       state$.proc <- NULL
     }
 
-    proc <- .rx_start_sidecar(sidecar_path = state$.sidecar, reqId = state$.reqId)
+    proc <- .rx_start_sidecar(sidecar_path = state$.sidecar)
     state$.proc <- proc
 
     # Wrap in tryCatch so that a thrown error (timeout, process death)

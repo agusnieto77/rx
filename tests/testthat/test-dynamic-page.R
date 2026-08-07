@@ -202,10 +202,17 @@ test_that("dynamically inserted DOM content is observable after load", {
 
   testthat::expect_true(ready, info = "test server is ready")
 
+  # Per-test request ID counter to avoid ID collisions across multiple requests.
+  test_req_id <- 0L
+  make_test_req_id <- function() {
+    test_req_id <<- test_req_id + 1L
+    test_req_id
+  }
+
   # Connect to CDP before navigation/evaluation.
   # Skip if Lightpanda is not available.
   connect_result <- tryCatch(
-    xtweetsR:::.rx_send_request(proc, "connect", list(endpoint = "ws://127.0.0.1:21111")),
+    xtweetsR:::.rx_send_request(proc, "connect", list(endpoint = "ws://127.0.0.1:21111"), reqId = make_test_req_id),
     error = function(e) NULL
   )
   if (is.null(connect_result) || !is.null(connect_result$error)) {
@@ -215,7 +222,7 @@ test_that("dynamically inserted DOM content is observable after load", {
 
   # Navigate to the local page.
   url <- paste0("http://127.0.0.1:", port, "/dynamic-page.html")
-  xtweetsR:::.rx_send_request(proc, "navigate", list(url = url))
+  xtweetsR:::.rx_send_request(proc, "navigate", list(url = url), reqId = make_test_req_id)
 
   # Wait a moment for JS to execute (setTimeout is 50ms).
   Sys.sleep(1)
@@ -225,7 +232,7 @@ test_that("dynamically inserted DOM content is observable after load", {
     expr = sprintf(
       "document.querySelectorAll('[data-post-id]').length"
     )
-  ))
+  ), reqId = make_test_req_id)
 
   testthat::expect_true(
     is.list(eval_result) && !is.null(eval_result$result),

@@ -47,10 +47,9 @@ NULL
 #' Start the TypeScript sidecar process.
 #'
 #' @param sidecar_path Optional explicit path to the sidecar directory.
-#' @param reqId A function returning the next request ID (per-backend counter).
 #' @return A `processx::process` object representing the running sidecar.
 #' @noRd
-.rx_start_sidecar <- function(sidecar_path = NULL, reqId = NULL) {
+.rx_start_sidecar <- function(sidecar_path = NULL) {
   sidecar_dir <- .rx_resolve_sidecar_path(sidecar_path)
 
   if (is.null(sidecar_dir)) {
