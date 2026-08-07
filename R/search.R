@@ -5,10 +5,10 @@
 #   1. Enable network capture on the session backend
 #   2. Construct the X search URL and navigate
 #   3. Wait for network responses to settle
-#   4. Retrieve captured network events
-#   5. Identify candidate JSON responses (X domain + application/json)
-#   6. For each candidate, fetch the response body and parse posts
-#   7. Normalize, convert to tibble, deduplicate
+#   4. Retrieve captured network events and extract posts (first batch)
+#   5. Optionally scroll the page to load more content (one-scroll, Task 40)
+#   6. Wait for new network responses, extract posts (second batch)
+#   7. Merge both batches, normalize, convert to tibble, deduplicate
 #   8. Apply limit and return
 #
 # @name search
@@ -36,6 +36,11 @@ NULL
 #' @param query A single non-empty character string with the search query.
 #' @param limit Optional integer limiting the maximum number of posts
 #'   returned. When \code{NULL} (default), no limit is applied.
+#' @param scroll Logical, default `TRUE`. When `TRUE`, performs one
+#'   incremental scroll after the initial extraction to load additional
+#'   content. When `FALSE`, only the initially visible content is
+#'   captured (faster, useful for testing or when the first page is
+#'   sufficient).
 #'
 #' @return A tibble with the canonical post schema (18 columns) containing
 #'   posts found during the search. Returns a zero-row tibble when no
@@ -50,7 +55,7 @@ NULL
 #' }
 #'
 #' @export
-x_search <- function(session, query, limit = NULL) {
+x_search <- function(session, query, limit = NULL, scroll = TRUE) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -90,13 +95,13 @@ x_search <- function(session, query, limit = NULL) {
     return(.rx_search_empty_tibble())
   }
 
-  # 4. Wait for network responses to arrive (X search loads content
+  # 4. Wait for initial network responses to arrive (X search loads content
   #    asynchronously via XHR/GraphQL). A short wait is more reliable
   #    than polling for specific response types.
   Sys.sleep(3)
 
-  # 5. Retrieve captured network events.
-  events <- tryCatch(
+  # 5. Retrieve captured network events and extract posts (first batch).
+  initial_events <- tryCatch(
     backend$networkCaptureGet(),
     error = function(e) {
       .rx_search_cleanup(backend)
@@ -105,20 +110,75 @@ x_search <- function(session, query, limit = NULL) {
     }
   )
 
-  # 6. Identify candidate JSON responses and extract posts.
-  posts <- .rx_search_extract_from_events(events, backend)
+  initial_posts <- .rx_search_extract_from_events(initial_events, backend)
 
-  # 7. Normalize, convert to tibble, deduplicate.
-  normalized <- .rx_normalize_posts(posts)
+  # 6. Optional one-scroll: scroll the page to trigger loading of more
+  #    content, then capture any new network responses and extract posts
+  #    (second batch). The network capture buffer is automatically empty
+  #    after the previous `$networkCaptureGet()` call, so this batch
+  #    contains only events captured after the scroll.
+  if (isTRUE(scroll)) {
+    .rx_scroll_page(backend)
+    # Wait for new network responses triggered by the scroll.
+    Sys.sleep(3)
+
+    scroll_events <- tryCatch(
+      backend$networkCaptureGet(),
+      error = function(e) {
+        # Scroll failure is non-fatal; proceed with initial batch only.
+        return(list())
+      }
+    )
+
+    scroll_posts <- .rx_search_extract_from_events(scroll_events, backend)
+  } else {
+    scroll_posts <- list(
+      post_id = character(0), text = character(0),
+      author_id = character(0), username = character(0),
+      display_name = character(0), created_at = character(0),
+      reply_count = integer(0), repost_count = integer(0),
+      like_count = integer(0), quote_count = integer(0),
+      bookmark_count = integer(0), view_count = integer(0),
+      conversation_id = character(0),
+      is_reply = logical(0), is_repost = logical(0), is_quote = logical(0),
+      reply_to_post_id = character(0), quoted_post_id = character(0)
+    )
+  }
+
+  # 7. Merge both batches (scroll posts appended to initial posts).
+  merged_posts <- list(
+    post_id      = c(initial_posts$post_id,      scroll_posts$post_id),
+    text         = c(initial_posts$text,         scroll_posts$text),
+    author_id    = c(initial_posts$author_id,    scroll_posts$author_id),
+    username     = c(initial_posts$username,     scroll_posts$username),
+    display_name = c(initial_posts$display_name, scroll_posts$display_name),
+    created_at   = c(initial_posts$created_at,   scroll_posts$created_at),
+    reply_count  = c(initial_posts$reply_count,  scroll_posts$reply_count),
+    repost_count = c(initial_posts$repost_count, scroll_posts$repost_count),
+    like_count   = c(initial_posts$like_count,   scroll_posts$like_count),
+    quote_count  = c(initial_posts$quote_count,  scroll_posts$quote_count),
+    bookmark_count = c(initial_posts$bookmark_count, scroll_posts$bookmark_count),
+    view_count   = c(initial_posts$view_count,   scroll_posts$view_count),
+    conversation_id = c(initial_posts$conversation_id, scroll_posts$conversation_id),
+    is_reply     = c(initial_posts$is_reply,     scroll_posts$is_reply),
+    is_repost    = c(initial_posts$is_repost,    scroll_posts$is_repost),
+    is_quote     = c(initial_posts$is_quote,     scroll_posts$is_quote),
+    reply_to_post_id = c(initial_posts$reply_to_post_id, scroll_posts$reply_to_post_id),
+    quoted_post_id   = c(initial_posts$quoted_post_id,   scroll_posts$quoted_post_id)
+  )
+
+  # 8. Normalize, convert to tibble, deduplicate (dedup handles cross-batch
+  #    duplicates where the same post appeared in both batches).
+  normalized <- .rx_normalize_posts(merged_posts)
   tibble_posts <- .rx_normalized_to_tibble(normalized)
   deduped <- .rx_deduplicate_posts(tibble_posts)
 
-  # 8. Apply limit.
+  # 9. Apply limit.
   if (!is.null(limit) && nrow(deduped) > limit) {
     deduped <- deduped[seq_len(limit), , drop = FALSE]
   }
 
-  # 9. Clean up network capture.
+  # 10. Clean up network capture.
   .rx_search_cleanup(backend)
 
   deduped
@@ -278,4 +338,30 @@ x_search <- function(session, query, limit = NULL) {
   }
 
   FALSE
+}
+
+#' Scroll the page downward to trigger loading of more content.
+#'
+#' Executes a JavaScript scroll expression in the current page.
+#' This is the standard pattern for infinite-scroll pages like X/Twitter:
+#' scroll down by a large amount, wait for content to load.
+#'
+#' The scroll is wrapped in `tryCatch` so that scroll failures are
+#' non-fatal — the search returns whatever was captured before the scroll.
+#'
+#' @param backend The backend object (must support `$evaluate()`).
+#' @noRd
+.rx_scroll_page <- function(backend) {
+  tryCatch(
+    backend$evaluate(
+      # Scroll by 4000px; X/Twitter uses IntersectionObserver-based lazy
+      # loading, so scrolling far enough triggers new content requests.
+      "window.scrollBy(0, 4000)"
+    ),
+    error = function(e) {
+      # Scroll is best-effort — a failed evaluation (e.g. page closed)
+      # should not break the search pipeline.
+      invisible(NULL)
+    }
+  )
 }

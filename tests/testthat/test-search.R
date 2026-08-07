@@ -270,3 +270,230 @@ test_that("duplicate posts are deduplicated by search", {
   expect_true(length(unique_ids) >= 1)
   expect_true(length(unique_ids) == nrow(result), info = "no duplicates should remain")
 })
+
+# --- Test 20: Scroll helper expression is valid JavaScript ---
+test_that(".rx_scroll_page executes a valid scroll expression", {
+  # The scroll helper should be a simple window.scrollBy call.
+  # We can't execute JS without a real browser, so we verify the
+  # backend method is called by mocking it.
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  scroll_called <- FALSE
+  mock_session$backend$evaluate <- function(expr) {
+    scroll_called <<- TRUE
+    expect_true(is.character(expr))
+    expect_true(grepl("scrollBy", expr, fixed = TRUE))
+    invisible(NULL)
+  }
+
+  x_search(mock_session, "test", scroll = TRUE)
+  expect_true(scroll_called, info = "scroll should be triggered when scroll=TRUE")
+})
+
+# --- Test 21: Scroll with scroll=FALSE does not call evaluate ---
+test_that("x_search with scroll=FALSE skips the scroll step", {
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  scroll_called <- FALSE
+  mock_session$backend$evaluate <- function(expr) {
+    scroll_called <<- TRUE
+    invisible(NULL)
+  }
+
+  x_search(mock_session, "test", scroll = FALSE)
+  expect_false(scroll_called, info = "scroll should NOT be triggered when scroll=FALSE")
+})
+
+# --- Test 22: Scroll batch with new posts merges correctly ---
+test_that("scroll batch with new posts is merged and deduplicated", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed_fixture <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  # Initial batch: fixture with 4 posts
+  # Scroll batch: different fixture with 2 posts (simulating new content)
+  # We need a second fixture with different post_ids.
+  fixture_with_2_posts <- list(
+    TimelineResult = list(
+      result = list(
+        __typename = "TimelineTimelineItem",
+        timeline_instructions = list(
+          list(
+            type = "TimelineAddEntries",
+            entries = list(
+              list(
+                entryId = "tweet-999",
+                content = list(
+                  __typename = "TimelineTimelineItem",
+                  itemContent = list(
+                    tweet_results = list(
+                      result = list(
+                        __typename = "TweetWithVisibilityResults",
+                        tweet = list(
+                          rest_id = "999",
+                          legacy = list(
+                            full_text = "Scroll post 1",
+                            created_at = "Mon Jul 01 00:00:00 +0000 2026",
+                            user_id_str = "u-scroll-1",
+                            screen_name = "scrolluser1",
+                            name = "Scroll User One",
+                            reply_count = 1L,
+                            retweet_count = 2L,
+                            favorite_count = 3L,
+                            quote_count = 0L,
+                            bookmark_count = 0L,
+                            conversation_id_str = "999",
+                            in_reply_to_status_id_str = NA_character_,
+                            is_quote_status = FALSE
+                          ),
+                          core = list(
+                            user_results = list(
+                              result = list(
+                                legacy = list(
+                                  id_str = "u-scroll-1",
+                                  screen_name = "scrolluser1",
+                                  name = "Scroll User One"
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              ),
+              list(
+                entryId = "tweet-998",
+                content = list(
+                  __typename = "TimelineTimelineItem",
+                  itemContent = list(
+                    tweet_results = list(
+                      result = list(
+                        __typename = "TweetWithVisibilityResults",
+                        tweet = list(
+                          rest_id = "998",
+                          legacy = list(
+                            full_text = "Scroll post 2",
+                            created_at = "Sun Jun 30 00:00:00 +0000 2026",
+                            user_id_str = "u-scroll-2",
+                            screen_name = "scrolluser2",
+                            name = "Scroll User Two",
+                            reply_count = 0L,
+                            retweet_count = 1L,
+                            favorite_count = 5L,
+                            quote_count = 0L,
+                            bookmark_count = 0L,
+                            conversation_id_str = "998",
+                            in_reply_to_status_id_str = NA_character_,
+                            is_quote_status = FALSE
+                          ),
+                          core = list(
+                            user_results = list(
+                              result = list(
+                                legacy = list(
+                                  id_str = "u-scroll-2",
+                                  screen_name = "scrolluser2",
+                                  name = "Scroll User Two"
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+
+  scroll_fixture <- jsonlite::toJSON(fixture_with_2_posts, auto_unbox = TRUE, simplifyVector = FALSE)
+
+  initial_event <- list(
+    requestId = "req-init-1", url = "https://x.com/graphql/init", contentType = "application/json"
+  )
+  scroll_event <- list(
+    requestId = "req-scroll-1", url = "https://x.com/graphql/scroll", contentType = "application/json"
+  )
+
+  call_count <- 0L
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  # First call returns initial batch events
+  mock_session$backend$networkCaptureGet <- function() {
+    call_count <<- call_count + 1L
+    if (call_count == 1L) {
+      initial_event
+    } else {
+      # Second call (after scroll) returns scroll batch events
+      scroll_event
+    }
+  }
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    if (grepl("^req-init", requestId)) {
+      list(requestId = requestId, body = parsed_fixture, contentType = "application/json", error = NULL)
+    } else {
+      # Parse scroll fixture as string
+      list(requestId = requestId, body = scroll_fixture, contentType = "application/json", error = NULL)
+    }
+  }
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+  mock_session$backend$evaluate <- function(expr) invisible(NULL)
+
+  result <- x_search(mock_session, "test", scroll = TRUE)
+
+  expect_true(inherits(result, "tbl_df"))
+  expect_true(nrow(result) >= 4, info = "initial batch has 4+ posts")
+  expect_true(nrow(result) >= 6, info = "merged result should have initial + scroll posts (8 unique)")
+  expect_true("post_id" %in% names(result))
+  # Verify that posts from both batches exist
+  expect_true(any(grepl("998|999", result$post_id)), info = "scroll batch posts should be present")
+})
+
+# --- Test 23: Scroll failure is non-fatal ---
+test_that("x_search handles scroll evaluation failure gracefully", {
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  # Evaluate throws — scroll should fail silently
+  mock_session$backend$evaluate <- function(expr) {
+    stop("page closed")
+  }
+
+  # Should NOT throw; returns empty tibble gracefully
+  expect_silent(result <- x_search(mock_session, "test", scroll = TRUE))
+  expect_true(inherits(result, "tbl_df"))
+  expect_equal(nrow(result), 0L)
+})
