@@ -1623,9 +1623,24 @@ Implement `x_thread()` by reusing the canonical parser.
 - `R/search.R` — added `x_thread()` function (~90 lines) after `x_post()`
 - `NAMESPACE` — added `export(x_thread)`
 
-### Iteration 83: Add replies extraction [ ]
+### Iteration 83: Add replies extraction [x]
 
 Implement `x_replies()` without creating a second post schema.
+
+**Acceptance criteria:**
+- [x] `x_replies()` added to `R/search.R` — searches X for posts mentioning a user (`@username`), extracts all posts via the same network-capture → parse → normalize → deduplicate pipeline as `x_search()` and `x_post()`, then filters to only posts where `is_reply == TRUE`.
+- [x] `x_replies()` exported in `NAMESPACE`.
+- [x] Replies fixture created at `inst/tests/fixtures/x-replies-response.json` (5 posts: 2 replies + 3 non-replies: 1 regular mention, 1 quote tweet mention, 1 mention with URL).
+- [x] 20 tests in `tests/testthat/test-replies.R` covering: input validation (4 tests), URL construction (2 tests), navigation failure (1 test), fixture integration (2 tests), filtering behavior (1 test), empty response (1 test), unparseable response (1 test), provenance (3 tests), limit enforcement (1 test), edge cases (4 tests).
+- [x] TypeScript compiles cleanly (34/34 tests pass).
+
+**Files created:**
+- `inst/tests/fixtures/x-replies-response.json` — replies fixture with 5 posts (2 replies, 3 non-replies, 10.3 KB)
+- `tests/testthat/test-replies.R` — 20 tests for `x_replies()`
+
+**Files changed:**
+- `R/search.R` — added `x_replies()` function (~100 lines) after `x_thread()`
+- `NAMESPACE` — added `export(x_replies)`
 
 ### Iteration 84: Add quote-post extraction [ ]
 

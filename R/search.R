@@ -961,6 +961,176 @@ x_thread <- function(session, post_id, quiet = FALSE) {
   deduped
 }
 
+# ---------------------------------------------------------------------------
+# x_replies() — Posts where a user is mentioned and is a reply (Iteration 83)
+# ---------------------------------------------------------------------------
+
+#' Fetch replies to a specific user.
+#'
+#' Searches X for posts mentioning a user (via `@username`) and returns only
+#' the posts that are actual replies.  Internally this reuses the same
+#' network-capture → parse → normalize → deduplicate pipeline as
+#' [x_search()] and [x_post()].
+#'
+#' Unlike [x_search()], which returns all matching posts, this function
+#' filters the result set to include only posts where [is_reply] is `TRUE`.
+#' This makes it useful for tracking conversations where a specific user
+#' is being replied to.
+#'
+#' @param session An `xtweetsR_session` object returned by [x_session()].
+#' @param username A single non-empty character string with an X
+#'   username (without the leading @).
+#' @param limit Optional integer limiting the maximum number of reply posts
+#'   returned. When \code{NULL} (default), no limit is applied.
+#' @param quiet Logical, default `FALSE`. When `TRUE`, progress messages
+#'   are suppressed.
+#'
+#' @return A tibble with the canonical post schema (26 columns)
+#'   containing only reply posts where the specified user was mentioned.
+#'   Returns a zero-row tibble when no replies are found.
+#'
+#' @examples
+#' \dontrun{
+#'   sess <- x_session()
+#'   replies <- x_replies(sess, "rstudio")
+#'   print(replies)
+#'   x_close(sess)
+#' }
+#'
+#' @export
+x_replies <- function(session, username, limit = NULL, quiet = FALSE) {
+  # 1. Validate inputs.
+  if (!inherits(session, "xtweetsR_session")) {
+    stop("session must be an xtweetsR_session object.", call. = FALSE)
+  }
+  if (!session$connected) {
+    stop("Session is not connected. Call x_session() first.", call. = FALSE)
+  }
+  if (!is.character(username) || length(username) != 1L || anyNA(username) || !nzchar(trimws(username))) {
+    stop("username must be a single non-empty character string.", call. = FALSE)
+  }
+  if (!is.null(limit)) {
+    if (!is.numeric(limit) || length(limit) != 1L || anyNA(limit) || limit < 1L) {
+      stop("limit must be a positive integer, or NULL.", call. = FALSE)
+    }
+    limit <- as.integer(limit)
+  }
+
+  backend <- session$backend
+
+  # 1b. Capture collection start time and generate collection_id for provenance.
+  collection_started_at <- Sys.time()
+  collection_id <- .rx_generate_uuid()
+  backend_label <- "unknown"
+  if (inherits(session$backend, "rx_lightpanda_backend")) {
+    backend_label <- "lightpanda"
+  } else if (inherits(session$backend, "rx_chromium_backend")) {
+    backend_label <- "chromium"
+  }
+
+  # 2. Enable network capture before navigation.
+  tryCatch(
+    backend$networkCaptureEnable(),
+    error = function(e) {
+      stop(.rx_error_network(
+        paste0("Failed to enable network capture: ", e$message)
+      ))
+    }
+  )
+
+  # 3. Construct search URL: posts mentioning the user (@username).
+  encoded_user <- URLencode(paste0("@", trimws(username)), reserved = TRUE)
+  url <- paste0("https://x.com/search?q=", encoded_user, "&f=live")
+
+  nav_result <- backend$navigate(url)
+  if (is.null(nav_result$status) || nav_result$status == "error") {
+    # Navigation failed — return empty tibble.
+    error_info <- if (!is.null(nav_result$error)) nav_result$error$code else "unknown"
+    .rx_search_cleanup(backend)
+    warning("Navigation failed (", error_info, "). No replies returned.")
+    empty <- .rx_search_empty_tibble()
+    provenance <- .rx_collection_metadata(
+      collection_id = collection_id,
+      started_at = collection_started_at,
+      query = paste0("replies:", trimws(username)),
+      backend = backend_label,
+      record_count = 0L
+    )
+    attr(empty, "rx_collection_provenance") <- provenance
+    return(empty)
+  } else {
+    .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
+  }
+
+  # 4. Wait for network responses to arrive (search results load asynchronously).
+  Sys.sleep(3)
+
+  # 5. Capture events and extract posts.
+  events <- tryCatch(
+    backend$networkCaptureGet(),
+    error = function(e) {
+      .rx_search_cleanup(backend)
+      warning("Failed to retrieve network events: ", e$message)
+      return(list())
+    }
+  )
+
+  posts <- .rx_search_extract_from_events(events, backend)
+
+  # 5b. Observation-level provenance.
+  n_posts <- if (length(posts$post_id) > 0L) length(posts$post_id) else 0L
+  posts$collected_at     <- rep(format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), n_posts)
+  posts$collection_query <- rep(paste0("replies:", trimws(username)), n_posts)
+  posts$collection_id    <- rep(collection_id, n_posts)
+
+  # 6. Normalize, convert to tibble, deduplicate.
+  normalized <- .rx_normalize_posts(posts)
+  tibble_posts <- .rx_normalized_to_tibble(normalized)
+  deduped <- .rx_deduplicate_posts(tibble_posts)
+
+  # 7. Filter to only reply posts (is_reply == TRUE).
+  reply_mask <- deduped$is_reply == TRUE
+  replies <- deduped[reply_mask, , drop = FALSE]
+
+  # 7b. Observation-level provenance for filtered results.
+  n_replies <- if (nrow(replies) > 0L) nrow(replies) else 0L
+  replies$collected_at     <- rep(format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), n_replies)
+  replies$collection_query <- rep(paste0("replies:", trimws(username)), n_replies)
+  replies$collection_id    <- rep(collection_id, n_replies)
+
+  # 8. Apply limit.
+  if (!is.null(limit) && nrow(replies) > limit) {
+    replies <- replies[seq_len(limit), , drop = FALSE]
+  }
+
+  # 9. Clean up network capture.
+  .rx_search_cleanup(backend)
+
+  # 10. Attach collection provenance metadata.
+  provenance <- .rx_collection_metadata(
+    collection_id = collection_id,
+    started_at = collection_started_at,
+    query = paste0("replies:", trimws(username)),
+    backend = backend_label,
+    record_count = as.integer(nrow(replies))
+  )
+  attr(replies, "rx_collection_provenance") <- provenance
+
+  .rx_progress(
+    "Found ", nrow(deduped), " post(s), ", nrow(replies), " reply(ies)",
+    quiet = quiet
+  )
+
+  .rx_progress(
+    "Replies collected: ", nrow(replies), " post(s) in ",
+    round(as.numeric(difftime(Sys.time(), collection_started_at, units = "secs")), 1),
+    "s",
+    quiet = quiet
+  )
+
+  replies
+}
+
 #' Return an empty batch with the canonical field structure.
 #'
 #' Used to maintain consistent field structure when a scroll iteration

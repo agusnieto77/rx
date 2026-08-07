@@ -1,0 +1,240 @@
+{
+  "data": {
+    "timeline": {
+      "instructions": [
+        {
+          "type": "TimelineAddEntries",
+          "entries": [
+            {
+              "entryId": "tweet-1900000000000000200",
+              "sortIndex": "1900000000000000200",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000200",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMjAw",
+                            "legacy": {
+                              "screen_name": "rstudio",
+                              "name": "RStudio"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Tue Aug 05 09:00:00 +0000 2026",
+                        "full_text": "@hadleywickham @rstats_david We're excited about the new package! Stay tuned for demos.",
+                        "conversation_id_str": "1900000000000000200",
+                        "reply_count": 2,
+                        "retweet_count": 5,
+                        "favorite_count": 30,
+                        "quote_count": 0,
+                        "bookmark_count": 3,
+                        "views": { "count": "4200" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [
+                            { "screen_name": "hadleywickham", "name": "Hadley Wickham", "id_str": "910000000000000101" },
+                            { "screen_name": "rstats_david", "name": "David Robinson", "id_str": "910000000000000102" }
+                          ],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000201",
+              "sortIndex": "1900000000000000201",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000201",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMjAx",
+                            "legacy": {
+                              "screen_name": "data_scientist_01",
+                              "name": "Data Scientist"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Tue Aug 05 09:30:00 +0000 2026",
+                        "full_text": "@rstudio This is exactly what we needed for our workflow! Great work.",
+                        "conversation_id_str": "1900000000000000200",
+                        "in_reply_to_status_id_str": "1900000000000000200",
+                        "reply_count": 0,
+                        "retweet_count": 1,
+                        "favorite_count": 8,
+                        "quote_count": 0,
+                        "bookmark_count": 0,
+                        "views": { "count": "1200" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [
+                            { "screen_name": "rstudio", "name": "RStudio", "id_str": "910000000000000200" }
+                          ],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000202",
+              "sortIndex": "1900000000000000202",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000202",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMjAy",
+                            "legacy": {
+                              "screen_name": "r_community",
+                              "name": "R Community"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Tue Aug 05 10:00:00 +0000 2026",
+                        "full_text": "@hadleywickham @rstudio Have you considered using this with Shiny? Would be a great combo.",
+                        "conversation_id_str": "1900000000000000200",
+                        "in_reply_to_status_id_str": "1900000000000000200",
+                        "reply_count": 1,
+                        "retweet_count": 0,
+                        "favorite_count": 12,
+                        "quote_count": 0,
+                        "bookmark_count": 2,
+                        "views": { "count": "950" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [
+                            { "screen_name": "hadleywickham", "name": "Hadley Wickham", "id_str": "910000000000000101" },
+                            { "screen_name": "rstudio", "name": "RStudio", "id_str": "910000000000000200" }
+                          ],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000203",
+              "sortIndex": "1900000000000000203",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000203",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMjAz",
+                            "legacy": {
+                              "screen_name": "tech_blogger",
+                              "name": "Tech Blogger"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Tue Aug 05 10:30:00 +0000 2026",
+                        "full_text": "Interesting discussion about @rstudio browser automation tools. Worth reading the full thread.",
+                        "conversation_id_str": "1900000000000000203",
+                        "reply_count": 0,
+                        "retweet_count": 3,
+                        "favorite_count": 15,
+                        "quote_count": 1,
+                        "bookmark_count": 4,
+                        "views": { "count": "2800" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [
+                            { "screen_name": "rstudio", "name": "RStudio", "id_str": "910000000000000200" }
+                          ],
+                          "urls": [
+                            { "url": "https://t.co/abc123", "expanded_url": "https://techblog.example.com/rstudio-browser" }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000204",
+              "sortIndex": "1900000000000000204",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000204",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMjA0",
+                            "legacy": {
+                              "screen_name": "hadleywickham",
+                              "name": "Hadley Wickham"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Tue Aug 05 11:00:00 +0000 2026",
+                        "full_text": "@rstudio Thanks! Looking forward to seeing the demos at the next conference.",
+                        "conversation_id_str": "1900000000000000200",
+                        "in_reply_to_status_id_str": "1900000000000000200",
+                        "reply_count": 0,
+                        "retweet_count": 2,
+                        "favorite_count": 20,
+                        "quote_count": 0,
+                        "bookmark_count": 1,
+                        "views": { "count": "3500" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [
+                            { "screen_name": "rstudio", "name": "RStudio", "id_str": "910000000000000200" }
+                          ],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
