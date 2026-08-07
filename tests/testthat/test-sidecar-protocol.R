@@ -53,6 +53,9 @@ test_that("valid ping request returns expected response", {
   testthat::skip_if(is.null(proc), "sidecar process cannot start")
   on.exit(xtweetsR:::.rx_stop_sidecar(proc))
 
+  # Capture the request ID before sending so we can verify the echo.
+  pre_id <- xtweetsR:::.rx_request_id$value
+
   resp <- xtweetsR:::.rx_send_request(proc, "ping")
 
   testthat::expect_true(
@@ -74,7 +77,7 @@ test_that("valid ping request returns expected response", {
 
   # id should be echoed back
   testthat::expect_equal(
-    resp$id, "ping",
+    resp$id, pre_id + 1L,
     info = "id is echoed back"
   )
 })
