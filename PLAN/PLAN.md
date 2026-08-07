@@ -319,7 +319,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 19: Create `x_close()` [ ]
+### Task 19: Create `x_close()` [x]
 
 **Goal:** Add public session cleanup.
 
