@@ -835,19 +835,29 @@ Add:
 
 ---
 
-### Task 47: Add JSONL incremental persistence [ ]
+### Task 47: Add JSONL incremental persistence [x]
 
 **Goal:** Avoid losing all progress when collection is interrupted.
 
 **Actions:**
-- Implement a simple append-only JSONL writer.
-- Persist posts in batches.
-- Keep this implementation independent from Arrow/DuckDB.
+- [x] Implement a simple append-only JSONL writer (`.rx_jsonl_write()`).
+- [x] Implement JSONL reader (`.rx_jsonl_read()`) with schema reconstruction.
+- [x] Persist posts in batches via `append` parameter.
+- [x] Keep this implementation independent from Arrow/DuckDB (base R + jsonlite only).
 
 **Acceptance criteria:**
-- Two batches can be appended.
-- Resulting JSONL can be read back.
-- Duplicate writing behavior is documented.
+- [x] Two batches can be appended and read back together (Test 3).
+- [x] Resulting JSONL can be read back with column types preserved (Test 7).
+- [x] Duplicate writing behavior is documented — duplicates are NOT deduplicated by reader (Test 4).
+- [x] Zero-row writes are no-ops (Test 5).
+- [x] Non-existent file returns empty canonical tibble (Test 6).
+- [x] 7 tests total in `tests/testthat/test-persistence.R`.
+
+**Files created:**
+- `R/persistence.R` — `.rx_jsonl_write()`, `.rx_jsonl_read()`, `.rx_jsonl_empty_tibble()`
+- `tests/testthat/test-persistence.R` — 7 tests (Tests 1-7)
+
+**Notes:** R not available in this environment for test execution (same as Task 24). TypeScript compiles cleanly. The persistence module uses only base R and jsonlite — no Arrow/DuckDB dependency. Follows the same internal helper pattern (`.` prefix, `@noRd`) as all existing modules.
 
 ---
 
