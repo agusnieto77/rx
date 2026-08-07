@@ -526,3 +526,147 @@ test_that("tibble column names match canonical schema", {
   expected <- xtweetsR:::.rx_canonical_fields()
   testthat::expect_equal(names(tbl), expected, info = "column names match canonical fields")
 })
+
+# --- Test 25: .rx_deduplicate_posts removes duplicate post_id from tibble (Task 38) ---
+test_that("deduplicate removes duplicate post_id from tibble, keeping first-seen", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  normalized <- xtweetsR:::.rx_normalize_posts(parsed)
+  tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
+
+  # Manually add a duplicate row (copy of the first post).
+  dup_tbl <- rbind(tbl, tbl[1L, , drop = FALSE])
+
+  testthat::expect_equal(nrow(dup_tbl), 5L, info = "5 rows before dedup (4 + 1 dup)")
+
+  deduped <- xtweetsR:::.rx_deduplicate_posts(dup_tbl)
+
+  testthat::expect_equal(nrow(deduped), 4L, info = "4 rows after dedup")
+  testthat::expect_equal(
+    deduped$post_id,
+    c("1900000000000000001", "1900000000000000002", "1900000000000000003", "1900000000000000004"),
+    info = "first-seen order preserved"
+  )
+  testthat::expect_true(inherits(deduped, "tbl_df"), info = "still a tibble")
+})
+
+# --- Test 26: .rx_deduplicate_posts removes duplicate post_id from normalized list (Task 38) ---
+test_that("deduplicate removes duplicate post_id from normalized list", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  normalized <- xtweetsR:::.rx_normalize_posts(parsed)
+
+  # Create a normalized list with a duplicate post (extend post_id and other fields).
+  dup_normalized <- lapply(normalized, function(vec) c(vec, vec[1L]))
+
+  deduped <- xtweetsR:::.rx_deduplicate_posts(dup_normalized)
+
+  testthat::expect_true(inherits(deduped, "tbl_df"), info = "returns a tibble")
+  testthat::expect_equal(nrow(deduped), 4L, info = "4 rows after dedup")
+})
+
+# --- Test 27: Different posts with same text are NOT deduplicated (Task 38) ---
+test_that("different post_ids with identical text are kept", {
+  same_text <- list(
+    post_id = c("100", "200"),
+    text = c("Same text", "Same text"),
+    author_id = c("a1", "a2"),
+    username = c("user1", "user2"),
+    display_name = c("User One", "User Two"),
+    created_at = c("Mon Jan 01 00:00:00 +0000 2025", "Tue Jan 02 00:00:00 +0000 2025"),
+    reply_count = c(1L, 2L),
+    repost_count = c(3L, 4L),
+    like_count = c(5L, 6L),
+    quote_count = c(0L, 1L),
+    bookmark_count = c(2L, 3L),
+    view_count = c(100L, 200L),
+    conversation_id = c("100", "200"),
+    is_reply = c(FALSE, FALSE),
+    is_repost = c(FALSE, FALSE),
+    is_quote = c(FALSE, FALSE),
+    reply_to_post_id = c(NA_character_, NA_character_),
+    quoted_post_id = c(NA_character_, NA_character_)
+  )
+
+  normalized <- xtweetsR:::.rx_normalize_posts(same_text)
+  deduped <- xtweetsR:::.rx_deduplicate_posts(normalized)
+
+  testthat::expect_equal(nrow(deduped), 2L, info = "both posts kept despite same text")
+  testthat::expect_equal(
+    deduped$post_id,
+    c("100", "200"),
+    info = "different post_ids are not collapsed"
+  )
+})
+
+# --- Test 28: Empty input returns unchanged (Task 38) ---
+test_that("zero-row tibble returns unchanged through deduplication", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  empty_norm <- xtweetsR:::.rx_normalize_posts(NULL)
+  empty_tbl <- xtweetsR:::.rx_normalized_to_tibble(empty_norm)
+  deduped <- xtweetsR:::.rx_deduplicate_posts(empty_tbl)
+
+  testthat::expect_equal(nrow(deduped), 0L, info = "zero rows stays zero")
+  testthat::expect_true(inherits(deduped, "tbl_df"), info = "still a tibble")
+})
+
+# --- Test 29: Deduplication preserves all column types (Task 38) ---
+test_that("deduplication preserves column types", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  normalized <- xtweetsR:::.rx_normalize_posts(parsed)
+  tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
+
+  # Add a duplicate to ensure we exercise the dedup path.
+  dup_tbl <- rbind(tbl, tbl[1L, , drop = FALSE])
+  deduped <- xtweetsR:::.rx_deduplicate_posts(dup_tbl)
+
+  type_map <- xtweetsR:::.rx_type_map()
+
+  for (field in names(type_map)) {
+    expected_type <- type_map[[field]]
+    actual <- deduped[[field]]
+
+    if (expected_type == "character") {
+      testthat::expect_true(
+        is.character(actual),
+        info = paste(field, "is character after dedup")
+      )
+    } else if (expected_type == "integer") {
+      testthat::expect_true(
+        is.integer(actual),
+        info = paste(field, "is integer after dedup")
+      )
+    } else if (expected_type == "logical") {
+      testthat::expect_true(
+        is.logical(actual),
+        info = paste(field, "is logical after dedup")
+      )
+    }
+  }
+})

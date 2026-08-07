@@ -1,4 +1,4 @@
-# Internal: Canonical post normalizer
+# Internal: Canonical post normalizer and deduplication
 #
 # This module converts parsed raw posts (the list-of-vectors output from
 # `.rx_parse_posts`) into one stable canonical schema.  The parser and
@@ -6,6 +6,7 @@
 #
 #   parser  -> list of 18 named character/integer/logical vectors
 #   normalizer -> validated, type-coerced, consistently-represented output
+#   dedup   -> removes duplicate posts by post_id, first-seen order
 #
 # Every output row (column in the list) has the same columns.
 # Missing values are represented consistently:
@@ -20,6 +21,8 @@
 #   # Internal use only — not exported.
 #   # parsed <- xtweetsR:::.rx_parse_posts(response)
 #   # normalized <- xtweetsR:::.rx_normalize_posts(parsed)
+#   # posts <- xtweetsR:::.rx_normalized_to_tibble(normalized)
+#   # deduped <- xtweetsR:::.rx_deduplicate_posts(posts)
 NULL
 
 #' Canonical field schema for post normalizer.
@@ -264,4 +267,59 @@ NULL
   # Build the tibble directly from the list.
   # The normalizer already guarantees consistent lengths and correct types.
   tibble::as_tibble(normalized)
+}
+
+#' Deduplicate posts by `post_id`, preserving first-seen order.
+#'
+#' Takes a normalized post list (as returned by `.rx_normalize_posts()`)
+#' or a tibble (as returned by `.rx_normalized_to_tibble()`) and removes
+#' rows where `post_id` has already been seen. The first occurrence of
+#' each `post_id` is kept; subsequent duplicates are dropped.
+#'
+#' This function deduplicates by `post_id` only. Two posts that share the
+#' same text but have different `post_id` values are NOT deduplicated.
+#'
+#' @param posts A normalized post list or a tibble.
+#' @return The same type as the input, with duplicate `post_id` rows removed.
+#'   When the input has zero rows, the output is returned unchanged.
+#'
+#' @examples
+#'   # Internal use only — not exported.
+#'   # parsed <- xtweetsR:::.rx_parse_posts(response)
+#'   # normalized <- xtweetsR:::.rx_normalize_posts(parsed)
+#'   # deduped <- xtweetsR:::.rx_deduplicate_posts(normalized)
+#'
+#' @noRd
+.rx_deduplicate_posts <- function(posts) {
+  # If it's already a tibble, work on it directly.
+  if (inherits(posts, "tbl_df")) {
+    return(.rx_deduplicate_tibble(posts))
+  }
+
+  # Otherwise treat it as a normalized list and convert first.
+  if (is.list(posts) && length(posts) > 0L && !is.null(posts$post_id)) {
+    tbl <- .rx_normalized_to_tibble(posts)
+    return(.rx_deduplicate_tibble(tbl))
+  }
+
+  # Fallback: return as-is (empty input).
+  posts
+}
+
+#' Internal: deduplicate a post tibble by `post_id`.
+#'
+#' @param tbl A tibble with at least a `post_id` column.
+#' @return A tibble with duplicate `post_id` rows removed (first-seen kept).
+#' @noRd
+.rx_deduplicate_tibble <- function(tbl) {
+  n <- nrow(tbl)
+  if (n == 0L) {
+    return(tbl)
+  }
+
+  # Use match to keep only the first occurrence of each post_id.
+  # `match` returns the index of the first match; we keep rows whose
+  # index equals the match result — i.e. the first time each value appears.
+  keep <- !duplicated(tbl$post_id)
+  tbl[keep, , drop = FALSE]
 }
