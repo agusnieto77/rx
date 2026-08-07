@@ -1,0 +1,175 @@
+{
+  "data": {
+    "timeline": {
+      "instructions": [
+        {
+          "type": "TimelineAddEntries",
+          "entries": [
+            {
+              "entryId": "tweet-1900000000000000001",
+              "sortIndex": "1900000000000000001",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000001",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMDE=",
+                            "legacy": {
+                              "screen_name": "rstudio",
+                              "name": "RStudio"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Mon Aug 04 14:30:00 +0000 2026",
+                        "full_text": "New release of the tidyverse ecosystem is out. Check it out!",
+                        "conversation_id_str": "1900000000000000001",
+                        "reply_count": 12,
+                        "retweet_count": 45,
+                        "favorite_count": 230,
+                        "quote_count": 3,
+                        "bookmark_count": 18,
+                        "bookmark_count_info": { "count": "18" },
+                        "views": { "count": "15420" },
+                        "entities": {
+                          "hashtags": [
+                            { "text": "RStats" },
+                            { "text": "tidyverse" }
+                          ],
+                          "user_mentions": [],
+                          "urls": [
+                            { "url": "https://t.co/abc123", "expanded_url": "https://posit.co/blog/new-release" }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000002",
+              "sortIndex": "1900000000000000002",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000002",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMDI=",
+                            "legacy": {
+                              "screen_name": "rstats_david",
+                              "name": "David Robinson"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Mon Aug 04 15:00:00 +0000 2026",
+                        "full_text": "Using R to analyze climate data — here is a quick walkthrough of the pipeline.",
+                        "conversation_id_str": "1900000000000000002",
+                        "in_reply_to_status_id_str": "1900000000000000001",
+                        "reply_count": 5,
+                        "retweet_count": 8,
+                        "favorite_count": 67,
+                        "quote_count": 1,
+                        "bookmark_count": 4,
+                        "bookmark_count_info": { "count": "4" },
+                        "views": { "count": "4210" },
+                        "entities": {
+                          "hashtags": [
+                            { "text": "rstats" }
+                          ],
+                          "user_mentions": [
+                            { "screen_name": "rstudio", "name": "RStudio", "id_str": "910000000000000001" }
+                          ],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000003",
+              "sortIndex": "1900000000000000003",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000003",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMDAz",
+                            "legacy": {
+                              "screen_name": "landc",
+                              "name": "Lionel Henry"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Mon Aug 04 15:30:00 +0000 2026",
+                        "full_text": "Quasiquotation in R is powerful once you understand it. Thread below on when to use !! vs {{",
+                        "conversation_id_str": "1900000000000000003",
+                        "reply_count": 20,
+                        "retweet_count": 30,
+                        "favorite_count": 150,
+                        "quote_count": 5,
+                        "bookmark_count": 42,
+                        "bookmark_count_info": { "count": "42" },
+                        "views": { "count": "28500" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            }
+          ]
+        },
+        {
+          "type": "TimelineAddToModule",
+          "moduleItems": [
+            {
+              "entryId": "cursor-bottom-1900000000000000004",
+              "item": {
+                "content": {
+                  "cursorType": "Bottom",
+                  "value": "HCaAgICwlb6rsKwKFAgAEg8IABIACAIA"
+                }
+              }
+            },
+            {
+              "entryId": "cursor-top-1900000000000000000",
+              "item": {
+                "content": {
+                  "cursorType": "Top",
+                  "value": "HCaAgICwlb6rsKwKFAgAEg8IABIACAAB"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

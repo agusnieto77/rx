@@ -464,3 +464,174 @@ test_that("test server serves fake-post.json with application/json content type"
   testthat::expect_true("entries" %in% names(parsed), info = "served JSON has entries")
   testthat::expect_true(isTRUE(nrow(parsed$entries) >= 1), info = "entries has at least one post")
 })
+
+# --- Test 16: x-search-response.json fixture is valid JSON with correct top-level structure ---
+# Task 30: Validates the X search response fixture introduced for parser testing.
+test_that("x-search-response.json parses as valid JSON with expected top-level structure", {
+  fixture_path <- file.path(
+    dirname(dirname(getwd())),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  testthat::expect_true(file.exists(fixture_path), info = "X search fixture exists")
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  testthat::expect_true(nzchar(content), info = "X search fixture is non-empty")
+
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  testthat::expect_true(is.list(parsed), info = "parsed JSON is a list")
+  testthat::expect_true("data" %in% names(parsed), info = "has 'data' field")
+  testthat::expect_true(is.list(parsed$data), info = "data is a list")
+  testthat::expect_true("timeline" %in% names(parsed$data), info = "data has 'timeline' field")
+  testthat::expect_true("instructions" %in% names(parsed$data$timeline), info = "timeline has 'instructions'")
+})
+
+# --- Test 17: x-search-response.json contains tweet entries with post data ---
+# Validates that the fixture contains at least one tweet entry with the
+# expected nesting: instructions > entries > tweet_results > result.
+test_that("x-search-response.json contains tweet entries with post data", {
+  fixture_path <- file.path(
+    dirname(dirname(getwd())),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  instructions <- parsed$data$timeline$instructions
+
+  # Find the TimelineAddEntries instruction.
+  add_entries <- Filter(function(inst) inst$type == "TimelineAddEntries", instructions)
+  testthat::expect_true(length(add_entries) >= 1, info = "TimelineAddEntries instruction exists")
+
+  entries <- add_entries[[1]]$entries
+  testthat::expect_true(length(entries) >= 1, info = "has at least one entry")
+
+  # Each entry should have tweet_results containing a result with rest_id.
+  tweet_entries <- Filter(function(e) {
+    !is.null(e$content$itemContent$tweet_results$result)
+  }, entries)
+  testthat::expect_true(length(tweet_entries) >= 1, info = "at least one tweet entry found")
+
+  # Extract rest_ids — they should be character strings.
+  rest_ids <- vapply(tweet_entries, function(e) {
+    e$content$itemContent$tweet_results$result$rest_id
+  }, character(1))
+
+  testthat::expect_true(all(nzchar(rest_ids)), info = "all rest_ids are non-empty")
+  testthat::expect_true(all(is.character(rest_ids)), info = "all rest_ids are character")
+  testthat::expect_true(length(unique(rest_ids)) == length(rest_ids), info = "rest_ids are unique")
+})
+
+# --- Test 18: x-search-response.json contains pagination cursors ---
+# Validates that the fixture includes cursor entries for infinite scroll.
+test_that("x-search-response.json contains pagination cursor entries", {
+  fixture_path <- file.path(
+    dirname(dirname(getwd())),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  instructions <- parsed$data$timeline$instructions
+
+  # Find the TimelineAddToModule instruction that holds cursors.
+  add_module <- Filter(function(inst) inst$type == "TimelineAddToModule", instructions)
+  testthat::expect_true(length(add_module) >= 1, info = "TimelineAddToModule instruction exists")
+
+  module_items <- add_module[[1]]$moduleItems
+  cursor_entries <- Filter(function(item) {
+    !is.null(item$item$content$cursorType)
+  }, module_items)
+
+  testthat::expect_true(length(cursor_entries) >= 1, info = "at least one cursor entry exists")
+
+  cursor_types <- vapply(cursor_entries, function(e) {
+    e$item$content$cursorType
+  }, character(1))
+
+  testthat::expect_true("Bottom" %in% cursor_types, info = "Bottom cursor present")
+  testthat::expect_true("Top" %in% cursor_types, info = "Top cursor present")
+
+  # Cursor values should be non-empty strings.
+  cursor_values <- vapply(cursor_entries, function(e) {
+    e$item$content$value
+  }, character(1))
+  testthat::expect_true(all(nzchar(cursor_values)), info = "all cursor values are non-empty")
+})
+
+# --- Test 19: x-search-response.json post structure supports downstream parser expectations ---
+# Verifies that each tweet in the fixture has the fields the parser will need:
+# rest_id, user screen_name/name, created_at, full_text, and engagement counts.
+test_that("x-search-response.json posts have fields expected by the downstream parser", {
+  fixture_path <- file.path(
+    dirname(dirname(getwd())),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  instructions <- parsed$data$timeline$instructions
+  add_entries <- Filter(function(inst) inst$type == "TimelineAddEntries", instructions)
+  entries <- add_entries[[1]]$entries
+
+  tweet_entries <- Filter(function(e) {
+    !is.null(e$content$itemContent$tweet_results$result)
+  }, entries)
+
+  testthat::expect_true(length(tweet_entries) >= 2, info = "at least 2 tweets in fixture")
+
+  for (i in seq_along(tweet_entries)) {
+    tweet <- tweet_entries[[i]]
+    result <- tweet$content$itemContent$tweet_results$result
+
+    # rest_id is required.
+    testthat::expect_true(
+      "rest_id" %in% names(result),
+      info = paste("tweet", i, "has rest_id")
+    )
+
+    # User identity via core > user_results > result > legacy.
+    user_result <- result$core$user_results$result$legacy
+    testthat::expect_true(
+      "screen_name" %in% names(user_result),
+      info = paste("tweet", i, "has screen_name")
+    )
+    testthat::expect_true(
+      "name" %in% names(user_result),
+      info = paste("tweet", i, "has name")
+    )
+
+    # Tweet text and metadata via legacy.
+    legacy <- result$legacy
+    testthat::expect_true(
+      "full_text" %in% names(legacy),
+      info = paste("tweet", i, "has full_text")
+    )
+    testthat::expect_true(
+      "created_at" %in% names(legacy),
+      info = paste("tweet", i, "has created_at")
+    )
+    testthat::expect_true(
+      "conversation_id_str" %in% names(legacy),
+      info = paste("tweet", i, "has conversation_id_str")
+    )
+
+    # Engagement metrics.
+    testthat::expect_true(
+      "reply_count" %in% names(legacy),
+      info = paste("tweet", i, "has reply_count")
+    )
+    testthat::expect_true(
+      "retweet_count" %in% names(legacy),
+      info = paste("tweet", i, "has retweet_count")
+    )
+    testthat::expect_true(
+      "favorite_count" %in% names(legacy),
+      info = paste("tweet", i, "has favorite_count")
+    )
+    testthat::expect_true(
+      "views" %in% names(legacy),
+      info = paste("tweet", i, "has views")
+    )
+  }
+})

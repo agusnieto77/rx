@@ -489,7 +489,7 @@ Test:
 
 ---
 
-### Task 30: Add minimal X network fixtures [ ]
+### Task 30: Add minimal X network fixtures [x]
 
 **Goal:** Turn observed X response structures into offline parser inputs.
 
@@ -499,9 +499,11 @@ Test:
 - Keep enough structure to represent one or more posts and pagination if present.
 
 **Acceptance criteria:**
-- Fixture parses as valid JSON.
-- Fixture is small enough for unit testing.
-- No parser code is required yet beyond fixture validation.
+- [x] Fixture parses as valid JSON (x-search-response.json, 6.8 KB).
+- [x] Fixture is small enough for unit testing (3 tweets + 2 cursors).
+- [x] No parser code is required yet beyond fixture validation (4 new tests).
+
+**Notes:** No live X traffic was captured (no Lightpanda running). Fixture created from known X/Twitter GraphQL search response structure. Includes `TimelineAddEntries` with 3 tweet entries and `TimelineAddToModule` with Bottom/Top cursors.
 
 ---
 

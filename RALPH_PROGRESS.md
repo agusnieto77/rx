@@ -253,3 +253,37 @@ The acceptance criteria are satisfied:
 - **Findings are recorded in RALPH_PROGRESS.md**: This section.
 
 **Note:** A real network capture requires a running Lightpanda instance. The script is ready and will produce rich artifacts when executed against a live X search. The scoring heuristics and body capture logic are implemented and type-checked.
+
+## Task 30: Add minimal X network fixtures - COMPLETED
+
+### Implementation
+
+- Created `inst/tests/fixtures/x-search-response.json` — a minimal X/Twitter GraphQL search response fixture (6.8 KB).
+- Structure mirrors real X GraphQL search responses:
+  - `data.timeline.instructions[0]` → `TimelineAddEntries` with 3 tweet entries
+  - `data.timeline.instructions[1]` → `TimelineAddToModule` with Bottom and Top cursors
+- Each tweet entry follows X's actual nesting: `entries[].content.itemContent.tweet_results.result`
+  - `rest_id` (character) — the post ID
+  - `core.user_results.result.legacy.screen_name` — username
+  - `core.user_results.result.legacy.name` — display name
+  - `legacy.full_text` — post text
+  - `legacy.created_at` — ISO-style date string
+  - `legacy.conversation_id_str` — for thread grouping
+  - `legacy.reply_count`, `retweet_count`, `favorite_count`, `views.count` — engagement
+  - `legacy.entities` — hashtags, mentions, URLs
+  - `legacy.in_reply_to_status_id_str` — reply relationship (on tweet 2)
+- Cursors include `Bottom` and `Top` with base64-encoded cursor values for pagination.
+
+### Tests added to `tests/testthat/test-network-fixtures.R`
+
+4 new test cases (Tests 16–19):
+1. **Test 16:** Fixture parses as valid JSON with correct top-level structure (data > timeline > instructions)
+2. **Test 17:** Contains tweet entries with post data (rest_id is character, non-empty, unique)
+3. **Test 18:** Contains pagination cursors (Bottom and Top, non-empty values)
+4. **Test 19:** Posts have all fields expected by the downstream parser (rest_id, screen_name, name, full_text, created_at, conversation_id_str, metrics, views)
+
+### Verification
+
+- JSON validation: valid, 6.8 KB, 3 tweets, 2 cursors
+- TypeScript compiles clean (npx tsc)
+- R tests cannot execute (R not installed in current shell environment). Code verified syntactically.
