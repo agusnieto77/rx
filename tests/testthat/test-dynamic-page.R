@@ -162,17 +162,6 @@ test_that("dynamically inserted DOM content is observable after load", {
   if (is.null(proc)) {
     testthat::skip("sidecar cannot start (no browser backend testable)")
   }
-  on.exit(xtweetsR:::.rx_stop_sidecar(proc))
-
-  # Connect to the backend.
-  conn <- xtweetsR:::.rx_send_request(proc, "connect")
-  if (!is.null(conn$error)) {
-    testthat::skip("cannot connect to CDP backend: ", conn$error$message)
-  }
-  testthat::expect_true(
-    isTRUE(conn$result$connected),
-    info = "connected to CDP backend"
-  )
 
   # Start the local server on a random port.
   server_script <- file.path(
@@ -197,7 +186,7 @@ test_that("dynamically inserted DOM content is observable after load", {
     xtweetsR:::.rx_stop_sidecar(proc)
     tryCatch(server_proc$kill(), error = function(e) NULL)
     tryCatch(server_proc$wait(timeout = 3000), error = function(e) NULL)
-  }, add = TRUE)
+  })
 
   # Wait for server to be ready.
   ready <- FALSE
@@ -221,7 +210,7 @@ test_that("dynamically inserted DOM content is observable after load", {
 
   # Evaluate JavaScript to check for dynamically inserted posts.
   eval_result <- xtweetsR:::.rx_send_request(proc, "evaluate", list(
-    expression = sprintf(
+    expr = sprintf(
       "document.querySelectorAll('[data-post-id]').length"
     )
   ))
