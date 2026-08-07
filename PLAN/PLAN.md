@@ -195,7 +195,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 11: Create the browser backend interface
+### Task 11: Create the browser backend interface [DONE]
 
 **Goal:** Separate the public R API from Lightpanda-specific implementation.
 
