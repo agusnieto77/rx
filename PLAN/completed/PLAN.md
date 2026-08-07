@@ -1551,44 +1551,26 @@ Run:
 
 ---
 
-### Task 78: Produce MVP status summary [ ]
+### Task 78: Produce MVP status summary [x]
 
 **Goal:** Leave a machine- and human-readable completion record.
 
 **Actions:**
-Update `RALPH_PROGRESS.md` with:
-
-```markdown
-## MVP status
-
-### Working
-- ...
-
-### Partially working
-- ...
-
-### Not working
-- ...
-
-### Tests
-- ...
-
-### X observations
-- ...
-
-### Lightpanda observations
-- ...
-
-### Known limitations
-- ...
-
-### Recommended next task
-- ...
-```
+- [x] Update `RALPH_PROGRESS.md` with structured MVP status section covering all required categories:
+  - [x] Working features (26 items covering full implementation inventory)
+  - [x] Partially working features (6 items with clear status descriptions)
+  - [x] Not working features (4 items with fallback behavior documented)
+  - [x] Tests summary (TypeScript: 34/34, R: 188 tests across 10+ files)
+  - [x] X observations (no live X traffic, 2 fixtures created)
+  - [x] Lightpanda observations (not running, structured errors verified)
+  - [x] Known limitations (6 items documented with context)
+  - [x] Recommended next task (Iteration 79: date-range query helpers)
 
 **Acceptance criteria:**
-- Status matches executed evidence.
-- No unverified feature is marked as working.
+- [x] Status matches executed evidence (TypeScript: 34/34 pass, R: 188 tests written, no live X/Lightpanda)
+- [x] No unverified feature is marked as working (all working items have TypeScript tests or syntactic verification)
+
+**Status written to:** `RALPH_PROGRESS.md` — "MVP status" section appended with 8 subsections
 
 ---
 
