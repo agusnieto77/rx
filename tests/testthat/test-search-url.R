@@ -227,3 +227,125 @@ test_that("result is always a single character string", {
   expect_length(url, 1L)
   expect_true(is.character(url))
 })
+
+# ===================================================================
+# Date-range filter helpers (Iteration 79)
+# ===================================================================
+
+test_that(".rx_build_date_range_filter returns NULL when both args are NULL", {
+  expect_null(.rx_build_date_range_filter())
+  expect_null(.rx_build_date_range_filter(since = NULL, until = NULL))
+})
+
+test_that(".rx_build_date_range_filter with only since", {
+  result <- .rx_build_date_range_filter(since = "2024-01-01")
+  expect_equal(result, "since:2024-01-01")
+})
+
+test_that(".rx_build_date_range_filter with only until", {
+  result <- .rx_build_date_range_filter(until = "2024-12-31")
+  expect_equal(result, "until:2024-12-31")
+})
+
+test_that(".rx_build_date_range_filter with both since and until", {
+  result <- .rx_build_date_range_filter(since = "2024-01-01", until = "2024-12-31")
+  expect_equal(result, "since:2024-01-01 until:2024-12-31")
+})
+
+test_that(".rx_build_date_range_filter rejects invalid dates", {
+  expect_error(.rx_build_date_range_filter(since = "not-a-date"), "not a valid date")
+  expect_error(.rx_build_date_range_filter(until = "2024-13-01"), "not a valid date")
+  expect_error(.rx_build_date_range_filter(since = ""), "must be a single character")
+})
+
+test_that(".rx_build_date_range_filter rejects NA and non-character", {
+  expect_error(.rx_build_date_range_filter(since = NA_character_), "must be a single character")
+  expect_error(.rx_build_date_range_filter(until = 123L), "must be a single character")
+})
+
+test_that(".rx_build_date_range_filter trims whitespace", {
+  result <- .rx_build_date_range_filter(since = " 2024-01-01 ", until = "2024-12-31  ")
+  expect_equal(result, "since:2024-01-01 until:2024-12-31")
+})
+
+# -- search URL with date range ------------------------------------------------
+
+test_that("since appends to search URL", {
+  url <- .rx_construct_search_url("r stats", since = "2024-01-01")
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+})
+
+test_that("until appends to search URL", {
+  url <- .rx_construct_search_url("r stats", until = "2024-12-31")
+  expect_true(grepl("until%3A2024-12-31", url, ignore.case = TRUE))
+})
+
+test_that("both since and until append to search URL", {
+  url <- .rx_construct_search_url("AI", since = "2024-01-01", until = "2024-12-31")
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+  expect_true(grepl("until%3A2024-12-31", url, ignore.case = TRUE))
+})
+
+test_that("date range works with from_user", {
+  url <- .rx_construct_search_url("r language", from_user = "rstudio", since = "2024-06-01")
+  expect_true(grepl("from%3Arstudio", url, ignore.case = TRUE))
+  expect_true(grepl("since%3A2024-06-01", url, ignore.case = TRUE))
+})
+
+test_that("date range works with arbitrary filter", {
+  url <- .rx_construct_search_url("climate", since = "2024-01-01", filter = "lang:en")
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+  expect_true(grepl("lang%3Aen", url, ignore.case = TRUE))
+})
+
+test_that("date range without other params produces minimal filter", {
+  url <- .rx_construct_search_url("test", since = "2024-01-01")
+  expect_true(grepl("test%20since%3A2024-01-01", url, ignore.case = TRUE))
+})
+
+test_that("invalid since throws in search URL", {
+  expect_error(.rx_construct_search_url("test", since = "bad"), "not a valid date")
+  expect_error(.rx_construct_search_url("test", until = NA_character_), "must be a single character")
+})
+
+# -- user timeline URL with date range -----------------------------------------
+
+test_that("since appends to user timeline URL as query filter", {
+  url <- .rx_construct_user_timeline_url("rstudio", since = "2024-01-01")
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+  expect_true(grepl("^https://x.com/rstudio\\?", url))
+})
+
+test_that("until appends to user timeline URL as query filter", {
+  url <- .rx_construct_user_timeline_url("hadley", until = "2024-06-01")
+  expect_true(grepl("until%3A2024-06-01", url, ignore.case = TRUE))
+})
+
+test_that("both since and until append to user timeline URL", {
+  url <- .rx_construct_user_timeline_url("rstudio", since = "2024-01-01", until = "2024-12-31")
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+  expect_true(grepl("until%3A2024-12-31", url, ignore.case = TRUE))
+})
+
+test_that("date range combined with path", {
+  url <- .rx_construct_user_timeline_url("rstudio", path = "media", since = "2024-01-01")
+  expect_true(grepl("https://x.com/rstudio/media\\?", url))
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+})
+
+test_that("date range combined with raw filter", {
+  url <- .rx_construct_user_timeline_url("rstudio", since = "2024-01-01", filter = "tagged_media=true")
+  # Both should be in the query parameter, combined and encoded
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+  expect_true(grepl("tagged_media", url, ignore.case = TRUE))
+})
+
+test_that("date range NULL gives no query string", {
+  url <- .rx_construct_user_timeline_url("rstudio", since = NULL, until = NULL)
+  expect_equal(url, "https://x.com/rstudio")
+})
+
+test_that("invalid date throws in user timeline URL", {
+  expect_error(.rx_construct_user_timeline_url("rstudio", since = "bad"), "not a valid date")
+  expect_error(.rx_construct_user_timeline_url("rstudio", until = NA_character_), "must be a single character")
+})

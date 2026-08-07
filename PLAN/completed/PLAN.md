@@ -1578,9 +1578,23 @@ Run:
 
 Do not execute these until Tasks 1–78 are complete unless a previous task explicitly requires one as a dependency.
 
-### Iteration 79: Add date-range query helpers [ ]
+### Iteration 79: Add date-range query helpers [x]
 
 Add `since` and `until` query helpers with unit tests.
+
+**Acceptance criteria:**
+- [x] `.rx_build_date_range_filter()` added to `R/search_url.R` — builds `since:<date> until:<date>` filter strings, validates YYYY-MM-DD format.
+- [x] `.rx_construct_search_url()` extended with `since` and `until` parameters — date filters are built and appended to the query.
+- [x] `.rx_construct_user_timeline_url()` extended with `since` and `until` parameters — date filters combined with raw filter as URL query parameter.
+- [x] `x_search()` accepts `since` and `until` parameters with date validation, passes them to URL construction.
+- [x] `x_user_posts()` accepts `since` and `until` parameters with date validation, passes them to URL construction.
+- [x] 25 new tests in `tests/testthat/test-search-url.R` covering: filter construction (7 tests), search URL date range (8 tests), user timeline URL date range (8 tests), and input validation (2 tests).
+- [x] TypeScript compiles cleanly (34/34 tests pass).
+
+**Files changed:**
+- `R/search_url.R` — added `.rx_build_date_range_filter()`, extended `.rx_construct_search_url()` and `.rx_construct_user_timeline_url()` with `since`/`until`
+- `R/search.R` — extended `x_search()` and `x_user_posts()` with `since`/`until` params and validation
+- `tests/testthat/test-search-url.R` — added 25 new tests
 
 ### Iteration 80: Add language query helper [ ]
 

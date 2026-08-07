@@ -252,6 +252,12 @@ print.rx_collection_provenance <- function(x, ...) {
 #' @param quiet Logical, default `FALSE`. When `TRUE`, progress messages
 #'   are suppressed. When `FALSE` (default), the function prints
 #'   informational messages at each major step.
+#' @param since Optional character string with a date (YYYY-MM-DD).
+#'   When provided, restricts results to posts from this date onwards.
+#'   Passed to the X search as `since:<date>`.
+#' @param until Optional character string with a date (YYYY-MM-DD).
+#'   When provided, restricts results to posts up to this date.
+#'   Passed to the X search as `until:<date>`.
 #'
 #' @return A tibble with the canonical post schema (26 columns) containing
 #'   posts found during the search. Returns a zero-row tibble when no
@@ -263,12 +269,15 @@ print.rx_collection_provenance <- function(x, ...) {
 #'   posts <- x_search(sess, "r programming", limit = 10)
 #'   print(posts)
 #'   x_close(sess)
+#'   # Date-range search:
+#'   posts <- x_search(sess, "AI", since = "2024-01-01", until = "2024-12-31")
+#'   x_close(sess)
 #' }
 #'
 #' @export
 x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 5L,
                      resume = FALSE, checkpoint_path = NULL, jsonl_path = NULL,
-                     quiet = FALSE) {
+                     quiet = FALSE, since = NULL, until = NULL) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -304,6 +313,33 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   if (!is.null(jsonl_path)) {
     if (!is.character(jsonl_path) || length(jsonl_path) != 1L || anyNA(jsonl_path) || !nzchar(jsonl_path[[1L]])) {
       stop("jsonl_path must be a single non-empty character string, or NULL.", call. = FALSE)
+    }
+  }
+
+  # Validate date-range parameters.
+  if (!is.null(since)) {
+    if (!is.character(since) || length(since) != 1L || anyNA(since)) {
+      stop("since must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
+    }
+    d <- trimws(since)
+    if (!nzchar(d)) {
+      stop("since must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
+    }
+    if (is.na(as.Date(d))) {
+      stop("since is not a valid date (YYYY-MM-DD): ", since, call. = FALSE)
+    }
+  }
+
+  if (!is.null(until)) {
+    if (!is.character(until) || length(until) != 1L || anyNA(until)) {
+      stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
+    }
+    d <- trimws(until)
+    if (!nzchar(d)) {
+      stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
+    }
+    if (is.na(as.Date(d))) {
+      stop("until is not a valid date (YYYY-MM-DD): ", until, call. = FALSE)
     }
   }
 
@@ -350,7 +386,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   )
 
   # 3. Construct search URL and navigate.
-  url <- .rx_construct_search_url(query)
+  url <- .rx_construct_search_url(query, since = since, until = until)
 
   nav_result <- backend$navigate(url)
   if (is.null(nav_result$status) || nav_result$status == "error") {
@@ -1251,6 +1287,10 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
 #' @param quiet Logical, default `FALSE`. When `TRUE`, progress messages
 #'   are suppressed. When `FALSE` (default), the function prints
 #'   informational messages at each major step.
+#' @param since Optional character string with a date (YYYY-MM-DD).
+#'   When provided, restricts results to posts from this date onwards.
+#' @param until Optional character string with a date (YYYY-MM-DD).
+#'   When provided, restricts results to posts up to this date.
 #'
 #' @return A tibble with the canonical post schema (26 columns) containing
 #'   posts found on the user's timeline. Returns a zero-row tibble when
@@ -1268,7 +1308,7 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
 x_user_posts <- function(session, username, limit = NULL, path = NULL,
                          scroll = TRUE, max_scrolls = 5L,
                          resume = FALSE, checkpoint_path = NULL, jsonl_path = NULL,
-                         quiet = FALSE) {
+                         quiet = FALSE, since = NULL, until = NULL) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -1304,6 +1344,33 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
   if (!is.null(jsonl_path)) {
     if (!is.character(jsonl_path) || length(jsonl_path) != 1L || anyNA(jsonl_path) || !nzchar(jsonl_path[[1L]])) {
       stop("jsonl_path must be a single non-empty character string, or NULL.", call. = FALSE)
+    }
+  }
+
+  # Validate date-range parameters.
+  if (!is.null(since)) {
+    if (!is.character(since) || length(since) != 1L || anyNA(since)) {
+      stop("since must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
+    }
+    d <- trimws(since)
+    if (!nzchar(d)) {
+      stop("since must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
+    }
+    if (is.na(as.Date(d))) {
+      stop("since is not a valid date (YYYY-MM-DD): ", since, call. = FALSE)
+    }
+  }
+
+  if (!is.null(until)) {
+    if (!is.character(until) || length(until) != 1L || anyNA(until)) {
+      stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
+    }
+    d <- trimws(until)
+    if (!nzchar(d)) {
+      stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
+    }
+    if (is.na(as.Date(d))) {
+      stop("until is not a valid date (YYYY-MM-DD): ", until, call. = FALSE)
     }
   }
 
@@ -1348,7 +1415,7 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
   )
 
   # 3. Construct user timeline URL and navigate.
-  url <- .rx_construct_user_timeline_url(username, path = path)
+  url <- .rx_construct_user_timeline_url(username, path = path, since = since, until = until)
 
   nav_result <- backend$navigate(url)
   if (is.null(nav_result$status) || nav_result$status == "error") {

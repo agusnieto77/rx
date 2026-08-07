@@ -19,17 +19,96 @@ NULL
 #' Query terms are separated by spaces (X's default search behaviour).
 #' Optional filters can be appended as URL parameters (e.g. `from_user`).
 #'
+#' Build an X/Twitter date-range filter string.
+#'
+#' Takes optional `since` and `until` date arguments and returns a
+#' single X search filter string such as `"since:2024-01-01 until:2024-12-31"`.
+#' Only non-NULL, non-empty dates are included.
+#'
+#' # Date format
+#' X search accepts dates in `YYYY-MM-DD` format. This function validates
+#' that each date is parseable as `as.Date()` before including it.
+#'
+#' @param since Optional character string with a date (YYYY-MM-DD).
+#'   When provided, appends `since:<date>` to the filter.
+#' @param until Optional character string with a date (YYYY-MM-DD).
+#'   When provided, appends `until:<date>` to the filter.
+#'
+#' @return A character string with the combined date-range filter,
+#'   or `NULL` when neither argument is provided.
+#'
+#' @examples
+#'   # Internal use only — not exported.
+#'   .rx_build_date_range_filter(since = "2024-01-01")
+#'   .rx_build_date_range_filter(since = "2024-01-01", until = "2024-12-31")
+#'   .rx_build_date_range_filter()
+#'
+#' @noRd
+.rx_build_date_range_filter <- function(since = NULL, until = NULL) {
+  parts <- character(0L)
+
+  if (!is.null(since)) {
+    if (!is.character(since) || length(since) != 1L || anyNA(since)) {
+      stop("since must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
+    }
+    d <- trimws(since)
+    if (!nzchar(d)) {
+      stop("since must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
+    }
+    if (is.na(as.Date(d))) {
+      stop("since is not a valid date (YYYY-MM-DD): ", since, call. = FALSE)
+    }
+    parts <- c(parts, paste0("since:", d))
+  }
+
+  if (!is.null(until)) {
+    if (!is.character(until) || length(until) != 1L || anyNA(until)) {
+      stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
+    }
+    d <- trimws(until)
+    if (!nzchar(d)) {
+      stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
+    }
+    if (is.na(as.Date(d))) {
+      stop("until is not a valid date (YYYY-MM-DD): ", until, call. = FALSE)
+    }
+    parts <- c(parts, paste0("until:", d))
+  }
+
+  if (length(parts) == 0L) {
+    return(NULL)
+  }
+
+  paste(parts, collapse = " ")
+}
+
+#' Construct an X search URL from a query string.
+#'
+#' Takes a search query and returns a properly URL-encoded X search URL.
+#' Query terms are separated by spaces (X's default search behaviour).
+#' Optional filters can be appended as URL parameters (e.g. `from_user`).
+#'
 #' @param query Character string, the search query. Must be non-empty.
 #' @param from_user Optional character string. When provided, appends
 #'   `from:<username>` to the query before encoding (X search syntax).
+#' @param since Optional character string with a date (YYYY-MM-DD).
+#'   When provided, appends `since:<date>` to the query before encoding.
+#' @param until Optional character string with a date (YYYY-MM-DD).
+#'   When provided, appends `until:<date>` to the query before encoding.
 #' @param filter Optional character string. Raw filter appended after the
-#'   query (e.g. `"lang:en"` or `"until:2026-01-01"`). The filter is
+#'   query (e.g. `"lang:en"`). The filter is
 #'   URL-encoded via `URLencode(raw, reserved=TRUE)`.
 #'
 #' @return Character string with the full X search URL.
 #'
+#' @examples
+#'   # Internal use only — not exported.
+#'   .rx_construct_search_url("r programming")
+#'   .rx_construct_search_url("climate change", from_user = "alice")
+#'   .rx_construct_search_url("AI", since = "2024-01-01", until = "2024-12-31")
+#'
 #' @noRd
-.rx_construct_search_url <- function(query, from_user = NULL, filter = NULL) {
+.rx_construct_search_url <- function(query, from_user = NULL, since = NULL, until = NULL, filter = NULL) {
   # Use trimws so whitespace-only strings are rejected (nzchar("  ") is TRUE).
   if (!is.character(query) || length(query) != 1L || anyNA(query) || !nzchar(trimws(query))) {
     stop("query must be a single non-empty character string.", call. = FALSE)
@@ -47,6 +126,13 @@ NULL
       stop("from_user must be a single non-empty character string, or NULL.", call. = FALSE)
     }
     raw <- paste0(raw, " from:", trimws(from_user))
+  }
+
+  # Append date-range filters (since/until).
+  # Validate each date individually, then build the filter.
+  date_filter <- .rx_build_date_range_filter(since = since, until = until)
+  if (!is.null(date_filter)) {
+    raw <- paste0(raw, " ", date_filter)
   }
 
   # Append an arbitrary filter (caller is responsible for valid syntax).
@@ -166,14 +252,18 @@ NULL
 #' Construct an X user timeline URL from a username.
 #'
 #' Takes a username (without the leading @) and returns a properly
-#' formed X user timeline URL. Optional path and filter parameters
-#' can modify the timeline view (e.g. media, with_replies).
+#' formed X user timeline URL. Optional path, date range, and filter
+#' parameters can modify the timeline view (e.g. media, with_replies).
 #'
 #' @param username A single non-empty character string with an X
 #'   username (without the leading @).
 #' @param path Optional path segment appended after the username,
 #'   e.g. `"media"`, `"tweets_with_replies"`, `"following"`,
 #'   `"followers"`. When NULL, the base timeline is returned.
+#' @param since Optional character string with a date (YYYY-MM-DD).
+#'   When provided, appends `since:<date>` to the timeline query filter.
+#' @param until Optional character string with a date (YYYY-MM-DD).
+#'   When provided, appends `until:<date>` to the timeline query filter.
 #' @param filter Optional character string. Raw filter appended as a
 #'   query parameter (e.g. `"tagged_media=true"`). The filter is
 #'   URL-encoded via `URLencode(raw, reserved=TRUE)`.
@@ -185,9 +275,10 @@ NULL
 #'   .rx_construct_user_timeline_url("hadleywickham")
 #'   .rx_construct_user_timeline_url("hadleywickham", path = "media")
 #'   .rx_construct_user_timeline_url("rstudio", path = "following")
+#'   .rx_construct_user_timeline_url("rstudio", since = "2024-01-01")
 #'
 #' @noRd
-.rx_construct_user_timeline_url <- function(username, path = NULL, filter = NULL) {
+.rx_construct_user_timeline_url <- function(username, path = NULL, since = NULL, until = NULL, filter = NULL) {
   # Validate username.
   if (!is.character(username) || length(username) != 1L || anyNA(username) || !nzchar(trimws(username))) {
     stop("username must be a single non-empty character string.", call. = FALSE)
@@ -207,12 +298,14 @@ NULL
     url <- paste0(url, "/", trimws(path))
   }
 
-  # Append an optional raw filter as a query parameter.
-  if (!is.null(filter)) {
-    if (!is.character(filter) || length(filter) != 1L || anyNA(filter) || !nzchar(trimws(filter))) {
-      stop("filter must be a single non-empty character string, or NULL.", call. = FALSE)
-    }
-    encoded_filter <- URLencode(trimws(filter), reserved = TRUE)
+  # Build combined query filter from date range + optional raw filter.
+  date_filter <- .rx_build_date_range_filter(since = since, until = until)
+  combined_parts <- c(date_filter, filter)
+  combined_parts <- combined_parts[!is.na(combined_parts) & nzchar(combined_parts)]
+
+  if (length(combined_parts) > 0L) {
+    combined_filter <- paste(combined_parts, collapse = " ")
+    encoded_filter <- URLencode(combined_filter, reserved = TRUE)
     url <- paste0(url, "?", encoded_filter)
   }
 
