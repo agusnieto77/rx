@@ -669,7 +669,7 @@ Create a normalizer that returns the canonical fields implemented so far.
 
 ---
 
-### Task 39: Create minimal `x_search()` [ ]
+### Task 39: Create minimal `x_search()` [x]
 
 **Goal:** Connect the pieces into one end-to-end search path.
 
