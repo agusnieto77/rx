@@ -116,9 +116,13 @@ test_that("parser extracts all fields from x-search-response.json", {
   testthat::expect_true(is.list(result$hashtags), info = "hashtags is a list")
   testthat::expect_true(is.list(result$mentions), info = "mentions is a list")
   testthat::expect_true(is.list(result$urls), info = "urls is a list")
+  testthat::expect_true(is.list(result$media_type), info = "media_type is a list")
+  testthat::expect_true(is.list(result$media_urls), info = "media_urls is a list")
   testthat::expect_equal(length(result$hashtags), 4L, info = "hashtags has 4 elements (one per post)")
   testthat::expect_equal(length(result$mentions), 4L, info = "mentions has 4 elements")
   testthat::expect_equal(length(result$urls), 4L, info = "urls has 4 elements")
+  testthat::expect_equal(length(result$media_type), 4L, info = "media_type has 4 elements (one per post)")
+  testthat::expect_equal(length(result$media_urls), 4L, info = "media_urls has 4 elements (one per post)")
 })
 
 # --- Test 2: post_id values are character strings ---
@@ -651,6 +655,8 @@ test_that("empty response returns all twenty-one empty vectors", {
   testthat::expect_equal(length(result_null$hashtags), 0L, info = "NULL returns empty hashtags")
   testthat::expect_equal(length(result_null$mentions), 0L, info = "NULL returns empty mentions")
   testthat::expect_equal(length(result_null$urls), 0L, info = "NULL returns empty urls")
+  testthat::expect_equal(length(result_null$media_type), 0L, info = "NULL returns empty media_type")
+  testthat::expect_equal(length(result_null$media_urls), 0L, info = "NULL returns empty media_urls")
   testthat::expect_equal(length(result_null$cursors), 0L, info = "NULL returns empty cursors")
 })
 
@@ -934,4 +940,116 @@ test_that(".rx_extract_urls returns empty for invalid input", {
   testthat::expect_equal(xtweetsR:::.rx_extract_urls(list()), character(0), info = "empty entities")
   testthat::expect_equal(xtweetsR:::.rx_extract_urls(list(urls = NULL)), character(0), info = "urls=NULL")
   testthat::expect_equal(xtweetsR:::.rx_extract_urls(list(urls = list())), character(0), info = "empty urls array")
+})
+
+# --- Test 28: Media fields extracted from x-search-response.json ---
+test_that("media_type and media_urls are extracted from x-search-response.json", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  result <- xtweetsR:::.rx_parse_posts(parsed)
+
+  # media_type is a list with 4 elements (one per post)
+  testthat::expect_true(is.list(result$media_type), info = "media_type is a list")
+  testthat::expect_equal(length(result$media_type), 4L, info = "4 media_type elements")
+
+  # First 3 tweets have no media, 4th has 2 photos
+  testthat::expect_equal(length(result$media_type[[1L]]), 0L, info = "tweet1 has no media")
+  testthat::expect_equal(length(result$media_type[[2L]]), 0L, info = "tweet2 has no media")
+  testthat::expect_equal(length(result$media_type[[3L]]), 0L, info = "tweet3 has no media")
+  testthat::expect_equal(as.character(result$media_type[[4L]]), c("photo", "photo"), info = "tweet4 has 2 photos")
+
+  # media_urls is a list with 4 elements (one per post)
+  testthat::expect_true(is.list(result$media_urls), info = "media_urls is a list")
+  testthat::expect_equal(length(result$media_urls), 4L, info = "4 media_urls elements")
+
+  # First 3 tweets have no media URLs, 4th has 2
+  testthat::expect_equal(length(result$media_urls[[1L]]), 0L, info = "tweet1 has no media_urls")
+  testthat::expect_equal(length(result$media_urls[[2L]]), 0L, info = "tweet2 has no media_urls")
+  testthat::expect_equal(length(result$media_urls[[3L]]), 0L, info = "tweet3 has no media_urls")
+  testthat::expect_equal(length(result$media_urls[[4L]]), 2L, info = "tweet4 has 2 media_urls")
+  testthat::expect_true("0" %in% names(result$media_urls[[4L]]), info = "media_urls are named by index")
+  testthat::expect_true("1" %in% names(result$media_urls[[4L]]), info = "media_urls has second named element")
+})
+
+# --- Test 29: Posts without extended_entities parse normally ---
+test_that("posts without extended_entities parse normally", {
+  # Tweet entry without extended_entities block.
+  response_no_media <- list(
+    data = list(
+      timeline = list(
+        instructions = list(
+          list(
+            type = "TimelineAddEntries",
+            entries = list(
+              list(
+                entryId = "tweet-700",
+                content = list(
+                  itemContent = list(
+                    tweet_results = list(
+                      result = list(
+                        rest_id = "700",
+                        legacy = list(full_text = "No media here")
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+
+  result <- xtweetsR:::.rx_parse_posts(response_no_media)
+
+  testthat::expect_equal(length(result$post_id), 1L, info = "post extracted despite no media")
+  testthat::expect_equal(length(result$media_type), 1L, info = "media_type has 1 element")
+  testthat::expect_equal(length(result$media_type[[1L]]), 0L, info = "empty media_type for post without media")
+  testthat::expect_equal(length(result$media_urls), 1L, info = "media_urls has 1 element")
+  testthat::expect_equal(length(result$media_urls[[1L]]), 0L, info = "empty media_urls for post without media")
+})
+
+# --- Test 30: Media extraction helpers handle edge cases ---
+test_that(".rx_extract_media_types returns empty for invalid input", {
+  testthat::expect_equal(xtweetsR:::.rx_extract_media_types(NULL), character(0), info = "NULL input")
+  testthat::expect_equal(xtweetsR:::.rx_extract_media_types(list()), character(0), info = "empty extended_entities")
+  testthat::expect_equal(xtweetsR:::.rx_extract_media_types(list(media = NULL)), character(0), info = "media=NULL")
+  testthat::expect_equal(xtweetsR:::.rx_extract_media_types(list(media = list())), character(0), info = "empty media array")
+})
+
+test_that(".rx_extract_media_urls returns empty for invalid input", {
+  testthat::expect_equal(xtweetsR:::.rx_extract_media_urls(NULL), character(0), info = "NULL input")
+  testthat::expect_equal(xtweetsR:::.rx_extract_media_urls(list()), character(0), info = "empty extended_entities")
+  testthat::expect_equal(xtweetsR:::.rx_extract_media_urls(list(media = NULL)), character(0), info = "media=NULL")
+  testthat::expect_equal(xtweetsR:::.rx_extract_media_urls(list(media = list())), character(0), info = "empty media array")
+})
+
+# --- Test 31: Animated GIF media extraction ---
+test_that("animated_gif media with video_info variants is extracted", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-user-timeline-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  result <- xtweetsR:::.rx_parse_posts(parsed)
+
+  # Tweet 5 (index 5) has an animated_gif with a video variant
+  # Tweet 4 (index 4) has a photo
+  testthat::expect_equal(length(result$media_type), 5L, info = "5 posts from user timeline")
+  testthat::expect_equal(as.character(result$media_type[[4L]]), "photo", info = "tweet4 has photo")
+  testthat::expect_equal(as.character(result$media_type[[5L]]), "animated_gif", info = "tweet5 has animated_gif")
+
+  # The animated_gif should have the video variant URL in media_urls
+  testthat::expect_true(length(result$media_urls[[5L]]) >= 1L, info = "animated_gif has at least one URL")
+  testthat::expect_true(any(grepl("tweet_video", result$media_urls[[5L]])), info = "animated_gif URL contains tweet_video")
 })

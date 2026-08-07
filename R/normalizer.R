@@ -5,7 +5,7 @@
 # normalizer are deliberately separate:
 #
 #   parser  -> list-of-vectors with post-level fields (+ cursors)
-#   normalizer -> validates, coerces, and pads to the 24-field canonical schema
+#   normalizer -> validates, coerces, and pads to the 26-field canonical schema
 #   dedup   -> removes duplicate posts by post_id, first-seen order
 #
 #   Note: observation-level provenance fields (collected_at, collection_query,
@@ -57,6 +57,8 @@ NULL
 #'   - hashtags — list of character vectors (Task 56)
 #'   - mentions — list of named character vectors (Task 56)
 #'   - urls — list of character vectors (Task 56)
+#'   - media_type — list of character vectors with media types (Task 57)
+#'   - media_urls — list of named character vectors with media URLs (Task 57)
 #'   - collected_at — character (ISO-8601 timestamp, Task 46)
 #'   - collection_query — character (search query string, Task 46)
 #'   - collection_id — character (UUID, Task 46)
@@ -75,6 +77,8 @@ NULL
     "reply_to_post_id", "quoted_post_id",
     # Entity fields (Task 56) — list-columns
     "hashtags", "mentions", "urls",
+    # Media fields (Task 57) — list-columns
+    "media_type", "media_urls",
     # Observation-level provenance (Task 46)
     "collected_at", "collection_query", "collection_id"
   )
@@ -100,6 +104,8 @@ NULL
     reply_to_post_id = "character", quoted_post_id = "character",
     # Entity fields (Task 56) — list-columns
     hashtags = "list", mentions = "list", urls = "list",
+    # Media fields (Task 57) — list-columns
+    media_type = "list", media_urls = "list",
     # Observation-level provenance (Task 46)
     collected_at = "character", collection_query = "character", collection_id = "character"
   )
@@ -125,6 +131,8 @@ NULL
     reply_to_post_id = NA_character_, quoted_post_id = NA_character_,
     # Entity fields (Task 56) — list-columns use list(NULL) as NA
     hashtags = list(NULL), mentions = list(NULL), urls = list(NULL),
+    # Media fields (Task 57) — list-columns use list(NULL) as NA
+    media_type = list(NULL), media_urls = list(NULL),
     # Observation-level provenance (Task 46)
     collected_at = NA_character_, collection_query = NA_character_, collection_id = NA_character_
   )
@@ -142,7 +150,7 @@ NULL
 # output expected by downstream code (Task 37).
 #'
 #' @param parsed A list as returned by `.rx_parse_posts()`.
-#' @return A list with the same 21 fields in canonical order, each coerced
+#' @return A list with the same 26 fields in canonical order, each coerced
 #'   to the expected type and padded to the longest length with NA defaults.
 #'   Returns an empty normalized list (zero-length vectors) when `parsed`
 #'   is NULL, empty, or contains no `post_id` field.
@@ -184,6 +192,27 @@ NULL
   }
 
   result
+}
+
+#' Create a filled vector for a missing canonical field.
+#'
+#' When a parsed field is missing from the input, this creates a
+#' zero-length default vector of the correct type.
+#'
+#' @param field The canonical field name.
+#' @param n The target length (from post_id).
+#' @param na_val The NA default value for the field.
+#' @return A vector of the appropriate type, filled with na_val.
+#' @noRd
+.rx_fill <- function(field, n, na_val) {
+  type <- .rx_type_map()[[field]]
+  switch(type,
+    character = rep(na_val, n),
+    integer   = rep(na_val, n),
+    logical   = rep(na_val, n),
+    list      = rep(list(na_val), n),
+    rep(na_val, n)
+  )
 }
 
 #' Create an empty normalized list with zero-length canonical fields.
@@ -256,7 +285,7 @@ NULL
 #' that Task 37 introduces.
 #'
 #' @param normalized A list as returned by `.rx_normalize_posts()`.
-#' @return A `tibble` with 24 columns matching the canonical schema.
+#' @return A `tibble` with 26 columns matching the canonical schema.
 #'   Zero rows when `normalized` is empty.
 #'
 #' @examples
@@ -282,7 +311,8 @@ NULL
       switch(type_map[[f]],
         character = character(0),
         integer = integer(0),
-        logical = logical(0)
+        logical = logical(0),
+        list      = list()
       )
     })
     names(cols) <- names(normalized)

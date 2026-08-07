@@ -4,11 +4,11 @@
 # (list-of-vectors from .rx_parse_posts) into a stable canonical schema
 # with consistent types, column order, and NA representation.
 
-# --- Test 1: Canonical fields returns 24 fields in correct order ---
-test_that(".rx_canonical_fields returns 24 fields in the expected order", {
+# --- Test 1: Canonical fields returns 26 fields in correct order ---
+test_that(".rx_canonical_fields returns 26 fields in the expected order", {
   fields <- xtweetsR:::.rx_canonical_fields()
 
-  testthat::expect_length(fields, 24L, info = "24 canonical fields")
+  testthat::expect_length(fields, 26L, info = "26 canonical fields")
   testthat::expect_equal(
     fields,
     c(
@@ -22,6 +22,8 @@ test_that(".rx_canonical_fields returns 24 fields in the expected order", {
       "reply_to_post_id", "quoted_post_id",
       # Entity fields (Task 56)
       "hashtags", "mentions", "urls",
+      # Media fields (Task 57)
+      "media_type", "media_urls",
       # Observation-level provenance (Task 46)
       "collected_at", "collection_query", "collection_id"
     ),
@@ -212,7 +214,7 @@ test_that("normalizer preserves exact values from x-search-response.json", {
 })
 
 # --- Test 8: Normalizer output has all canonical fields ---
-test_that("normalizer output has all 24 canonical fields", {
+test_that("normalizer output has all 26 canonical fields", {
   fixture_path <- file.path(
     testthat::test_path("..", ".."),
     "inst", "tests", "fixtures", "x-search-response.json"
@@ -224,8 +226,8 @@ test_that("normalizer output has all 24 canonical fields", {
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
 
   fields <- xtweetsR:::.rx_canonical_fields()
-  testthat::expect_setequal(names(normalized), fields, info = "all 24 fields present")
-  testthat::expect_length(names(normalized), 24L, info = "exactly 24 fields")
+  testthat::expect_setequal(names(normalized), fields, info = "all 26 fields present")
+  testthat::expect_length(names(normalized), 26L, info = "exactly 26 fields")
 })
 
 # --- Test 9: Normalizer output field order matches canonical order ---
@@ -579,7 +581,7 @@ test_that("tibble has 21 columns and 4 rows from fixture", {
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
 
-  testthat::expect_equal(ncol(tbl), 24L, info = "24 canonical columns")
+  testthat::expect_equal(ncol(tbl), 26L, info = "26 canonical columns")
   testthat::expect_equal(nrow(tbl), 4L, info = "4 posts from fixture")
 })
 
@@ -784,18 +786,23 @@ test_that("deduplication preserves column types", {
   }
 })
 
-# --- Test 30: Canonical fields returns 24 fields (Task 56) ---
-test_that(".rx_canonical_fields returns 24 fields including entity and provenance fields", {
+# --- Test 30: Canonical fields returns 26 fields (Tasks 56-57) ---
+test_that(".rx_canonical_fields returns 26 fields including entity, media, and provenance fields", {
   fields <- xtweetsR:::.rx_canonical_fields()
 
-  testthat::expect_length(fields, 24L, info = "24 canonical fields")
+  testthat::expect_length(fields, 26L, info = "26 canonical fields")
   testthat::expect_equal(
     fields[19:21],
     c("hashtags", "mentions", "urls"),
     info = "entity fields are at positions 19-21"
   )
   testthat::expect_equal(
-    fields[22:24],
+    fields[22:23],
+    c("media_type", "media_urls"),
+    info = "media fields are at positions 22-23"
+  )
+  testthat::expect_equal(
+    fields[24:26],
     c("collected_at", "collection_query", "collection_id"),
     info = "observation provenance fields are at the end"
   )
@@ -828,8 +835,8 @@ test_that("observation provenance fields default to NA_character_", {
   )
 })
 
-# --- Test 33: Tibble has 24 columns (Task 56) ---
-test_that("tibble has 24 columns from fixture", {
+# --- Test 33: Tibble has 26 columns (Tasks 56-57) ---
+test_that("tibble has 26 columns from fixture", {
   fixture_path <- file.path(
     testthat::test_path("..", ".."),
     "inst", "tests", "fixtures", "x-search-response.json"
@@ -841,7 +848,7 @@ test_that("tibble has 24 columns from fixture", {
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
 
-  testthat::expect_equal(ncol(tbl), 24L, info = "24 canonical columns")
+  testthat::expect_equal(ncol(tbl), 26L, info = "26 canonical columns")
   testthat::expect_equal(nrow(tbl), 4L, info = "4 posts from fixture")
   testthat::expect_equal(
     names(tbl)[19:21],
@@ -849,7 +856,12 @@ test_that("tibble has 24 columns from fixture", {
     info = "entity columns are at positions 19-21"
   )
   testthat::expect_equal(
-    names(tbl)[22:24],
+    names(tbl)[22:23],
+    c("media_type", "media_urls"),
+    info = "media columns are at positions 22-23"
+  )
+  testthat::expect_equal(
+    names(tbl)[24:26],
     c("collected_at", "collection_query", "collection_id"),
     info = "provenance columns are last"
   )

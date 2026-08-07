@@ -1064,7 +1064,7 @@ Use list-columns initially.
 
 ---
 
-### Task 57: Add media parsing [ ]
+### Task 57: Add media parsing [x]
 
 **Goal:** Represent attached media.
 

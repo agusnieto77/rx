@@ -33,6 +33,11 @@ NULL
 #'   - `hashtags` — list of character vectors with hashtag texts (Task 56).
 #'   - `mentions` — list of named character vectors with screen_name/name (Task 56).
 #'   - `urls` — list of character vectors with URL strings (Task 56).
+#'   - `media_type` — list of character vectors with media types
+#'     ("photo", "video", "animated_gif") from `extended_entities$media`
+#'     (Task 57).
+#'   - `media_urls` — list of named character vectors with media URLs,
+#'     keyed by zero-based media index (Task 57).
 #'   - `cursors` — a list of cursor objects discovered in the response.
 #'     Each cursor has `cursorType` (character: "Top"/"Bottom"/etc.)
 #'     and `value` (character: the cursor token).
@@ -89,6 +94,10 @@ NULL
 #'     \item `hashtags` — list of character vectors with hashtag texts (Task 56)
 #'     \item `mentions` — list of named character vectors with screen_name and name (Task 56)
 #'     \item `urls` — list of character vectors with URL strings (Task 56)
+#'     \item `media_type` — list of character vectors with media types
+#'       ("photo", "video", "animated_gif") from `extended_entities$media` (Task 57)
+#'     \item `media_urls` — list of named character vectors with media URLs,
+#'       keyed by zero-based media index (Task 57)
 #'     \item `cursors` — named character vector of cursor tokens keyed by cursorType
 #'       (e.g. "Bottom" → cursor value, "Top" → cursor value); empty when absent
 #'   }
@@ -109,6 +118,8 @@ NULL
       reply_to_post_id = character(0), quoted_post_id = character(0),
       # Entity fields (Task 56) — list-columns
       hashtags = list(), mentions = list(), urls = list(),
+      # Media fields (Task 57) — list-columns
+      media_type = list(), media_urls = list(),
       cursors = character(0)
     ))
   }
@@ -128,6 +139,8 @@ NULL
       reply_to_post_id = character(0), quoted_post_id = character(0),
       # Entity fields (Task 56) — list-columns
       hashtags = list(), mentions = list(), urls = list(),
+      # Media fields (Task 57) — list-columns
+      media_type = list(), media_urls = list(),
       cursors = character(0)
     ))
   }
@@ -156,6 +169,9 @@ NULL
   hashtags_list <- list()
   mentions_list <- list()
   urls_list <- list()
+  # Media fields (Task 57) — list-columns
+  media_type_list <- list()
+  media_urls_list <- list()
 
   for (inst in instructions) {
     # Only process TimelineAddEntries instructions.
@@ -248,6 +264,11 @@ NULL
       mentions_list[[length(mentions_list) + 1L]] <- .rx_extract_mentions(entities)
       urls_list[[length(urls_list) + 1L]] <- .rx_extract_urls(entities)
 
+      # Extract media fields (Task 57).
+      extended_entities <- if (is.list(legacy) && !is.null(legacy$extended_entities)) legacy$extended_entities else list()
+      media_type_list[[length(media_type_list) + 1L]] <- .rx_extract_media_types(extended_entities)
+      media_urls_list[[length(media_urls_list) + 1L]] <- .rx_extract_media_urls(extended_entities)
+
       post_ids <- c(post_ids, rest_id)
       texts <- c(texts, as.character(full_text))
       author_ids <- c(author_ids, author_id_str)
@@ -283,6 +304,9 @@ NULL
     hashtags = hashtags_list,
     mentions = mentions_list,
     urls = urls_list,
+    # Media fields (Task 57)
+    media_type = media_type_list,
+    media_urls = media_urls_list,
     cursors = cursors
   )
 }
@@ -552,4 +576,77 @@ NULL
       NA_character_
     }
   }, USE.NAMES = FALSE)
+}
+
+#' Extract media types from extended entities.
+#'
+#' Returns a character vector of media types (e.g. "photo", "video",
+#' "animated_gif") from `extended_entities$media` when available,
+#' or an empty character vector.
+#'
+#' @param extended_entities The `extended_entities` list from a tweet's
+#'   `legacy` block.
+#' @return A character vector of media type strings.
+#' @noRd
+.rx_extract_media_types <- function(extended_entities) {
+  if (!is.list(extended_entities) || is.null(extended_entities$media)) {
+    return(character(0))
+  }
+  ml <- extended_entities$media
+  if (!is.list(ml) || length(ml) == 0L) {
+    return(character(0))
+  }
+  sapply(ml, function(m) {
+    if (is.list(m) && !is.null(m$type) && length(m$type) == 1L && !is.na(m$type)) {
+      as.character(m$type)
+    } else {
+      NA_character_
+    }
+  }, USE.NAMES = FALSE)
+}
+
+#' Extract media URLs from extended entities.
+#'
+#' Returns a named character vector of media URLs from
+#' `extended_entities$media`. For photos, uses `media_url_https` when
+#' available, falls back to `media_url`. For videos and animated_gifs,
+#' collects all `video_info$variants$url` values.
+#'
+#' @param extended_entities The `extended_entities` list from a tweet's
+#'   `legacy` block.
+#' @return A named character vector of media URLs, named by zero-based
+#'   media index.
+#' @noRd
+.rx_extract_media_urls <- function(extended_entities) {
+  if (!is.list(extended_entities) || is.null(extended_entities$media)) {
+    return(character(0))
+  }
+  ml <- extended_entities$media
+  if (!is.list(ml) || length(ml) == 0L) {
+    return(character(0))
+  }
+  urls <- character(0)
+  for (i in seq_along(ml)) {
+    m <- ml[[i]]
+    if (!is.list(m)) next
+    # Photos: prefer media_url_https, fallback to media_url
+    if (!is.null(m$media_url_https) && length(m$media_url_https) == 1L && !is.na(m$media_url_https)) {
+      urls <- c(urls, as.character(m$media_url_https))
+    } else if (!is.null(m$media_url) && length(m$media_url) == 1L && !is.na(m$media_url)) {
+      urls <- c(urls, as.character(m$media_url))
+    }
+    # Videos / animated_gifs: collect all variant URLs
+    video_info <- m$video_info
+    if (is.list(video_info) && !is.null(video_info$variants)) {
+      variants <- video_info$variants
+      if (is.list(variants)) {
+        for (v in variants) {
+          if (is.list(v) && !is.null(v$url) && length(v$url) == 1L && !is.na(v$url)) {
+            urls <- c(urls, as.character(v$url))
+          }
+        }
+      }
+    }
+  }
+  setNames(urls, seq_along(urls) - 1L)
 }

@@ -76,11 +76,11 @@ test_that("is_candidate returns TRUE for internal.alg.com URLs", {
 })
 
 # --- Test 9: .rx_search_empty_tibble has canonical schema ---
-test_that("empty tibble has all 24 canonical columns (Task 56)", {
+test_that("empty tibble has all 26 canonical columns (Tasks 56-57)", {
   tbl <- .rx_search_empty_tibble()
   expect_true(inherits(tbl, "tbl_df"))
   fields <- .rx_canonical_fields()
-  expect_equal(ncol(tbl), 24L)
+  expect_equal(ncol(tbl), 26L)
   expect_equal(sort(names(tbl)), sort(fields))
   expect_equal(nrow(tbl), 0L)
 })

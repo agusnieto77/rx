@@ -180,6 +180,20 @@
                           "hashtags": [],
                           "user_mentions": [],
                           "urls": []
+                        },
+                        "extended_entities": {
+                          "media": [
+                            {
+                              "type": "photo",
+                              "media_url_https": "https://pbs.twimg.com/media/example1.jpg",
+                              "url": "https://t.co/med1"
+                            },
+                            {
+                              "type": "photo",
+                              "media_url_https": "https://pbs.twimg.com/media/example2.jpg",
+                              "url": "https://t.co/med2"
+                            }
+                          ]
                         }
                       }
                     }

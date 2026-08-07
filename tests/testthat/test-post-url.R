@@ -272,7 +272,7 @@ test_that("x_post returns empty tibble when no events captured", {
 
   expect_true(inherits(result, "tbl_df"))
   expect_equal(nrow(result), 0L)
-  expect_equal(ncol(result), 24L)
+  expect_equal(ncol(result), 26L)
 })
 
 # --- Test 25: x_post returns empty tibble when response body is unparseable ---
@@ -296,7 +296,7 @@ test_that("x_post handles unparseable response body gracefully", {
 
   expect_true(inherits(result, "tbl_df"))
   expect_equal(nrow(result), 0L)
-  expect_equal(ncol(result), 24L)
+  expect_equal(ncol(result), 26L)
 
   # Provenance should still be attached.
   provenance <- attr(result, "rx_collection_provenance")

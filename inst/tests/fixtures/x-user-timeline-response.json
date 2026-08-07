@@ -178,6 +178,15 @@
                           ],
                           "user_mentions": [],
                           "urls": []
+                        },
+                        "extended_entities": {
+                          "media": [
+                            {
+                              "type": "photo",
+                              "media_url_https": "https://pbs.twimg.com/media/example_purrr.jpg",
+                              "url": "https://t.co/med3"
+                            }
+                          ]
                         }
                       }
                     }
@@ -220,6 +229,20 @@
                           "hashtags": [],
                           "user_mentions": [],
                           "urls": []
+                        },
+                        "extended_entities": {
+                          "media": [
+                            {
+                              "type": "animated_gif",
+                              "media_url_https": "https://pbs.twimg.com/tweet_video/example_gif.jpg",
+                              "url": "https://t.co/med4",
+                              "video_info": {
+                                "variants": [
+                                  { "bitrate": 832000, "url": "https://video.twimg.com/tweet_video/example_gif.mp4" }
+                                ]
+                              }
+                            }
+                          ]
                         }
                       }
                     }
