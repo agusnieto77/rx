@@ -476,3 +476,43 @@ Implemented append-only JSONL read/write for incremental post collection persist
 - TypeScript compiles clean (`npx tsc --noEmit`)
 - R code verified syntactically (R not installed in environment)
 - 7 new tests
+
+## Task 73: Add a minimal benchmark harness - COMPLETED
+
+### Summary
+
+Created a reproducible benchmark harness under `benchmarks/` that measures sidecar startup, ping latency, Lightpanda connection, local fixture navigation, and structured extraction performance.
+
+### Implementation
+
+- **`benchmarks/benchmark.js`** — Main benchmark script (Node.js ESM, ~500 lines)
+  - Measures: sidecar startup, ping, LPD connection, navigation, structured extraction
+  - Per-iteration timing with warmup runs
+  - Statistics: avg, min, max, p50, p95
+  - Status reporting: ok / skip / fail
+  - Local HTTP fixture server for navigation/extraction tests
+  - JSON output to stdout, progress log to stderr
+  
+- **`benchmarks/run.sh`** — Shell runner script with timestamped result files
+- **`benchmarks/README.md`** — Documentation for the benchmark harness
+- **`benchmarks/results/`** — Directory for saved benchmark JSON outputs
+
+### Benchmark Results (this run)
+
+| Benchmark | Status | Avg | p50 | p95 |
+|-----------|--------|-----|-----|-----|
+| sidecar_startup | OK | 172.8ms | 184.7ms | 188.1ms |
+| sidecar_ping | OK | 62.3ms | 62.5ms | 62.9ms |
+| lpd_connection | SKIP | — | — | — (Lightpanda not running) |
+| local_fixture_navigation | SKIP | — | — | — (no CDP connection) |
+| local_structured_extraction | SKIP | — | — | — (no CDP connection) |
+
+Environment: Node.js v24.18.0, 1 warmup + 3 measured iterations
+
+### Design decisions
+
+- Plain JavaScript (ESM) — no ts-node dependency for the benchmark itself
+- Uses `performance.now()` for sub-millisecond precision
+- Local HTTP server serves test fixtures for navigation/extraction tests
+- Graceful handling: benchmarks that require Lightpanda report SKIP (not FAIL) when unavailable
+- Results saved as timestamped JSON files for regression tracking

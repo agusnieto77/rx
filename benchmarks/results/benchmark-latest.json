@@ -1,0 +1,61 @@
+{
+  "timestamp": "2026-08-07T22:26:25.592Z",
+  "nodeVersion": "v24.18.0",
+  "sidecarPath": "G:\\RALPHEX\\rx\\inst\\node\\dist\\index.js",
+  "sidecarVersion": "0.1.0",
+  "results": [
+    {
+      "name": "sidecar_startup",
+      "iterations": [
+        145.3159,
+        184.6753,
+        188.47609999999997
+      ],
+      "warmup": 1,
+      "avg": 172.82243333333335,
+      "min": 145.3159,
+      "max": 188.47609999999997,
+      "p50": 184.6753,
+      "p95": 188.09601999999998,
+      "status": "ok",
+      "metadata": {
+        "iterations": 3
+      }
+    },
+    {
+      "name": "sidecar_ping",
+      "iterations": [
+        62.933000000000106,
+        61.378099999999904,
+        62.48739999999998
+      ],
+      "warmup": 1,
+      "avg": 62.26616666666666,
+      "min": 61.378099999999904,
+      "max": 62.933000000000106,
+      "p50": 62.48739999999998,
+      "p95": 62.888440000000095,
+      "status": "ok"
+    },
+    {
+      "name": "lpd_connection",
+      "iterations": [
+        -1,
+        -1,
+        -1,
+        -1
+      ],
+      "warmup": 1,
+      "avg": 0,
+      "min": 0,
+      "max": 0,
+      "p50": 0,
+      "p95": 0,
+      "status": "skip",
+      "error": "No CDP endpoint reachable — Lightpanda not running",
+      "metadata": {
+        "endpoint": "ws://127.0.0.1:21111"
+      }
+    }
+  ]
+}
