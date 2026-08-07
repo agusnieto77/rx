@@ -1053,3 +1053,209 @@ test_that("animated_gif media with video_info variants is extracted", {
   testthat::expect_true(length(result$media_urls[[5L]]) >= 1L, info = "animated_gif has at least one URL")
   testthat::expect_true(any(grepl("tweet_video", result$media_urls[[5L]])), info = "animated_gif URL contains tweet_video")
 })
+
+# --- Test 32: Schema validation detects missing instructions ---
+test_that(
+  "response with data$timeline but no instructions throws PARSER_ERROR",
+  {
+    # data$timeline exists but instructions is missing entirely —
+    # this means X changed the response key.
+    response <- list(
+      data = list(
+        timeline = list(
+          # No $instructions at all.
+          something_else = "not_instructions"
+        )
+      )
+    )
+
+    testthat::expect_error(
+      xtweetsR:::.rx_parse_posts(response),
+      class = "rx_parser_error"
+    )
+  }
+)
+
+# --- Test 33: Schema validation detects empty instructions ---
+test_that(
+  "response with empty instructions array throws PARSER_ERROR",
+  {
+    # instructions exists but is empty — X may have changed the structure.
+    response <- list(
+      data = list(
+        timeline = list(
+          instructions = list()
+        )
+      )
+    )
+
+    testthat::expect_error(
+      xtweetsR:::.rx_parse_posts(response),
+      class = "rx_parser_error"
+    )
+  }
+)
+
+# --- Test 34: Schema validation detects wrong instruction type ---
+test_that(
+  "response with non-TimelineAddEntries instructions throws PARSER_ERROR",
+  {
+    # instructions exist but the type is not TimelineAddEntries —
+    # X may have renamed the instruction type.
+    response <- list(
+      data = list(
+        timeline = list(
+          instructions = list(
+            list(type = "TimelineSuppressEntries")
+          )
+        )
+      )
+    )
+
+    testthat::expect_error(
+      xtweetsR:::.rx_parse_posts(response),
+      class = "rx_parser_error"
+    )
+  }
+)
+
+# --- Test 35: Schema validation detects entries with no valid post objects ---
+test_that(
+  "entries present but no valid post objects throws PARSER_ERROR",
+  {
+    # TimelineAddEntries exists with entries, but none contain
+    # tweet_results/result — X changed the entry nesting.
+    response <- list(
+      data = list(
+        timeline = list(
+          instructions = list(
+            list(
+              type = "TimelineAddEntries",
+              entries = list(
+                list(
+                  entryId = "cursor-bottom-abc",
+                  content = list(
+                    itemContent = list(
+                      cursor = list(cursorType = "Bottom", value = "abc123")
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+
+    testthat::expect_error(
+      xtweetsR:::.rx_parse_posts(response),
+      class = "rx_parser_error"
+    )
+  }
+)
+
+# --- Test 36: Error includes parser_version in the message ---
+test_that(
+  "schema errors include parser_version in the error message",
+  {
+    response <- list(
+      data = list(
+        timeline = list(
+          something_else = "not_instructions"
+        )
+      )
+    )
+
+    err <- testthat::expect_error(
+      xtweetsR:::.rx_parse_posts(response),
+      class = "rx_parser_error"
+    )
+
+    testthat::expect_true(
+      grepl("parser_version", conditionMessage(err), ignore.case = TRUE),
+      info = "error message mentions parser_version"
+    )
+    testthat::expect_true(
+      grepl("0\\.1\\.0", conditionMessage(err)),
+      info = "error message contains the version string"
+    )
+  }
+)
+
+# --- Test 37: Error includes diagnostic context ---
+test_that(
+  "schema errors include diagnostic context about what was expected vs found",
+  {
+    response <- list(
+      data = list(
+        timeline = list(
+          instructions = list(
+            list(type = "TimelineSuppressEntries")
+          )
+        )
+      )
+    )
+
+    err <- testthat::expect_error(
+      xtweetsR:::.rx_parse_posts(response),
+      class = "rx_parser_error"
+    )
+
+    msg <- conditionMessage(err)
+    testthat::expect_true(
+      grepl("TimelineAddEntries", msg),
+      info = "error mentions the expected instruction type"
+    )
+    testthat::expect_true(
+      grepl("TimelineSuppressEntries", msg),
+      info = "error mentions the actual instruction type seen"
+    )
+  }
+)
+
+# --- Test 38: Entries with mix of tweet and cursor — valid tweets still parse ---
+test_that(
+  "entries with both tweets and cursors parse the tweets (not an error)",
+  {
+    # This is the normal case: entries contain both tweet entries and
+    # cursor entries. Valid tweets should be extracted, not an error.
+    response <- list(
+      data = list(
+        timeline = list(
+          instructions = list(
+            list(
+              type = "TimelineAddEntries",
+              entries = list(
+                list(
+                  entryId = "tweet-123",
+                  content = list(
+                    itemContent = list(
+                      tweet_results = list(
+                        result = list(
+                          rest_id = "123",
+                          legacy = list(full_text = "Hello world")
+                        )
+                      )
+                    )
+                  )
+                ),
+                list(
+                  entryId = "cursor-bottom-456",
+                  content = list(
+                    itemContent = list(
+                      cursor = list(cursorType = "Bottom", value = "abc")
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+
+    result <- xtweetsR:::.rx_parse_posts(response)
+    testthat::expect_equal(length(result$post_id), 1L, info = "tweet extracted")
+    testthat::expect_equal(result$post_id, "123", info = "correct post_id")
+  }
+)

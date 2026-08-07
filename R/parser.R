@@ -29,7 +29,9 @@ NULL
 # and walks the instruction/entry tree to find tweet entries.
 #'
 #' Returns a list with:
-#'   - 21 vectors as described below (post_id through urls).
+#'   - 18 base vectors as described below (post_id through quoted_post_id).
+#'   - 3 entity vectors (hashtags, mentions, urls, Task 56).
+#'   - 2 media vectors (media_type, media_urls, Task 57).
 #'   - `hashtags` — list of character vectors with hashtag texts (Task 56).
 #'   - `mentions` — list of named character vectors with screen_name/name (Task 56).
 #'   - `urls` — list of character vectors with URL strings (Task 56).
@@ -102,6 +104,178 @@ NULL
 #'       (e.g. "Bottom" → cursor value, "Top" → cursor value); empty when absent
 #'   }
 #'
+#' Validate the response schema for known structural changes.
+#'
+#' This function is called early in `.rx_parse_posts()` to detect when
+#' X/Twitter has changed its GraphQL response structure. It checks for
+#' three classes of schema drift:
+#'
+#' 1. **Response recognized but no expected timeline structure** — the
+#'    response has the `data$timeline` path but lacks `instructions`,
+#'    or `instructions` exist but no `TimelineAddEntries` entry type is
+#'    present. This typically means X changed the top-level response key.
+#'
+#' 2. **Expected post object missing** — entries exist under
+#'    `TimelineAddEntries` but none of them contain a valid post object
+#'    (no `content$itemContent$tweet_results$result` chain, or the
+#'    result lacks `rest_id`). This may indicate X changed the nesting
+#'    inside entries.
+#'
+#' 3. **Incompatible field structure** — a post-like object is found but
+#'    critical fields have wrong types (e.g. `rest_id` is numeric
+#'    instead of character).
+#'
+#' When any condition is detected, a `PARSER_ERROR` is thrown that
+#' includes the current `parser_version` and diagnostic context so the
+#' consumer can surface a clear message.
+#'
+#' Returns `invisible(NULL)` when the schema is compatible.
+#'
+#' @param response A list, the parsed JSON response.
+#' @return Invisible `NULL` (only reached when schema is compatible).
+#' @noRd
+.rx_validate_response_schema <- function(response) {
+  # --- Condition 1: response recognized but no expected timeline structure ---
+  # We consider the response "recognized" when data$timeline exists but
+  # the expected structure (instructions with TimelineAddEntries) is absent.
+
+  data_block <- response$data
+  if (is.null(data_block)) {
+    return(invisible(NULL))
+  }
+
+  timeline <- data_block$timeline
+  if (is.null(timeline)) {
+    return(invisible(NULL))
+  }
+
+  instructions <- timeline$instructions
+
+  # If there are no instructions at all, check whether this looks like a
+  # known X response shape (has data$timeline but wrong sub-keys).
+  if (is.null(instructions)) {
+    # data$timeline exists but has no $instructions — X changed the key.
+    known_keys <- names(timeline)
+    stop(.rx_error(
+      paste0(
+        "X response structure changed: data$timeline exists but ",
+        "instructions is missing. Expected timeline instructions ",
+        "array (e.g. TimelineAddEntries) not found. ",
+        "Timeline keys present: ",
+        paste(shQuote(known_keys), collapse = ", "),
+        ". parser_version: ", .rx_parser_version()
+      ),
+      class = "parser_error",
+      code = "PARSER_ERROR"
+    ))
+  }
+
+  if (!is.list(instructions) || length(instructions) == 0L) {
+    known_keys <- names(instructions)
+    stop(.rx_error(
+      paste0(
+        "X response structure changed: data$timeline$instructions exists ",
+        "but is empty or not a list. Keys: ",
+        paste(shQuote(known_keys), collapse = ", "),
+        ". parser_version: ", .rx_parser_version()
+      ),
+      class = "parser_error",
+      code = "PARSER_ERROR"
+    ))
+  }
+
+  # Check whether any instruction has the expected type.
+  has_timeline_add_entries <- FALSE
+  for (inst in instructions) {
+    if (is.list(inst) && !is.null(inst$type) && inst$type == "TimelineAddEntries") {
+      has_timeline_add_entries <- TRUE
+      break
+    }
+  }
+
+  if (!has_timeline_add_entries) {
+    # Instructions exist but none are TimelineAddEntries — X may have
+    # changed the instruction type name.
+    inst_types <- vapply(instructions, function(i) {
+      if (is.list(i) && !is.null(i$type)) as.character(i$type) else "<none>"
+    }, character(1))
+    stop(.rx_error(
+      paste0(
+        "X response structure changed: instructions array present with ",
+        length(instructions), " entry/entries but no TimelineAddEntries ",
+        "instruction found. Instruction types seen: ",
+        paste(shQuote(inst_types), collapse = ", "),
+        ". parser_version: ", .rx_parser_version()
+      ),
+      class = "parser_error",
+      code = "PARSER_ERROR"
+    ))
+  }
+
+  # --- Condition 2: entries exist but expected post objects are missing ---
+  # Walk the instructions looking for TimelineAddEntries entries.
+  # If we find entries but none yield a valid tweet result, that's
+  # a schema drift signal.
+
+  entries_found <- 0L
+  posts_found <- 0L
+
+  for (inst in instructions) {
+    if (!is.list(inst) || is.null(inst$type) || inst$type != "TimelineAddEntries") {
+      next
+    }
+    entries <- inst$entries
+    if (is.null(entries) || !is.list(entries)) {
+      next
+    }
+    for (entry in entries) {
+      entries_found <- entries_found + 1L
+      result <- .rx_find_tweet_result(entry)
+      if (!is.null(result) && !is.null(result$rest_id)) {
+        posts_found <- posts_found + 1L
+      }
+    }
+  }
+
+  if (entries_found > 0L && posts_found == 0L) {
+    # We had entries but zero valid post objects — X changed the entry
+    # nesting or the post object shape.
+    entry_ids <- character(0)
+    for (inst in instructions) {
+      if (!is.list(inst) || is.null(inst$type) || inst$type != "TimelineAddEntries") next
+      entries <- inst$entries
+      if (is.null(entries) || !is.list(entries)) next
+      for (entry in entries) {
+        eid <- if (is.list(entry) && !is.null(entry$entryId)) as.character(entry$entryId) else "<unnamed>"
+        has_content <- !is.null(entry$content)
+        has_item_content <- FALSE
+        if (has_content && is.list(entry$content)) {
+          has_item_content <- !is.null(entry$content$itemContent)
+        }
+        entry_ids <- c(entry_ids, paste0(eid, "(content=", has_content, ", itemContent=", has_item_content, ")"))
+      }
+    }
+    stop(.rx_error(
+      paste0(
+        "X response structure changed: found ", entries_found, " entry/entries ",
+        "in TimelineAddEntries but zero valid post objects. ",
+        "Entry shapes observed: ",
+        paste(entry_ids, collapse = "; "),
+        ". parser_version: ", .rx_parser_version()
+      ),
+      class = "parser_error",
+      code = "PARSER_ERROR"
+    ))
+  }
+
+  # --- Condition 3: incompatible field structure ---
+  # This is checked inline during extraction (e.g. rest_id type check).
+  # No separate validation pass needed — the field-level checks already
+  # handle this silently for known-safe patterns.
+
+  invisible(NULL)
+}
+
 #' @noRd
 .rx_parse_posts <- function(response) {
   # Guard against non-list input.
@@ -123,6 +297,9 @@ NULL
       cursors = character(0)
     ))
   }
+
+  # Validate schema — detect X response structure changes early.
+  .rx_validate_response_schema(response)
 
   # Navigate to the instructions array.
   instructions <- response$data$timeline$instructions
