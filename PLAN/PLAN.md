@@ -429,7 +429,7 @@ Test:
 
 ---
 
-### Task 26: Create `x_debug_dom()` [ ]
+### Task 26: Create `x_debug_dom()` [x]
 
 **Goal:** Expose DOM inspection separately from network capture.
 

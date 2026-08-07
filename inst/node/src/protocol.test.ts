@@ -275,4 +275,12 @@ describe("sidecar protocol", () => {
     assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "INVALID_REQUEST");
   });
+
+  it("domInspect without connection returns CDP_ERROR", async () => {
+    const { proc: p } = await startSidecar();
+    const resp = await sendRequest(p, "domInspect", {});
+    assert.strictEqual(typeof resp.id, "number");
+    assert.strictEqual((resp.error as { code: string }).code, "CDP_ERROR");
+    assert.ok((resp.error as { message: string }).message.includes("CDP connection not active"));
+  });
 });

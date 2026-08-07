@@ -11,6 +11,7 @@
 #     $connect()           - establish connection, return self (invisibly)
 #     $navigate(url)       - navigate to URL, return list(url, status)
 #     $evaluate(expr)      - evaluate JavaScript, return list(result, error)
+#     $domInspect(selector) - inspect DOM, return html or matched elements
 #     $networkCaptureEnable() - enable CDP network event capture
 #     $networkCaptureGet()     - retrieve captured network events, clear buffer
 #     $networkCaptureGetBody() - retrieve response body for a captured event
@@ -141,6 +142,13 @@ NULL
   }
 
   #' Navigate to a URL. Returns a list with url and status.
+  #'
+  #' SSRF note: the initial URL is validated against private/reserved ranges
+  #' (isPrivateHost in inst/node/src/index.ts).  However, HTTP 3xx redirects
+  #' are followed automatically by the browser (Page.navigate) without
+  #' re-validation.  An initial URL on an allowed host that redirects to a
+  #' private IP would bypass the guard.  This is a known limitation; mitigated
+  #' by the fact that navigate() is not intended for untrusted input.
   backend$navigate <- function(url) {
     if (!state$connected) {
       stop("Backend not connected. Call connect() first.", call. = FALSE)
@@ -163,6 +171,41 @@ NULL
     }
     resp <- tryCatch(
       .rx_send_request(state$.proc, "evaluate", list(expr = expr), reqId = state$.reqId),
+      error = function(e) list(error = list(code = "SEND_REQUEST_ERROR", message = e$message))
+    )
+    if (!is.null(resp$error)) {
+      list(result = NULL, error = resp$error)
+    } else {
+      list(result = resp$result, error = NULL)
+    }
+  }
+
+  #' Inspect the DOM of the current page. Returns HTML or matched elements.
+  #'
+  #' When \code{selector} is \code{NULL}, the full \code{<html>} document
+  #' (outerHTML of \code{<html>}) is returned in the \code{html} field.
+  #'
+  #' When \code{selector} is provided, an array of objects is returned,
+  #' each with \code{tagName}, \code{id}, \code{className}, and
+  #' \code{outerHTML}. Matches zero or more elements.
+  #'
+  #' @param selector Optional character string, a CSS selector. When
+  #'   \code{NULL} (default), the full document HTML is returned.
+  #' @return A list with:
+  #'   \itemize{
+  #'     \item \code{html} — full document HTML (when \code{selector} is \code{NULL})
+  #'     \item \code{selector} — the selector used (when provided)
+  #'     \item \code{found} — array of matched element info objects
+  #'     \item \code{error} — error code string, or \code{NULL} on success
+  #'   }
+  #' @noRd
+  backend$domInspect <- function(selector = NULL) {
+    if (!state$connected) {
+      stop("Backend not connected. Call connect() first.", call. = FALSE)
+    }
+    params <- if (is.null(selector)) list() else list(selector = selector)
+    resp <- tryCatch(
+      .rx_send_request(state$.proc, "domInspect", params, reqId = state$.reqId),
       error = function(e) list(error = list(code = "SEND_REQUEST_ERROR", message = e$message))
     )
     if (!is.null(resp$error)) {
@@ -303,6 +346,9 @@ NULL
         warning("Failed to close browser session: ", e$message, call. = FALSE)
       }
     )
+    # Bump the counter so that if the backend is re-used (close + connect
+    # again), the next request id does not collide with the close's id=1.
+    state$.reqId_counter <- state$.reqId_counter + 1L
     invisible(.rx_stop_sidecar(state$.proc))
     state$.proc <- NULL
     state$connected <- FALSE

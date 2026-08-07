@@ -3,6 +3,7 @@
 S3method(base::print,rx_doctor)
 S3method(base::print,xtweetsR_session)
 export(x_close)
+export(x_debug_dom)
 export(x_debug_network)
 export(x_doctor)
 export(x_session)

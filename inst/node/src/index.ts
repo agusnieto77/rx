@@ -83,6 +83,12 @@ interface NetworkEvent {
 }
 
 let networkEvents: NetworkEvent[] = [];
+// Secondary map keyed by requestId that persists until Clear, so
+// handleNetworkCaptureGetBody can look up events after a prior Get
+// has returned a snapshot and cleared the main buffer.
+let networkEventsById = new Map<string, NetworkEvent>();
+// TODO: size cap / LRU eviction — a page with 10k resources after 5 Get()
+// cycles holds 10k entries. Consider a max-size or TTL-based cleanup.
 // Module-level references to the current handler closures, so that
 // handleNetworkCaptureClear() can remove them without casting.
 let _captureOnRequest: ((params: Record<string, unknown>) => void) | null = null;
@@ -95,12 +101,12 @@ async function handleNetworkCaptureEnable(id: unknown): Promise<void> {
   }
   const conn = cdpConnection;
   networkEvents = [];
+  networkEventsById.clear();
 
   // Remove stale listeners from a prior enable call to prevent duplicate
   // event pushes. This also fixes the race window: we register listeners
   // BEFORE sending Network.enable so no events are lost.
   if (_captureOnRequest !== null) {
-    conn.removeListener("Network.request", _captureOnRequest);
     conn.removeListener("Network.requestWillBeSent", _captureOnRequest);
   }
   if (_captureOnResponse !== null) {
@@ -109,17 +115,22 @@ async function handleNetworkCaptureEnable(id: unknown): Promise<void> {
 
   const onRequest = (params: Record<string, unknown>): void => {
     const request = params.request as Record<string, unknown> | undefined;
-    networkEvents.push({
+    const entry: NetworkEvent = {
       requestId: String(params.requestId ?? ""),
       url: String((request?.url ?? params.url ?? "") as string),
       method: request?.method as string | undefined,
       resourceType: String(params.type ?? ""),
-    });
+    };
+    networkEvents.push(entry);
+    // Keep a secondary index so GetBody can find events after Get
+    // has returned a snapshot and cleared the main buffer.
+    networkEventsById.set(entry.requestId, entry);
   };
 
   const onResponse = (params: Record<string, unknown>): void => {
     const rid = String(params.requestId ?? "");
     const response = params.response as Record<string, unknown> | undefined;
+    // Update the main array (for events still being captured).
     for (const ev of networkEvents) {
       if (ev.requestId === rid) {
         ev.status = typeof (response?.status as number | undefined) === "number" ? response!.status as number : undefined;
@@ -137,6 +148,20 @@ async function handleNetworkCaptureEnable(id: unknown): Promise<void> {
         break;
       }
     }
+    // Also update the map directly so events already returned by Get()
+    // still get their status/contentType updated by interleaved responses.
+    // The map entry is the same object reference as the array entry.
+    const mapped = networkEventsById.get(rid);
+    if (mapped) {
+      mapped.status = typeof (response?.status as number | undefined) === "number" ? response!.status as number : undefined;
+      mapped.protocol = String((response?.protocol as string | undefined) ?? "");
+      mapped.fromDiskCache = Boolean(response?.fromDiskCache);
+      mapped.fromServiceWorker = Boolean(response?.fromServiceWorker);
+      mapped.fromPrefetchCache = Boolean(response?.fromPrefetchCache);
+      mapped.timedOut = Boolean(response?.timedOut);
+      const ct = (response?.contentType as string | undefined) ?? "";
+      mapped.contentType = ct.split(";")[0].trim();
+    }
   };
 
   // Register listeners BEFORE sending Network.enable to prevent the narrow
@@ -144,7 +169,9 @@ async function handleNetworkCaptureEnable(id: unknown): Promise<void> {
   _captureOnRequest = onRequest;
   _captureOnResponse = onResponse;
 
-  conn.on("Network.request", onRequest as (params: Record<string, unknown>) => void);
+  // Only register Network.requestWillBeSent — Network.request is not a
+  // standard CDP event and likely never fires; registering it would cause
+  // duplicate calls if a custom runtime emits both.
   conn.on("Network.requestWillBeSent", onRequest as (params: Record<string, unknown>) => void);
   conn.on("Network.responseReceived", onResponse as (params: Record<string, unknown>) => void);
 
@@ -161,6 +188,8 @@ async function handleNetworkCaptureEnable(id: unknown): Promise<void> {
 }
 
 function handleNetworkCaptureGet(id: unknown): void {
+  // Return a snapshot and clear the array, but keep the secondary map
+  // so handleNetworkCaptureGetBody can still look up events by requestId.
   const events = networkEvents.slice();
   networkEvents = [];
   respond(id, { events });
@@ -177,9 +206,9 @@ async function handleNetworkCaptureClear(id: unknown): Promise<void> {
     }
   }
   networkEvents = [];
+  networkEventsById.clear();
   // Remove event listeners from the connection.
   if (cdpConnection !== null && _captureOnRequest !== null) {
-    cdpConnection.removeListener("Network.request", _captureOnRequest);
     cdpConnection.removeListener("Network.requestWillBeSent", _captureOnRequest);
   }
   if (cdpConnection !== null && _captureOnResponse !== null) {
@@ -216,7 +245,10 @@ async function handleNetworkCaptureGetBody(id: unknown, params?: unknown): Promi
   const conn = cdpConnection;
 
   // Validate that the requestId exists in our captured events.
-  const event = networkEvents.find((e) => e.requestId === requestId);
+  // Use the secondary map (networkEventsById) so GetBody works even after
+  // Get() has returned a snapshot and cleared the main array.
+  const event = networkEventsById.get(requestId)
+    ?? networkEvents.find((e) => e.requestId === requestId);
   if (!event) {
     respondError(id, "REQUEST_ID_NOT_FOUND", `No captured event with requestId="${requestId}"`);
     return;
@@ -457,6 +489,18 @@ function isPrivateHost(host: string): boolean {
   // Node.js URL.hostname includes brackets for IPv6 addresses (e.g. "[::1]").
   // Strip them so the pattern checks below work on the bare address.
   const h = host.replace(/^\[/, "").replace(/\]$/, "").toLowerCase();
+
+  // Detect IPv4-mapped IPv6 (e.g. ::ffff:10.0.0.1) — extract the embedded
+  // IPv4 address and check it, since the raw IPv6 string would not match
+  // the IPv4-only patterns below.
+  // NOTE: hex-encoded IPv4 form (e.g. ::ffff:c0a8:101 → 192.168.1.1) is
+  // not handled here. A production system should normalize this via
+  // ipaddr.js or similar. See: https://github.com/whitequark/ipaddr.js
+  const ipv6Mapped = /^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i.exec(h);
+  if (ipv6Mapped !== null) {
+    return isPrivateHost(ipv6Mapped[1]);
+  }
+
   // Detect numeric IP obfuscation — browsers may parse these as loopback IPs.
   if (/^0x[0-9a-f]/i.test(h)) return true;
   if (/^0\d/.test(h) && /\d+\.\d+\.\d+$/.test(h)) return true;
@@ -651,6 +695,79 @@ async function handleEvaluate(id: unknown, params?: unknown): Promise<void> {
   }
 }
 
+// ── domInspect handler ────────────────────────────────────────────────
+
+async function handleDomInspect(id: unknown, params?: unknown): Promise<void> {
+  // Validate params — selector is optional.
+  let selector: string | null = null;
+  if (typeof params === "object" && params !== null) {
+    const p = params as Record<string, unknown>;
+    if (typeof p.selector === "string" && p.selector.length > 0) {
+      selector = p.selector;
+    }
+    // If selector is present but empty, treat as null (full HTML).
+  }
+
+  if (cdpConnection === null || !cdpConnection.isConnected) {
+    respondError(id, "CDP_ERROR", "Cannot inspect DOM — CDP connection not active");
+    log("warn", "domInspect failed — not connected");
+    return;
+  }
+
+  // Capture local reference to prevent race with handleClose.
+  const conn = cdpConnection;
+
+  try {
+    await conn.sendCommand("Runtime.enable");
+
+    let result: Record<string, unknown>;
+
+    if (selector !== null) {
+      // Query a specific selector and return outer HTML of matches.
+      // Use Function to safely pass the selector string without template-literal escaping issues.
+      const js = `
+        (function(sel) {
+          const nodes = Array.from(document.querySelectorAll(sel));
+          return nodes.map(n => ({
+            tagName: n.tagName.toLowerCase(),
+            id: n.id || null,
+            className: n.className || null,
+            outerHTML: n.outerHTML
+          }));
+        })(${JSON.stringify(selector)})`;
+      const evalResult = await conn.sendCommand("Runtime.evaluate", { expression: js, returnByValue: true });
+      if (evalResult && typeof evalResult === "object" && "exceptionDetails" in evalResult) {
+        const details = (evalResult as Record<string, unknown>).exceptionDetails as Record<string, unknown>;
+        const message = typeof details === "object" && details !== null && "text" in details
+          ? String(details.text)
+          : "DOM query exception";
+        respondError(id, "JS_EXCEPTION", `DOM query failed: ${message}`);
+        return;
+      }
+      result = { selector, found: (evalResult as Record<string, unknown>).value };
+    } else {
+      // Return the full document HTML.
+      const js = "document.documentElement.outerHTML";
+      const evalResult = await conn.sendCommand("Runtime.evaluate", { expression: js, returnByValue: true });
+      if (evalResult && typeof evalResult === "object" && "exceptionDetails" in evalResult) {
+        const details = (evalResult as Record<string, unknown>).exceptionDetails as Record<string, unknown>;
+        const message = typeof details === "object" && details !== null && "text" in details
+          ? String(details.text)
+          : "DOM read exception";
+        respondError(id, "JS_EXCEPTION", `DOM inspection failed: ${message}`);
+        return;
+      }
+      result = { html: String((evalResult as Record<string, unknown>).value ?? "") };
+    }
+
+    respond(id, result);
+    log("debug", "domInspect succeeded", selector ? `selector=${selector}` : "full html");
+  } catch (err) {
+    respondError(id, "CDP_ERROR", `DOM inspection failed: ${(err as Error).message}`);
+    log("error", "domInspect failed", (err as Error).message);
+  }
+}
+
 // ── ping handler ─────────────────────────────────────────────────────
 
 function handlePing(id: unknown): void {
@@ -738,6 +855,9 @@ async function main(): Promise<void> {
         break;
       case "networkCaptureGetBody":
         await handleNetworkCaptureGetBody(id, req.params);
+        break;
+      case "domInspect":
+        await handleDomInspect(id, req.params);
         break;
       default:
         respondError(id, "UNKNOWN_METHOD", `Method "${method}" is not implemented`);
