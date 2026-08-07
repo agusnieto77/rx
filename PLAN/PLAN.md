@@ -1360,7 +1360,7 @@ Show:
 
 ---
 
-### Task 70: Add GitHub Actions for TypeScript [ ]
+### Task 70: Add GitHub Actions for TypeScript [x]
 
 **Goal:** Automate sidecar checks.
 
@@ -1371,8 +1371,11 @@ Run:
 - Node tests
 
 **Acceptance criteria:**
-- Workflow YAML is valid.
-- Equivalent local commands pass.
+- [x] Workflow YAML is valid.
+- [x] Equivalent local commands pass (20/20 Node tests).
+
+**Files created:**
+- `.github/workflows/ts-check.yaml` — Node.js 20, `npm ci`, `npm run build`, `npm test`
 
 ---
 

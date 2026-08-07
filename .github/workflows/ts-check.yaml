@@ -1,0 +1,41 @@
+## Workflow: TypeScript sidecar checks for xtweetsR
+## Runs on every push and pull request to main.
+## Installs Node.js, compiles TypeScript, and runs Node tests.
+## No live X/Twitter or Lightpanda access required — all tests use
+## in-memory protocol assertions without a browser.
+
+name: ts-check
+
+on:
+  push:
+    branches: [main, PLAN]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ts-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: inst/node
+        run: npm ci
+
+      - name: Build
+        working-directory: inst/node
+        run: npm run build
+
+      - name: Test
+        working-directory: inst/node
+        run: npm test
