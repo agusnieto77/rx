@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dynamic Test Page</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; }
+    #dynamic-content { margin-top: 1rem; }
+    .post { border: 1px solid #ccc; padding: 0.5rem 1rem; margin: 0.5rem 0; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Dynamic Test Page</h1>
+  <p id="static-text">This content is rendered server-side.</p>
+  <div id="dynamic-content"></div>
+
+  <script>
+    // Simulate an async data fetch that inserts posts into the DOM.
+    // This mimics how a real application (e.g. X/Twitter) would
+    // populate content via JavaScript after the initial page load.
+    (function () {
+      var posts = [
+        { id: "1", author: "alice", text: "Hello from dynamic page #1" },
+        { id: "2", author: "bob", text: "Second post injected by JS" },
+        { id: "3", author: "carol", text: "Third post — testing DOM mutation" }
+      ];
+
+      // Simulate a small async delay (like a network round-trip).
+      setTimeout(function () {
+        var container = document.getElementById("dynamic-content");
+        posts.forEach(function (post) {
+          var div = document.createElement("div");
+          div.className = "post";
+          div.setAttribute("data-post-id", post.id);
+          div.setAttribute("data-author", post.author);
+          div.textContent = "[" + post.author + "] " + post.text;
+          container.appendChild(div);
+        });
+
+        // Also update a meta-like element so R can read arbitrary data.
+        var meta = document.createElement("meta");
+        meta.id = "page-meta";
+        meta.setAttribute("data-post-count", String(posts.length));
+        document.head.appendChild(meta);
+
+        // Dispatch a custom event so observers can react.
+        var event = new CustomEvent("dynamicContentReady", {
+          detail: { postCount: posts.length }
+        });
+        window.dispatchEvent(event);
+      }, 50);
+    })();
+  </script>
+</body>
+</html>

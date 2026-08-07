@@ -259,7 +259,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 15: Add a local dynamic test page
+### Task 15: Add a local dynamic test page [DONE]
 
 **Goal:** Test browser automation without depending on X.
 
