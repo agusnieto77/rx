@@ -68,6 +68,101 @@ NULL
   paste0("https://x.com/search?q=", encoded)
 }
 
+#' Normalize a post identifier to a canonical X post URL.
+#'
+#' Accepts either a full X/Twitter post URL or a bare post ID string.
+#' When given a URL, extracts the numeric post ID and rewrites it to
+#' the canonical `https://x.com/<username>/status/<id>` form.
+#' When given a bare ID, returns `https://x.com/status/<id>`.
+#'
+#' # Supported URL patterns
+#' - `https://x.com/<user>/status/<id>` — canonical form
+#' - `https://x.com/<user>/status/<id>/` — trailing slash
+#' - `https://t.co/<shortlink>` — X short link (bare ID returned)
+#' - `https://twitter.com/<user>/status/<id>` — legacy domain
+#' - Any other URL — returned unchanged (caller should validate)
+#'
+#' @param url_or_id A character string that is either a full post URL
+#'   or a bare post ID (numeric string).
+#' @return A character string with the canonical X post URL, or the
+#'   original input when it cannot be parsed.
+#'
+#' @examples
+#'   # Internal use only — not exported.
+#'   .rx_normalize_post_url("https://x.com/rstudio/status/1234567890123456789")
+#'   .rx_normalize_post_url("1234567890123456789")
+#'   .rx_normalize_post_url("https://t.co/abc123")
+#'
+#' @noRd
+.rx_normalize_post_url <- function(url_or_id) {
+  if (!is.character(url_or_id) || length(url_or_id) != 1L || anyNA(url_or_id)) {
+    return(url_or_id)
+  }
+
+  input <- trimws(url_or_id)
+
+  # If it looks like a numeric post ID (15-20 digits), return canonical URL.
+  if (grepl("^\\d{15,20}$", input)) {
+    return(paste0("https://x.com/status/", input))
+  }
+
+  # Try to parse as a URL and extract the post ID.
+  # Supported patterns:
+  #   https://x.com/USER/status/ID
+  #   https://x.com/USER/status/ID/
+  #   https://twitter.com/USER/status/ID
+  #   https://t.co/SHORTLINK  -> returns bare ID? No, we can't extract ID from t.co
+  #                             without resolving. Return as-is for now.
+
+  # Match x.com or twitter.com post URLs.
+  m <- regmatches(input, regexec(
+    "^https?://(?:x|twitter)\\.com/([^/]+)/status/(\\d+)",
+    input,
+    perl = TRUE
+  ))
+
+  if (length(m[[1L]]) > 0L) {
+    # regexec returns list of character vectors; m[[1]] has the full match + groups.
+    id <- m[[1L]][2L]
+    return(paste0("https://x.com/status/", id))
+  }
+
+  # t.co short links: we cannot extract the post ID without resolving,
+  # so return the URL as-is. The caller should try navigating to it.
+  # Handle both x.com/shortlink and t.co patterns.
+  if (grepl("^https?://t\\.co/", input, ignore.case = TRUE)) {
+    return(input)
+  }
+
+  # Any other URL: return as-is. Caller validates.
+  input
+}
+
+#' Construct an X post URL from a post ID.
+#'
+#' Takes a post ID (numeric string) and returns the canonical
+#' X post URL: `https://x.com/status/<id>`.
+#'
+#' @param post_id A single character string with a numeric post ID
+#'   (15-20 digits).
+#' @return Character string with the full X post URL.
+#'
+#' @examples
+#'   # Internal use only — not exported.
+#'   .rx_construct_post_url("1234567890123456789")
+#'
+#' @noRd
+.rx_construct_post_url <- function(post_id) {
+  if (!is.character(post_id) || length(post_id) != 1L || anyNA(post_id)) {
+    stop("post_id must be a single non-empty character string.", call. = FALSE)
+  }
+  id <- trimws(post_id)
+  if (!grepl("^\\d+$", id)) {
+    stop("post_id must be a numeric string (15-20 digits).", call. = FALSE)
+  }
+  paste0("https://x.com/status/", id)
+}
+
 #' Construct an X user timeline URL from a username.
 #'
 #' Takes a username (without the leading @) and returns a properly

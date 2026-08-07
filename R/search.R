@@ -534,6 +534,148 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   deduped
 }
 
+# ---------------------------------------------------------------------------
+# x_post() — Individual post navigation (Task 54)
+# ---------------------------------------------------------------------------
+
+#' Fetch a single post by its URL or post ID.
+#'
+#' Navigates to an X post URL (or a bare post ID), captures structured
+#' network responses from that single post page, parses and normalizes
+#' the post object, and returns a one-row tibble.
+#'
+#' This is the simplest entry point for post-level data collection.
+#' Unlike \code{\link[=x_search]{x_search()}} or \code{\link[=x_user_posts]{x_user_posts()}},
+#' it does not scroll — it captures whatever structured data is
+#' available on the single post page.
+#'
+#' @param session An \code{xtweetsR_session} object returned by
+#'   \code{\link[=x_session]{x_session()}}.
+#' @param post_id A single character string that is either a full X
+#'   post URL (e.g. `https://x.com/rstudio/status/1234567890`) or a
+#'   bare post ID (e.g. `1234567890123456789`).
+#' @param limit Optional integer limiting the maximum number of posts
+#'   returned. Default `1L` — a single post page should yield at most
+#'   one post.
+#'
+#' @return A tibble with the canonical post schema (21 columns)
+#'   containing zero or one row. Returns a zero-row tibble when no
+#'   post data is captured.
+#'
+#' @examples
+#' \dontrun{
+#'   sess <- x_session()
+#'   post <- x_post(sess, "1234567890123456789")
+#'   print(post)
+#'   x_close(sess)
+#' }
+#'
+#' @export
+x_post <- function(session, post_id, limit = 1L) {
+  # 1. Validate inputs.
+  if (!inherits(session, "xtweetsR_session")) {
+    stop("session must be an xtweetsR_session object.", call. = FALSE)
+  }
+  if (!session$connected) {
+    stop("Session is not connected. Call x_session() first.", call. = FALSE)
+  }
+  if (!is.character(post_id) || length(post_id) != 1L || anyNA(post_id) || !nzchar(trimws(post_id))) {
+    stop("post_id must be a single non-empty character string (URL or post ID).", call. = FALSE)
+  }
+  if (!is.numeric(limit) || length(limit) != 1L || anyNA(limit) || limit < 1L) {
+    stop("limit must be a positive integer.", call. = FALSE)
+  }
+  limit <- as.integer(limit)
+
+  backend <- session$backend
+
+  # 1b. Normalize the post identifier to a canonical URL.
+  url <- .rx_normalize_post_url(post_id)
+
+  # 1c. Capture collection start time and generate collection_id for provenance.
+  collection_started_at <- Sys.time()
+  collection_id <- .rx_generate_uuid()
+  backend_label <- "unknown"
+  if (inherits(session$backend, "rx_lightpanda_backend")) {
+    backend_label <- "lightpanda"
+  } else if (inherits(session$backend, "rx_chromium_backend")) {
+    backend_label <- "chromium"
+  }
+
+  # 2. Enable network capture before navigation.
+  tryCatch(
+    backend$networkCaptureEnable(),
+    error = function(e) {
+      stop("Failed to enable network capture: ", e$message, call. = FALSE)
+    }
+  )
+
+  # 3. Navigate to the post.
+  nav_result <- backend$navigate(url)
+  if (is.null(nav_result$status) || nav_result$status == "error") {
+    # Navigation failed — return empty tibble.
+    error_info <- if (!is.null(nav_result$error)) nav_result$error$code else "unknown"
+    .rx_search_cleanup(backend)
+    warning("Navigation failed (", error_info, "). No post returned.")
+    empty <- .rx_search_empty_tibble()
+    provenance <- .rx_collection_metadata(
+      collection_id = collection_id,
+      started_at = collection_started_at,
+      query = paste0("post:", trimws(post_id)),
+      backend = backend_label,
+      record_count = 0L
+    )
+    attr(empty, "rx_collection_provenance") <- provenance
+    return(empty)
+  }
+
+  # 4. Wait for network responses to arrive (post pages load asynchronously).
+  Sys.sleep(3)
+
+  # 5. Capture events and extract posts from the single post page.
+  events <- tryCatch(
+    backend$networkCaptureGet(),
+    error = function(e) {
+      .rx_search_cleanup(backend)
+      warning("Failed to retrieve network events: ", e$message)
+      return(list())
+    }
+  )
+
+  posts <- .rx_search_extract_from_events(events, backend)
+
+  # 5b. Observation-level provenance.
+  n_posts <- if (length(posts$post_id) > 0L) length(posts$post_id) else 0L
+  posts$collected_at     <- rep(format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), n_posts)
+  posts$collection_query <- rep(paste0("post:", trimws(post_id)), n_posts)
+  posts$collection_id    <- rep(collection_id, n_posts)
+
+  # 6. Normalize, convert to tibble, deduplicate.
+  normalized <- .rx_normalize_posts(posts)
+  tibble_posts <- .rx_normalized_to_tibble(normalized)
+  deduped <- .rx_deduplicate_posts(tibble_posts)
+
+  # 7. Apply limit (should be 1 by default).
+  if (nrow(deduped) > limit) {
+    deduped <- deduped[seq_len(limit), , drop = FALSE]
+  }
+
+  # 8. Clean up network capture.
+  .rx_search_cleanup(backend)
+
+  # 9. Attach collection provenance metadata.
+  provenance <- .rx_collection_metadata(
+    collection_id = collection_id,
+    started_at = collection_started_at,
+    query = paste0("post:", trimws(post_id)),
+    backend = backend_label,
+    record_count = as.integer(nrow(deduped))
+  )
+  attr(deduped, "rx_collection_provenance") <- provenance
+
+  deduped
+}
+
 #' Return an empty batch with the canonical field structure.
 #'
 #' Used to maintain consistent field structure when a scroll iteration

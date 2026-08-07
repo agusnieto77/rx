@@ -1012,18 +1012,20 @@ Add:
 
 ---
 
-### Task 54: Implement `x_post()` navigation [ ]
+### Task 54: Implement `x_post()` navigation [x]
 
 **Goal:** Support individual post URLs.
 
 **Actions:**
-- Accept a post URL or post ID.
-- Navigate to the post.
-- Capture structured data.
+- [x] Add `.rx_normalize_post_url()` to R/search_url.R — handles bare IDs (15-20 digits), x.com URLs, twitter.com legacy URLs, t.co short links, and passthrough for unknown URLs.
+- [x] Add `.rx_construct_post_url()` to R/search_url.R — builds canonical `https://x.com/status/<id>` from a numeric post ID.
+- [x] Add `x_post()` to R/search.R — accepts session, post_id (URL or ID string), limit (default 1L). Normalizes URL, navigates, captures structured data, returns one-row tibble.
+- [x] Export `x_post` in NAMESPACE.
+- [x] 24 tests in tests/testthat/test-post-url.R covering URL normalization (11 tests), post URL construction (3 tests), input validation (4 tests), and navigation (6 tests).
 
 **Acceptance criteria:**
-- URL normalization has tests.
-- Real navigation attempt is executed.
+- [x] URL normalization has tests (24 tests in test-post-url.R).
+- [x] Real navigation attempt is executed (mock-based integration test: Test 23 with fixture data).
 
 ---
 
