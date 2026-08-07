@@ -1398,7 +1398,7 @@ Run:
 
 ---
 
-### Task 72: Run full TypeScript checks [ ]
+### Task 72: Run full TypeScript checks [x]
 
 **Goal:** Stabilize the sidecar.
 
