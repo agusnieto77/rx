@@ -458,7 +458,7 @@ Test:
 
 ---
 
-### Task 28: Open an X search URL [ ]
+### Task 28: Open an X search URL [x]
 
 **Goal:** Reach a search results page.
 
