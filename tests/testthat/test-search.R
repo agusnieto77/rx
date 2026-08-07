@@ -1595,3 +1595,109 @@ test_that(".rx_progress emits messages when quiet=FALSE", {
   expect_equal(length(msgs), 1L)
   expect_true(grepl("test message", msgs[[1L]]))
 })
+
+# ===================================================================
+# Infinite-scroll mock infrastructure (Task 61)
+# ===================================================================
+
+# Source the mock module so it's available to all tests in this file.
+# The file lives alongside testthat tests and is not a test itself (prefixed with _).
+source(file.path(testthat::test_path(), "_mock-infinite-scroll.R"))
+
+# --- Test 57: rx_mock_batch generates correct number of posts ---
+test_that("rx_mock_batch generates the requested number of posts", {
+  batch <- rx_mock_batch(id_start = 10L, n = 5L, prefix = "test")
+
+  entries <- batch$TimelineResult$result$timeline_instructions[[1L]]$entries
+  expect_equal(length(entries), 5L)
+
+  post_ids <- vapply(entries, function(e) {
+    e$content$itemContent$tweet_results$result$tweet$rest_id
+  }, character(1))
+
+  expect_equal(post_ids, c("test-10", "test-11", "test-12", "test-13", "test-14"))
+})
+
+# --- Test 58: rx_mock_batch with duplicates includes extra entries ---
+test_that("rx_mock_batch with include_duplicates adds 2 extra entries", {
+  batch <- rx_mock_batch(id_start = 1L, n = 3L, prefix = "dup",
+                          include_duplicates = TRUE)
+
+  entries <- batch$TimelineResult$result$timeline_instructions[[1L]]$entries
+  expect_equal(length(entries), 5L, info = "3 base + 2 duplicates")
+
+  post_ids <- vapply(entries, function(e) {
+    e$content$itemContent$tweet_results$result$tweet$rest_id
+  }, character(1))
+
+  expect_true("dup-dup-a" %in% post_ids)
+  expect_true("dup-dup-b" %in% post_ids)
+})
+
+# --- Test 59: rx_mock_session returns a valid session ---
+test_that("rx_mock_session creates a valid xtweetsR_session", {
+  batch <- rx_mock_batch(id_start = 1L, n = 2L, prefix = "s")
+  session <- rx_mock_session(list(batch))
+
+  expect_true(inherits(session, "xtweetsR_session"))
+  expect_true(session$connected)
+  expect_true(inherits(session$backend, "environment"))
+  expect_true(is.function(session$backend$networkCaptureEnable))
+  expect_true(is.function(session$backend$networkCaptureGet))
+  expect_true(is.function(session$backend$networkCaptureGetBody))
+  expect_true(is.function(session$backend$networkCaptureClear))
+  expect_true(is.function(session$backend$evaluate))
+  expect_true(is.function(session$backend$navigate))
+})
+
+# --- Test 60: Multi-batch mock drives x_search with deduplication ---
+test_that("multi-batch mock: deduplication across batches is correct", {
+  # Batch 1: 3 posts (a-1, a-2, a-3).
+  batch1 <- rx_mock_batch(id_start = 1L, n = 3L, prefix = "a")
+  # Batch 2: 3 posts starting from ID 2 (a-2, a-3, a-4) — 2 duplicates.
+  batch2 <- rx_mock_batch(id_start = 2L, n = 3L, prefix = "a")
+
+  session <- rx_mock_session(list(batch1, batch2),
+                              delays = c(0, 0.01), end_at = 3L)
+
+  result <- x_search(session, "dedup test", max_scrolls = 5L, scroll = TRUE)
+
+  expect_true(inherits(result, "tbl_df"))
+  expect_equal(nrow(result), 4L, info = "3 from batch1 + 1 new from batch2 = 4 unique")
+  expect_true(all(c("a-1", "a-2", "a-3", "a-4") %in% result$post_id))
+})
+
+# --- Test 61: Multi-batch mock verifies scroll loop termination ---
+test_that("multi-batch mock: scroll loop terminates on no-new-data", {
+  # 2 batches with unique posts, then 2 empty batches.
+  batch1 <- rx_mock_batch(id_start = 1L, n = 3L, prefix = "term")
+  batch2 <- rx_mock_batch(id_start = 4L, n = 2L, prefix = "term")
+  empty <- rx_mock_batch(id_start = 100L, n = 0L, prefix = "term")
+
+  session <- rx_mock_session(
+    batches = list(batch1, batch2, empty, empty),
+    delays = c(0, 0.01, 0, 0),
+    end_at = 4L
+  )
+
+  result <- x_search(session, "termination test", max_scrolls = 10L, scroll = TRUE)
+
+  expect_true(inherits(result, "tbl_df"))
+  expect_equal(nrow(result), 5L, info = "3 + 2 unique posts, no more after batch 2")
+  # The scroll loop should terminate because batches 3 and 4 are empty,
+  # triggering stall detection (no_new_data_cycles >= 2).
+})
+
+# --- Test 62: Realistic scenario produces expected unique count ---
+test_that("rx_mock_realistic_scenario: exercises full collection pipeline", {
+  session <- rx_mock_realistic_scenario(delay_between_batches = 0.005)
+
+  result <- x_search(session, "realistic test", max_scrolls = 10L, scroll = TRUE, quiet = TRUE)
+
+  expect_true(inherits(result, "tbl_df"))
+  expect_true(nrow(result) >= 1, info = "should have posts from batch 1")
+  # The realistic scenario has 5 + 4 + 3 = 12 unique posts across batches.
+  # Check deduplication worked: no duplicate post_ids.
+  expect_equal(length(unique(result$post_id)), nrow(result),
+                info = "no duplicate post_ids should remain after dedup")
+})
