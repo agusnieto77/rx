@@ -1,1921 +1,1435 @@
-# Ralph Loop — Librería R moderna para scraping de X/Twitter usando Lightpanda
+# PLAN.md — xtweetsR + Lightpanda
 
-Actuá como un **senior software engineer especializado en R, browser automation, scraping, CDP, Lightpanda, TypeScript/Node.js, sistemas distribuidos, testing y diseño de paquetes open source**.
+## Execution rules for ralphex
 
-Tu misión es **diseñar, implementar, ejecutar, probar, depurar y documentar una librería R moderna para recolectar datos de X/Twitter utilizando Lightpanda como navegador headless**, aprovechando las tecnologías más actuales disponibles.
+Execute the tasks strictly in order.
 
-No quiero solamente un análisis o un plan.
+Each `### Task N:` section is intended to be a small, independently verifiable unit of work.
 
-Quiero que **construyas realmente la librería**, ejecutes el código, pruebes distintas estrategias y avances iterativamente hasta obtener un MVP funcional y verificable.
+For every task:
 
-Trabajá utilizando un **Ralph Loop autónomo**:
+1. Inspect the current repository state.
+2. Implement only the scope of the current task.
+3. Run the task-specific verification commands.
+4. Fix failures caused by the task.
+5. Record the result in `RALPH_PROGRESS.md`.
+6. Do not start the next task until the current task's acceptance criteria are satisfied.
+7. Preserve working behavior from previous tasks.
+8. Prefer the smallest implementation that proves the required capability.
+9. Do not refactor unrelated code.
+10. Do not claim success without executing the relevant verification.
 
-**OBSERVE → SELECT → IMPLEMENT → RUN → TEST → DIAGNOSE → FIX → REFACTOR → DOCUMENT → LOOP**
-
-No consideres terminada la tarea hasta satisfacer los criterios de aceptación definidos al final.
-
----
-
-# 1. OBJETIVO
-
-Construir un paquete R mantenible, rápido y extensible para extraer datos de X/Twitter mediante Lightpanda.
-
-Nombre provisional:
-
-```text
-xtweetsR
-```
-
-Podés cambiarlo si encontrás un nombre claramente mejor, pero no detengas el desarrollo por esto.
-
-La experiencia ideal desde R debería ser aproximadamente:
-
-```r
-library(xtweetsR)
-
-x <- x_session()
-
-posts <- x_search(
-  x,
-  query = '"inteligencia artificial" lang:es',
-  limit = 1000
-)
-
-posts
-```
-
-También:
-
-```r
-posts <- x_user_posts(
-  x,
-  username = "usuario",
-  limit = 500
-)
-```
-
-El resultado debe devolverse como estructuras compatibles de manera natural con:
-
-```text
-tibble
-dplyr
-tidyr
-data.table
-arrow
-duckdb
-```
-
-La librería debe estar especialmente preparada para investigación en ciencias sociales computacionales y recolecciones de decenas de miles o cientos de miles de publicaciones.
+The final goal is an R package that controls Lightpanda and can collect structured post data from X/Twitter, with network-first extraction, DOM fallback, deduplication, checkpoints, persistence, and reproducible research metadata.
 
 ---
 
-# 2. INVESTIGACIÓN TÉCNICA INICIAL
+### Task 1: Inspect the repository [DONE]
 
-Antes de decidir la arquitectura definitiva, investigá las versiones y capacidades ACTUALES de:
+**Goal:** Determine the current repository state before changing anything.
 
+**Actions:**
+- List files and directories.
+- Detect whether an R package already exists.
+- Detect whether Node/TypeScript infrastructure already exists.
+- Detect existing tests, CI, README, and configuration.
+- Detect whether `RALPH_PROGRESS.md` exists.
+
+**Output:**
+- Create or update `RALPH_PROGRESS.md`.
+- Record the current repository structure.
+- Record detected tooling.
+
+**Acceptance criteria:**
+- `RALPH_PROGRESS.md` exists.
+- It contains a short "Initial repository state" section.
+- No application code is changed unless required to create the progress file.
+
+---
+
+### Task 2: Initialize the R package skeleton
+
+**Goal:** Ensure the repository is a valid minimal R package.
+
+**Actions:**
+- Create `DESCRIPTION` if missing.
+- Create `NAMESPACE` if missing.
+- Create `R/`.
+- Create `tests/testthat/`.
+- Create `tests/testthat.R`.
+- Create `.Rbuildignore` if needed.
+
+**Acceptance criteria:**
+- The project is recognized as an R package.
+- `R CMD build .` reaches package validation far enough to confirm the package structure is valid.
+
+---
+
+### Task 3: Define package metadata
+
+**Goal:** Make `DESCRIPTION` minimally correct.
+
+**Actions:**
+- Set package name to `xtweetsR`.
+- Add title and description.
+- Set an initial development version.
+- Set a modern R version requirement.
+- Add `testthat` under `Suggests`.
+- Configure testthat edition 3.
+
+**Acceptance criteria:**
+- `DESCRIPTION` parses correctly.
+- `R CMD build .` does not fail because of malformed metadata.
+
+---
+
+### Task 4: Add the first package smoke test
+
+**Goal:** Verify the test infrastructure itself works.
+
+**Actions:**
+- Add a trivial test under `tests/testthat/`.
+- Do not test browser behavior yet.
+
+**Acceptance criteria:**
+- `testthat::test_local()` executes.
+- The smoke test passes.
+
+---
+
+### Task 5: Add package-level documentation
+
+**Goal:** Avoid missing package documentation later.
+
+**Actions:**
+- Add package documentation using roxygen.
+- Generate `NAMESPACE` and `man/` documentation if roxygen tooling is available.
+
+**Acceptance criteria:**
+- Package-level help exists.
+- Documentation generation completes without errors.
+
+---
+
+### Task 6: Create the TypeScript sidecar skeleton
+
+**Goal:** Create the minimal Node/TypeScript component without browser logic.
+
+**Actions:**
+- Create `inst/node/package.json`.
+- Create `inst/node/tsconfig.json`.
+- Create `inst/node/src/index.ts`.
+- Enable TypeScript strict mode.
+- Add a minimal executable entry point.
+
+**Acceptance criteria:**
+- Dependencies install successfully.
+- TypeScript compiles successfully.
+- Running the sidecar prints one deterministic test message.
+
+---
+
+### Task 7: Define the R-to-sidecar protocol
+
+**Goal:** Establish one tiny request/response contract.
+
+**Protocol:**
+Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exists.
+
+**Actions:**
+- Define a request with `id`, `method`, and `params`.
+- Define a response with `id` and `result`.
+- Define an error response with `id` and `error`.
+- Keep logs on stderr.
+
+**Acceptance criteria:**
+- A manual request sent to the sidecar returns valid JSON.
+- stdout contains protocol data only.
+
+---
+
+### Task 8: Add a `ping` sidecar method
+
+**Goal:** Prove bidirectional protocol behavior.
+
+**Actions:**
+- Implement sidecar method `ping`.
+- Return a deterministic result such as `{ "pong": true }`.
+
+**Acceptance criteria:**
+- Sending a JSONL `ping` request returns the expected JSONL response.
+- Invalid methods return a structured error.
+
+---
+
+### Task 9: Add the minimal R sidecar client
+
+**Goal:** Allow R to start the sidecar and issue one request.
+
+**Actions:**
+- Add only the dependencies required for process management and JSON parsing.
+- Implement an internal process-start function.
+- Implement an internal request function.
+- Implement an internal process-stop function.
+
+**Acceptance criteria:**
+- An R test can start the sidecar.
+- R can call `ping`.
+- R receives `pong`.
+- The sidecar process is closed after the test.
+
+---
+
+### Task 10: Add sidecar protocol tests
+
+**Goal:** Lock down the R ↔ TypeScript boundary.
+
+**Actions:**
+- Test valid request.
+- Test unknown method.
+- Test malformed JSON handling.
+- Test process shutdown.
+
+**Acceptance criteria:**
+- All protocol tests pass.
+- No orphan sidecar process remains after tests.
+
+---
+
+### Task 11: Create the browser backend interface
+
+**Goal:** Separate the public R API from Lightpanda-specific implementation.
+
+**Actions:**
+- Define a minimal internal backend contract for:
+  - connect
+  - navigate
+  - evaluate
+  - close
+- Do not implement multiple backends yet.
+
+**Acceptance criteria:**
+- The interface is represented in code.
+- Lightpanda-specific code can be placed behind that interface.
+- No X/Twitter logic is added yet.
+
+---
+
+### Task 12: Add Lightpanda configuration discovery
+
+**Goal:** Resolve how the package finds Lightpanda.
+
+**Actions:**
+- Support an explicit endpoint argument.
+- Support `LPD_ENDPOINT`.
+- Support local default configuration.
+- Support `LPD_TOKEN` as optional configuration data.
+- Never hardcode secrets.
+
+**Acceptance criteria:**
+- A unit test verifies endpoint precedence.
+- Configuration can be inspected without starting Lightpanda.
+
+---
+
+### Task 13: Implement Lightpanda connection in the sidecar
+
+**Goal:** Connect the sidecar to an already-running Lightpanda CDP endpoint.
+
+**Actions:**
+- Use the currently supported CDP connection mechanism.
+- Keep connection logic isolated in `inst/node/src/browser/`.
+
+**Acceptance criteria:**
+- Sidecar can connect to a configured Lightpanda endpoint.
+- Failure returns a structured `LPD_CONNECTION_ERROR`.
+
+---
+
+### Task 14: Implement browser close
+
+**Goal:** Cleanly release Lightpanda-related resources.
+
+**Actions:**
+- Add a sidecar browser close method.
+- Make repeated close calls safe.
+
+**Acceptance criteria:**
+- Connect → close succeeds.
+- Closing twice does not crash the sidecar.
+
+---
+
+### Task 15: Add a local dynamic test page
+
+**Goal:** Test browser automation without depending on X.
+
+**Actions:**
+- Add a minimal local HTML page under test fixtures or a small test server.
+- The page must modify the DOM with JavaScript after load.
+
+**Acceptance criteria:**
+- The fixture can be served locally.
+- A normal browser would observe dynamically inserted content.
+
+---
+
+### Task 16: Implement browser navigation
+
+**Goal:** Navigate Lightpanda to the local dynamic test page.
+
+**Actions:**
+- Add a sidecar `navigate` method.
+- Return URL and basic navigation result.
+
+**Acceptance criteria:**
+- Lightpanda loads the local test page.
+- The sidecar reports successful navigation.
+
+---
+
+### Task 17: Implement JavaScript evaluation
+
+**Goal:** Execute JavaScript in the loaded page.
+
+**Actions:**
+- Add a sidecar `evaluate` method.
+- Return JSON-serializable values.
+
+**Acceptance criteria:**
+- R can navigate to the local fixture.
+- R can execute JavaScript through the sidecar.
+- R can read the dynamically inserted DOM content.
+
+---
+
+### Task 18: Create `x_session()`
+
+**Goal:** Expose the first public R API.
+
+**Actions:**
+- Implement `x_session()`.
+- Start the sidecar.
+- Connect to the configured backend.
+- Store session state.
+
+**Acceptance criteria:**
+- `x_session()` returns a session object.
+- Printing it shows backend and connection status.
+- Existing protocol tests remain green.
+
+---
+
+### Task 19: Create `x_close()`
+
+**Goal:** Add public session cleanup.
+
+**Actions:**
+- Implement `x_close(session)`.
+- Close browser resources.
+- Stop sidecar process.
+
+**Acceptance criteria:**
+- `x_session()` → `x_close()` succeeds.
+- Repeated close does not crash.
+- No child process remains.
+
+---
+
+### Task 20: Create `x_doctor()` basic diagnostics
+
+**Goal:** Provide immediate environment diagnostics.
+
+**Actions:**
+Check only:
+- R
+- Node.js
+- sidecar files
+- sidecar compilation/runtime
+- configured Lightpanda endpoint
+
+**Acceptance criteria:**
+- `x_doctor()` returns or prints a deterministic diagnostic summary.
+- Missing dependencies are reported clearly.
+
+---
+
+### Task 21: Add CDP network event capture
+
+**Goal:** Observe page network traffic.
+
+**Actions:**
+- Enable relevant CDP network events.
+- Capture request URL, method, resource type, and status where available.
+- Keep raw event capture isolated from X-specific parsing.
+
+**Acceptance criteria:**
+- Loading the local fixture produces captured network events.
+- Events are returned to R as structured data.
+
+---
+
+### Task 22: Add a local JSON network fixture
+
+**Goal:** Prove structured network-response extraction.
+
+**Actions:**
+- Extend the local test page so JavaScript fetches a local JSON endpoint.
+- JSON should contain a fake post-like object.
+
+**Acceptance criteria:**
+- Lightpanda observes the request.
+- The sidecar can identify the JSON response.
+
+---
+
+### Task 23: Capture response bodies
+
+**Goal:** Read JSON bodies from selected network responses.
+
+**Actions:**
+- Implement response body retrieval.
+- Limit this task to local fixture responses.
+
+**Acceptance criteria:**
+- The fake post JSON body is captured.
+- Parsed JSON reaches R correctly.
+
+---
+
+### Task 24: Add network capture tests
+
+**Goal:** Stabilize network-first infrastructure.
+
+**Actions:**
+Test:
+- request discovery
+- response metadata
+- response body capture
+- JSON parsing
+
+**Acceptance criteria:**
+- Tests run entirely against local fixtures.
+- All network tests pass.
+
+---
+
+### Task 25: Create `x_debug_network()`
+
+**Goal:** Expose network inspection for development.
+
+**Actions:**
+- Add a public or clearly marked experimental R function.
+- Return a tibble/data frame of captured requests.
+
+**Acceptance criteria:**
+- Running it against the local fixture returns structured rows.
+- At minimum include URL, method, resource type, and status when available.
+
+---
+
+### Task 26: Create `x_debug_dom()`
+
+**Goal:** Expose DOM inspection separately from network capture.
+
+**Actions:**
+- Return HTML or selected semantic DOM information.
+- Keep DOM debugging separate from extraction logic.
+
+**Acceptance criteria:**
+- It works on the local dynamic fixture.
+- It can see dynamically generated content.
+
+---
+
+### Task 27: Navigate to X
+
+**Goal:** Prove Lightpanda can load X/Twitter.
+
+**Actions:**
+- Use the browser backend to navigate to X.
+- Record title, final URL, and high-level navigation result.
+- Do not implement extraction yet.
+
+**Acceptance criteria:**
+- The attempt is executed.
+- Success or the exact technical failure is recorded in `RALPH_PROGRESS.md`.
+
+---
+
+### Task 28: Open an X search URL
+
+**Goal:** Reach a search results page.
+
+**Actions:**
+- Add an internal function to construct a search URL from a query.
+- Navigate to it with Lightpanda.
+- Capture page title, final URL, and network summary.
+
+**Acceptance criteria:**
+- Search URL construction has unit tests.
+- A real navigation attempt is executed and documented.
+
+---
+
+### Task 29: Capture X search network traffic
+
+**Goal:** Identify candidate structured responses containing posts.
+
+**Actions:**
+- Capture fetch/XHR/GraphQL-like traffic during one X search.
+- Record operation names, response content types, and candidate response URLs.
+- Do not build the full parser yet.
+
+**Acceptance criteria:**
+- At least one network capture artifact or diagnostic summary is produced.
+- Candidate post-bearing responses are identified if present.
+- Findings are recorded in `RALPH_PROGRESS.md`.
+
+---
+
+### Task 30: Add minimal X network fixtures
+
+**Goal:** Turn observed X response structures into offline parser inputs.
+
+**Actions:**
+- Save the smallest useful sanitized fixture from an observed structured response.
+- Remove irrelevant bulk.
+- Keep enough structure to represent one or more posts and pagination if present.
+
+**Acceptance criteria:**
+- Fixture parses as valid JSON.
+- Fixture is small enough for unit testing.
+- No parser code is required yet beyond fixture validation.
+
+---
+
+### Task 31: Implement minimal post discovery parser
+
+**Goal:** Locate post objects inside one known X fixture.
+
+**Actions:**
+- Write a parser that extracts only:
+  - post_id
+  - text
+- Do not normalize all metadata yet.
+
+**Acceptance criteria:**
+- Parser returns at least one post from the fixture.
+- `post_id` is character.
+- Unit test passes.
+
+---
+
+### Task 32: Extend parser with author fields
+
+**Goal:** Add author identity fields.
+
+**Actions:**
+Extract when available:
+- author_id
+- username
+- display_name
+
+**Acceptance criteria:**
+- Existing fixture tests remain green.
+- Missing fields return `NA`/null rather than crashing.
+
+---
+
+### Task 33: Extend parser with timestamps
+
+**Goal:** Add time information.
+
+**Actions:**
+Extract:
+- created_at
+
+**Acceptance criteria:**
+- Timestamp parsing has tests.
+- Invalid/missing timestamps fail gracefully.
+
+---
+
+### Task 34: Extend parser with engagement metrics
+
+**Goal:** Add post metrics.
+
+**Actions:**
+Extract when available:
+- reply_count
+- repost_count
+- like_count
+- quote_count
+- bookmark_count
+- view_count
+
+**Acceptance criteria:**
+- Metrics are numeric/integer-compatible.
+- Missing metrics do not break parsing.
+
+---
+
+### Task 35: Extend parser with relationship fields
+
+**Goal:** Represent replies and quotes.
+
+**Actions:**
+Extract when available:
+- conversation_id
+- is_reply
+- is_repost
+- is_quote
+- reply_to_post_id
+- quoted_post_id
+
+**Acceptance criteria:**
+- IDs remain character.
+- Unit tests cover at least one missing relationship case.
+
+---
+
+### Task 36: Add canonical post normalization
+
+**Goal:** Convert parsed raw posts to one stable schema.
+
+**Actions:**
+Create a normalizer that returns the canonical fields implemented so far.
+
+**Acceptance criteria:**
+- Every output row has the same columns.
+- Missing values are represented consistently.
+- Parser and normalizer are separate modules.
+
+---
+
+### Task 37: Return posts as a tibble
+
+**Goal:** Make parsed output idiomatic for R.
+
+**Actions:**
+- Convert normalized posts to `tibble`.
+- Preserve character IDs.
+
+**Acceptance criteria:**
+- Output inherits from `tbl_df`.
+- `post_id` is character.
+- Unit test passes.
+
+---
+
+### Task 38: Implement deduplication by `post_id`
+
+**Goal:** Remove duplicates safely.
+
+**Actions:**
+- Add a dedicated deduplication function.
+- Preserve first-seen ordering unless there is a documented better choice.
+
+**Acceptance criteria:**
+- Duplicate fixture rows collapse to one post.
+- Different posts with identical text are not deduplicated.
+
+---
+
+### Task 39: Create minimal `x_search()`
+
+**Goal:** Connect the pieces into one end-to-end search path.
+
+**Actions:**
+- Accept `session`, `query`, and small finite `limit`.
+- Navigate to an X search.
+- Capture candidate structured responses.
+- Parse and normalize posts.
+- Deduplicate.
+- Return tibble.
+
+**Acceptance criteria:**
+- A real execution attempt is made.
+- If X data is observable, multiple posts are returned.
+- If blocked by a technical incompatibility, the exact failing layer is documented.
+
+---
+
+### Task 40: Add one-scroll collection
+
+**Goal:** Collect beyond the initially visible result set.
+
+**Actions:**
+- Perform exactly one incremental scroll after initial extraction.
+- Capture new network responses.
+- Merge and deduplicate posts.
+
+**Acceptance criteria:**
+- Scroll behavior is observable.
+- New posts are added when available.
+- Duplicate posts are not duplicated.
+
+---
+
+### Task 41: Add a scroll state object
+
+**Goal:** Stop relying on implicit loop state.
+
+**Actions:**
+Track:
+- seen_post_ids
+- current_count
+- previous_count
+- no_new_data_cycles
+- scroll_position
+- last_post_id
+- last_cursor
+- elapsed_time
+
+**Acceptance criteria:**
+- State has unit tests.
+- One-scroll behavior uses the state object.
+
+---
+
+### Task 42: Add repeated scrolling with termination
+
+**Goal:** Support bounded repeated collection.
+
+**Actions:**
+- Repeat scroll and extraction.
+- Stop on `limit`.
+- Stop after a configurable number of no-new-data cycles.
+
+**Acceptance criteria:**
+- No infinite loop is possible under tested conditions.
+- A local mock test proves termination.
+
+---
+
+### Task 43: Enforce `limit`
+
+**Goal:** Make result count deterministic.
+
+**Actions:**
+- Ensure `x_search(..., limit = N)` never returns more than N posts.
+
+**Acceptance criteria:**
+- Tests for limits 1, 2, and a value larger than available fixture results pass.
+
+---
+
+### Task 44: Detect pagination cursors
+
+**Goal:** Extract cursors from known structured responses when present.
+
+**Actions:**
+- Add cursor discovery to the parser.
+- Do not yet directly replay cursor requests.
+
+**Acceptance criteria:**
+- Cursor extraction has fixture tests.
+- Missing cursor returns a defined empty value.
+
+---
+
+### Task 45: Store collection provenance in memory
+
+**Goal:** Track how a search result was created.
+
+**Actions:**
+Create collection metadata containing at least:
+- collection_id
+- started_at
+- query
+- package_version
+- backend
+- parser_version
+- records
+
+**Acceptance criteria:**
+- `x_search()` can associate metadata with its result.
+- Metadata generation has tests.
+
+---
+
+### Task 46: Add `collected_at` and query metadata
+
+**Goal:** Add observation-level provenance.
+
+**Actions:**
+Add:
+- collected_at
+- collection_query
+- collection_id
+
+**Acceptance criteria:**
+- Fields exist in returned post rows.
+- Existing canonical schema tests are updated and pass.
+
+---
+
+### Task 47: Add JSONL incremental persistence
+
+**Goal:** Avoid losing all progress when collection is interrupted.
+
+**Actions:**
+- Implement a simple append-only JSONL writer.
+- Persist posts in batches.
+- Keep this implementation independent from Arrow/DuckDB.
+
+**Acceptance criteria:**
+- Two batches can be appended.
+- Resulting JSONL can be read back.
+- Duplicate writing behavior is documented.
+
+---
+
+### Task 48: Add checkpoint state persistence
+
+**Goal:** Save collection state separately from post data.
+
+**Actions:**
+Persist:
+- collection_id
+- query
+- seen_post_ids
+- last_cursor
+- last_post_id
+- records_collected
+
+**Acceptance criteria:**
+- State can be written and read.
+- Round-trip test passes.
+
+---
+
+### Task 49: Add resume support
+
+**Goal:** Continue from a saved checkpoint.
+
+**Actions:**
+- Add `resume = TRUE`.
+- Restore seen IDs and collection metadata.
+- Continue writing to the same collection.
+
+**Acceptance criteria:**
+- A local simulated interrupted collection resumes.
+- Already-seen posts are not duplicated.
+
+---
+
+### Task 50: Add Parquet export
+
+**Goal:** Provide modern columnar output.
+
+**Actions:**
+- Implement `x_save()` support for `.parquet` when Arrow is installed.
+- Keep Arrow optional.
+
+**Acceptance criteria:**
+- A small tibble can be saved and read back as Parquet.
+- Package still loads without Arrow installed.
+
+---
+
+### Task 51: Add DuckDB export
+
+**Goal:** Support large local research collections.
+
+**Actions:**
+- Add optional DuckDB persistence.
+- Start with a single `posts` table.
+- Keep DuckDB optional.
+
+**Acceptance criteria:**
+- A test database can be created.
+- Posts can be inserted and queried.
+- Package still loads without DuckDB installed.
+
+---
+
+### Task 52: Implement `x_user_posts()` URL/navigation layer
+
+**Goal:** Add user timeline navigation without duplicating search architecture.
+
+**Actions:**
+- Construct a user timeline URL from a username.
+- Navigate using the same session/backend.
+- Reuse capture infrastructure.
+
+**Acceptance criteria:**
+- URL construction has tests.
+- Real navigation attempt is executed.
+
+---
+
+### Task 53: Implement minimal `x_user_posts()` extraction
+
+**Goal:** Reuse post parser for user timelines.
+
+**Actions:**
+- Capture structured timeline responses.
+- Reuse canonical parser/normalizer.
+- Support `limit`.
+
+**Acceptance criteria:**
+- Function returns the canonical tibble when data is observable.
+- No duplicated parser implementation is introduced.
+
+---
+
+### Task 54: Implement `x_post()` navigation
+
+**Goal:** Support individual post URLs.
+
+**Actions:**
+- Accept a post URL or post ID.
+- Navigate to the post.
+- Capture structured data.
+
+**Acceptance criteria:**
+- URL normalization has tests.
+- Real navigation attempt is executed.
+
+---
+
+### Task 55: Implement minimal `x_post()` extraction
+
+**Goal:** Return one canonical post.
+
+**Actions:**
+- Reuse existing parser and normalizer.
+- Return one-row tibble when found.
+
+**Acceptance criteria:**
+- No separate incompatible schema is created.
+- Unit tests cover not-found behavior.
+
+---
+
+### Task 56: Add hashtag, mention, and URL parsing
+
+**Goal:** Extend structured post content.
+
+**Actions:**
+Extract when available:
+- hashtags
+- mentions
+- urls
+
+Use list-columns initially.
+
+**Acceptance criteria:**
+- Canonical schema includes these fields.
+- Fixture tests pass.
+
+---
+
+### Task 57: Add media parsing
+
+**Goal:** Represent attached media.
+
+**Actions:**
+Extract when available:
+- media_type
+- media_urls
+
+**Acceptance criteria:**
+- Posts without media parse normally.
+- Posts with media return structured list-column data.
+
+---
+
+### Task 58: Improve `x_doctor()`
+
+**Goal:** Make diagnostics useful for real installations.
+
+**Actions:**
+Report:
+- R
+- Node.js
+- TypeScript sidecar
+- Lightpanda connection
+- CDP connection
+- JavaScript evaluation
+- network capture
+- X navigation
+
+**Acceptance criteria:**
+- Each check reports OK/FAIL independently.
+- A failed check does not prevent reporting later independent checks.
+
+---
+
+### Task 59: Add structured error classes
+
+**Goal:** Replace generic failures with actionable errors.
+
+**Actions:**
+Introduce only errors currently needed, such as:
+- `LPD_CONNECTION_ERROR`
+- `CDP_ERROR`
+- `PAGE_LOAD_ERROR`
+- `NETWORK_ERROR`
+- `PARSER_ERROR`
+- `TIMEOUT`
+- `NO_NEW_DATA`
+
+**Acceptance criteria:**
+- Existing failure paths use structured codes/classes.
+- Tests assert at least three error types.
+
+---
+
+### Task 60: Add CLI progress output
+
+**Goal:** Make long collections understandable.
+
+**Actions:**
+Add progress messages for:
+- session connected
+- navigation
+- posts collected
+- checkpoint written
+- completion
+
+Add `quiet = TRUE`.
+
+**Acceptance criteria:**
+- Normal mode prints useful progress.
+- Quiet mode suppresses non-error progress.
+
+---
+
+### Task 61: Add a richer local infinite-scroll mock
+
+**Goal:** Test collection logic without X.
+
+**Actions:**
+The mock must simulate:
+- multiple pages/batches
+- duplicated posts
+- delayed responses
+- end of results
+
+**Acceptance criteria:**
+- `x_search()` collection engine can be exercised against the mock through an internal test path.
+- Deduplication and termination are verified.
+
+---
+
+### Task 62: Add cursor behavior to the local mock
+
+**Goal:** Test cursor-aware parsing independently.
+
+**Actions:**
+- Add fake cursor values to mock responses.
+- Change cursor after each batch.
+
+**Acceptance criteria:**
+- Parser extracts successive cursors.
+- Final batch has an explicit terminal state or missing next cursor.
+
+---
+
+### Task 63: Add parser schema-change detection
+
+**Goal:** Fail clearly when expected X structures change.
+
+**Actions:**
+Detect:
+- response recognized but no expected timeline structure
+- expected post object missing
+- incompatible field structure
+
+**Acceptance criteria:**
+- Unknown fixture triggers a specific parser error.
+- Error includes parser version and diagnostic context.
+
+---
+
+### Task 64: Add parser and schema versions
+
+**Goal:** Make collection provenance auditable.
+
+**Actions:**
+Define internal:
+- `parser_version`
+- `schema_version`
+
+Add both to collection metadata.
+
+**Acceptance criteria:**
+- Versions appear in provenance.
+- Unit tests verify their presence.
+
+---
+
+### Task 65: Add README quickstart
+
+**Goal:** Document the working MVP.
+
+**Actions:**
+README should include:
+- installation prerequisites
+- Lightpanda configuration
+- `x_doctor()`
+- `x_session()`
+- `x_search()`
+- `x_close()`
+- returned data structure
+
+**Acceptance criteria:**
+- Every documented function exists.
+- Example code matches the current API.
+
+---
+
+### Task 66: Add architecture documentation
+
+**Goal:** Explain the implementation that actually exists.
+
+**Actions:**
+Create `docs/architecture.md` covering:
+- R API
+- sidecar
+- CDP
 - Lightpanda
-- repositorio oficial de Lightpanda
-- Chrome DevTools Protocol
-- Playwright
-- Puppeteer
-- playwright-core
-- puppeteer-core
-- WebSocket
-- browser automation moderna
-- paquetes R para WebSocket y CDP
-- processx
-- callr
-- jsonlite
-- httr2
-- cli
-- rlang
-- testthat
-- Arrow
-- DuckDB
+- network capture
+- parser
+- normalizer
+- persistence
 
-No asumas que APIs antiguas siguen funcionando.
-
-Utilizá documentación oficial, repositorios y código fuente actual.
-
-Cuando exista incertidumbre:
-
-**hacé un experimento mínimo ejecutable.**
-
-No decidas solamente a partir de documentación.
-
-Registrar decisiones relevantes en:
-
-```text
-docs/architecture.md
-```
+**Acceptance criteria:**
+- Documentation reflects implemented code, not hypothetical architecture.
 
 ---
 
-# 3. PRINCIPIO ARQUITECTÓNICO
+### Task 67: Add a getting-started vignette
 
-La API pública R debe estar desacoplada del mecanismo específico utilizado para controlar Lightpanda.
+**Goal:** Provide an end-to-end R workflow.
 
-Evaluar experimentalmente tres estrategias.
+**Actions:**
+Document:
+- environment check
+- session creation
+- search
+- basic dplyr use
+- close
 
-## Estrategia A
-
-```text
-R
-↓
-WebSocket
-↓
-Chrome DevTools Protocol
-↓
-Lightpanda
-```
-
-## Estrategia B
-
-```text
-R
-↓
-Node.js / TypeScript sidecar
-↓
-Playwright / Puppeteer
-↓
-CDP
-↓
-Lightpanda
-```
-
-## Estrategia C
-
-Arquitectura híbrida con backend intercambiable.
-
-Hipótesis inicial recomendada:
-
-```text
-R package
-   │
-   ├── API pública
-   ├── orchestration
-   ├── parsing
-   ├── normalization
-   ├── persistence
-   └── research data model
-          │
-          ▼
-   Node / TypeScript sidecar
-          │
-          ▼
- playwright-core / puppeteer-core
-          │
-          ▼
-         CDP
-          │
-          ▼
-      Lightpanda
-          │
-          ▼
-           X
-```
-
-No adoptar esta arquitectura dogmáticamente.
-
-Construí pequeños prototipos y elegí según:
-
-1. estabilidad;
-2. performance;
-3. control;
-4. facilidad de debugging;
-5. mantenibilidad;
-6. capacidad de acceder a network events;
-7. capacidad de manipular DOM;
-8. capacidad de ejecutar JavaScript;
-9. integración con R.
+**Acceptance criteria:**
+- Vignette source builds or renders successfully.
 
 ---
 
-# 4. ABSTRACCIÓN DEL BROWSER
+### Task 68: Add large-collection documentation
 
-Diseñar desde el inicio una abstracción como:
+**Goal:** Document checkpoints and resume.
 
-```r
-x_session(
-  backend = "lightpanda",
-  endpoint = NULL
-)
-```
+**Actions:**
+Show:
+- finite `limit`
+- checkpoint path
+- resume
+- JSONL/Parquet/DuckDB options currently implemented
 
-La API pública no debe depender directamente de Lightpanda.
-
-En el futuro debería poder soportar:
-
-```r
-backend = "lightpanda"
-backend = "chromium"
-backend = "remote-cdp"
-```
-
-sin modificar:
-
-```r
-x_search()
-x_user_posts()
-x_post()
-x_thread()
-```
+**Acceptance criteria:**
+- Documentation matches real function signatures.
 
 ---
 
-# 5. LIGHTPANDA
+### Task 69: Add GitHub Actions for R
 
-Implementar inicialmente soporte para Lightpanda local.
+**Goal:** Automate package checks.
 
-Ejemplo conceptual:
+**Actions:**
+- Add an R CMD check workflow.
+- Do not require live X access.
 
-```text
-ws://127.0.0.1:9222
-```
-
-Investigar también Lightpanda Cloud y conexión remota mediante CDP.
-
-Configuración mediante variables de entorno cuando corresponda:
-
-```text
-LPD_ENDPOINT
-LPD_TOKEN
-```
-
-Nunca hardcodear secretos.
-
-Crear funciones internas capaces de:
-
-```text
-start browser
-connect browser
-create context
-create page
-navigate
-execute JavaScript
-inspect DOM
-intercept network
-scroll
-wait for events
-close page
-close browser
-```
+**Acceptance criteria:**
+- Workflow YAML is valid.
+- Local `R CMD check` is run before declaring completion.
 
 ---
 
-# 6. OBJETIVO PRINCIPAL: X/TWITTER
+### Task 70: Add GitHub Actions for TypeScript
 
-El objetivo inmediato es poder recolectar publicaciones desde:
+**Goal:** Automate sidecar checks.
 
-## Search
+**Actions:**
+Run:
+- install
+- TypeScript compile
+- Node tests
 
-```r
-x_search()
-```
-
-## User timeline
-
-```r
-x_user_posts()
-```
-
-## Individual post
-
-```r
-x_post()
-```
-
-Posteriormente:
-
-```r
-x_thread()
-x_replies()
-x_quotes()
-```
-
-Priorizar una ruta vertical completa antes de agregar muchas funciones.
+**Acceptance criteria:**
+- Workflow YAML is valid.
+- Equivalent local commands pass.
 
 ---
 
-# 7. ESTRATEGIA DE EXTRACCIÓN
+### Task 71: Run full R package check
 
-No depender exclusivamente de scraping HTML tradicional.
+**Goal:** Stabilize the package after MVP implementation.
 
-Investigar todas las capas de información disponibles durante la navegación.
+**Actions:**
+Run:
+- documentation generation
+- test suite
+- `R CMD build`
+- `R CMD check`
 
-Prioridad aproximada:
-
-## Nivel 1 — Network
-
-Inspeccionar tráfico de red mediante CDP.
-
-Buscar:
-
-- fetch;
-- XHR;
-- GraphQL;
-- JSON;
-- payloads estructurados;
-- metadata;
-- cursors;
-- timeline responses;
-- pagination tokens.
-
-Determinar experimentalmente qué información recibe el navegador durante búsquedas y timelines.
-
-Construir tooling interno para inspeccionar:
-
-```text
-request URL
-method
-headers
-request payload
-response status
-response headers
-response body
-resource type
-timing
-```
-
-Crear un modo de debugging:
-
-```r
-x_network_debug()
-```
-
-o equivalente.
+**Acceptance criteria:**
+- No R CMD check errors.
+- Any warnings/notes are documented in `RALPH_PROGRESS.md`.
 
 ---
 
-# 8. NETWORK FIRST
+### Task 72: Run full TypeScript checks
 
-Si los posts aparecen en respuestas JSON o estructuras equivalentes antes de renderizarse en el DOM, preferir esa fuente.
+**Goal:** Stabilize the sidecar.
 
-El parser de datos estructurados debe estar separado de la navegación.
+**Actions:**
+Run:
+- TypeScript compile
+- Node tests
+- configured lint if present
 
-Arquitectura:
-
-```text
-browser
-   ↓
-network events
-   ↓
-raw responses
-   ↓
-X parser
-   ↓
-normalizer
-   ↓
-canonical schema
-   ↓
-tibble
-```
-
-Guardar fixtures representativos para testing.
+**Acceptance criteria:**
+- All configured TypeScript/Node checks pass.
 
 ---
 
-# 9. DOM FALLBACK
+### Task 73: Add a minimal benchmark harness
 
-Cuando la información necesaria no esté disponible estructuradamente, usar DOM.
+**Goal:** Measure instead of assuming performance.
 
-Priorizar selectores relativamente estables:
+**Actions:**
+Measure at least:
+- sidecar startup
+- Lightpanda connection
+- local fixture navigation
+- local structured extraction
 
-```text
-article
-data-testid
-role
-aria attributes
-semantic structure
-```
-
-Centralizar selectores.
-
-Por ejemplo:
-
-```text
-src/x/selectors.ts
-```
-
-Nunca dispersar docenas de selectores específicos de X por diferentes módulos.
+**Acceptance criteria:**
+- `benchmarks/` contains a reproducible benchmark script.
+- Results from one execution are recorded in `RALPH_PROGRESS.md`.
 
 ---
 
-# 10. PARSERS INDEPENDIENTES
+### Task 74: Add optional Chromium backend spike
 
-Separar completamente:
+**Goal:** Verify that the backend abstraction is real.
 
-```text
-navigation
-network capture
-DOM capture
-raw extraction
-parsing
-normalization
-validation
-storage
-```
+**Actions:**
+- Implement only enough Chromium support to navigate the local fixture and evaluate JavaScript.
+- Do not duplicate X logic.
 
-Ejemplo:
-
-```text
-search.ts
-timeline.ts
-network.ts
-selectors.ts
-parser.ts
-normalize.ts
-```
-
-Los parsers deben poder ejecutarse contra fixtures sin iniciar Lightpanda.
+**Acceptance criteria:**
+- Same high-level internal navigation call works with Lightpanda and Chromium.
+- Existing `x_search()` architecture does not require parser changes.
 
 ---
 
-# 11. EXPLORACIÓN DEL FRONTEND DE X
+### Task 75: Compare Lightpanda and Chromium on the local fixture
 
-Crear herramientas internas para investigar la aplicación.
+**Goal:** Produce a basic empirical comparison.
 
-Ejemplos:
+**Actions:**
+Compare:
+- startup
+- navigation
+- memory if easily measurable
+- structured extraction
 
-```r
-x_debug_page()
-x_debug_network()
-x_debug_dom()
-x_dump_network()
-x_dump_html()
-```
-
-Permitir identificar:
-
-- endpoints usados;
-- estructuras JSON;
-- nombres de operaciones GraphQL;
-- cursores;
-- objetos tweet/post;
-- objetos user;
-- metadata;
-- pagination;
-- respuestas al hacer scroll.
-
-Guardar solamente muestras pequeñas necesarias para desarrollo y tests.
+**Acceptance criteria:**
+- Results are recorded without asserting superiority unless measured.
 
 ---
 
-# 12. API PÚBLICA R
+### Task 76: Final MVP regression run
 
-Diseñar inicialmente:
+**Goal:** Verify the entire implemented system before declaring MVP complete.
 
-```r
-x_session()
-x_close()
+**Actions:**
+Run:
+- R tests
+- Node tests
+- TypeScript compile
+- local dynamic page integration
+- local network fixture integration
+- local infinite-scroll integration
+- checkpoint/resume integration
+- `R CMD check`
+- one real X search attempt
+- one real user timeline attempt
 
-x_search()
-x_user()
-x_user_posts()
-x_post()
-
-x_collect()
-x_stream_scroll()
-
-x_save()
-x_read()
-
-x_doctor()
-```
-
-Implementar primero:
-
-```text
-x_session()
-x_search()
-x_user_posts()
-```
-
-Luego extender.
+**Acceptance criteria:**
+- All local deterministic tests pass.
+- R CMD check has no errors.
+- Real X attempts and their observed outcomes are documented.
+- `RALPH_PROGRESS.md` accurately distinguishes working features from unresolved issues.
 
 ---
 
-# 13. x_search()
+### Task 77: Final repository cleanup
 
-Objetivo de API:
+**Goal:** Remove development debris without changing behavior.
 
-```r
-x_search(
-  session,
-  query,
-  limit = Inf,
-  since = NULL,
-  until = NULL,
-  lang = NULL,
-  mode = c("latest", "top"),
-  checkpoint = NULL,
-  progress = interactive()
-)
-```
+**Actions:**
+- Remove obsolete temporary scripts.
+- Remove dead code.
+- Remove unused dependencies.
+- Verify `.gitignore`.
+- Confirm no tokens or credentials are committed.
 
-El algoritmo debe:
-
-1. construir la búsqueda;
-2. navegar;
-3. esperar resultados;
-4. comenzar captura;
-5. extraer posts;
-6. normalizar;
-7. deduplicar;
-8. hacer scroll;
-9. detectar nuevas respuestas;
-10. procesar cursores cuando existan;
-11. continuar;
-12. detenerse al alcanzar el objetivo.
+**Acceptance criteria:**
+- Full regression tests still pass.
+- Git diff contains only intentional project files.
 
 ---
 
-# 14. SCROLL ENGINE
+### Task 78: Produce MVP status summary
 
-Construir un controlador de scroll robusto.
+**Goal:** Leave a machine- and human-readable completion record.
 
-Mantener estado explícito:
-
-```text
-seen_post_ids
-current_count
-previous_count
-no_new_data_cycles
-scroll_position
-last_post_id
-last_cursor
-elapsed_time
-requests_seen
-responses_parsed
-```
-
-El motor debe saber cuándo avanzar, cuándo esperar y cuándo terminar.
-
-No usar bucles infinitos sin estado.
-
----
-
-# 15. CURSORS Y PAGINACIÓN
-
-Investigar especialmente si X utiliza cursors internos.
-
-Si existen cursores disponibles en respuestas estructuradas:
-
-- identificarlos;
-- almacenarlos;
-- versionarlos;
-- estudiar cómo cambian;
-- determinar su relación con infinite scroll.
-
-La extracción no debe asumir que scrolling físico es siempre la única forma de paginación.
-
-Diseñar:
-
-```text
-ScrollStrategy
-CursorStrategy
-NetworkPaginationStrategy
-```
-
-o abstracciones equivalentes si aportan valor real.
-
----
-
-# 16. ESQUEMA CANÓNICO DE POSTS
-
-Crear un schema interno explícito.
-
-Campos iniciales:
-
-```text
-post_id
-conversation_id
-
-author_id
-username
-display_name
-
-created_at
-text
-lang
-
-reply_count
-repost_count
-like_count
-quote_count
-bookmark_count
-view_count
-
-is_reply
-is_repost
-is_quote
-
-reply_to_post_id
-quoted_post_id
-
-url
-
-hashtags
-mentions
-urls
-
-media_type
-media_urls
-
-possibly_sensitive
-
-collected_at
-collection_query
-collection_method
-collector_version
-```
-
-Agregar campos útiles descubiertos durante investigación.
-
-No eliminar datos disponibles sin una razón.
-
----
-
-# 17. IDs
-
-Todos los identificadores de X deben almacenarse como:
-
-```r
-character
-```
-
-Nunca:
-
-```r
-double
-```
-
-Evitar cualquier riesgo de pérdida de precisión.
-
----
-
-# 18. ESTRUCTURA DE DATOS
-
-Evaluar un modelo relacional:
-
-```text
-posts
-users
-media
-hashtags
-mentions
-urls
-collections
-post_collections
-```
-
-La función sencilla:
-
-```r
-x_search()
-```
-
-puede devolver inicialmente una tabla de posts.
-
-Pero internamente la arquitectura debe permitir relaciones múltiples.
-
----
-
-# 19. DEDUPLICACIÓN
-
-Clave principal:
-
-```text
-post_id
-```
-
-Nunca deduplicar por texto.
-
-Un mismo post puede aparecer:
-
-- varias veces durante scroll;
-- en varias respuestas;
-- en distintas consultas.
-
-Mantener relación entre:
-
-```text
-post_id
-collection_id
-query
-```
-
----
-
-# 20. PROVENANCE
-
-Cada corrida debe generar metadata.
-
-```text
-collection_id
-started_at
-finished_at
-query
-package_version
-backend
-lightpanda_version
-parser_version
-records
-requests
-responses
-warnings
-errors
-```
-
-Esto es particularmente importante para investigación reproducible.
-
----
-
-# 21. CHECKPOINTS
-
-Prioridad alta.
-
-Ejemplo:
-
-```r
-x_search(
-  session,
-  query = "protesta",
-  limit = 100000,
-  checkpoint = "data/protestas"
-)
-```
-
-No mantener 100.000 posts únicamente en RAM.
-
-Persistir periódicamente.
-
-Evaluar:
-
-```text
-Parquet
-DuckDB
-JSONL
-```
-
-Preferencia inicial:
-
-```text
-Parquet o DuckDB
-```
-
-CSV puede existir como formato de exportación, pero no como formato interno principal.
-
----
-
-# 22. REANUDACIÓN
-
-Una ejecución interrumpida debe poder retomarse.
-
-Guardar:
-
-```text
-seen_post_ids
-last_cursor
-last_post_id
-query
-collection_id
-records_collected
-timestamps
-```
-
-Objetivo:
-
-```r
-x_search(
-  session,
-  query = "...",
-  checkpoint = "data/protestas",
-  resume = TRUE
-)
-```
-
----
-
-# 23. STREAMING
-
-Diseñar extracción incremental.
-
-Conceptualmente:
-
-```text
-Browser
-↓
-Network events
-↓
-Parser
-↓
-Batch
-↓
-Normalizer
-↓
-Deduplicate
-↓
-Storage
-```
-
-No esperar al final para guardar todo.
-
-Usar batches configurables.
-
-Ejemplo:
-
-```r
-batch_size = 500
-```
-
----
-
-# 24. ARROW
-
-Agregar soporte opcional para Parquet.
-
-Ejemplo:
-
-```r
-x_save(
-  posts,
-  "posts.parquet"
-)
-```
-
-Considerar particionamiento:
-
-```text
-year
-month
-collection_id
-```
-
-si resulta útil.
-
----
-
-# 25. DUCKDB
-
-Investigar DuckDB como almacenamiento de colecciones grandes.
-
-Ejemplo conceptual:
-
-```r
-x_collect(
-  ...,
-  output = "duckdb",
-  path = "tweets.duckdb"
-)
-```
-
-Diseñar tablas indexables y consultas desde R.
-
----
-
-# 26. PERFORMANCE
-
-Lightpanda se elige precisamente para experimentar con browser automation más eficiente.
-
-Medir realmente:
-
-```text
-startup time
-navigation time
-posts/minute
-requests/sec
-RAM
-CPU
-parsing time
-storage throughput
-```
-
-Cuando sea posible comparar:
-
-```text
-Lightpanda
-vs
-Chromium headless
-```
-
-Guardar benchmarks en:
-
-```text
-benchmarks/
-```
-
-No asumir resultados.
-
-Medir.
-
----
-
-# 27. CONCURRENCIA
-
-Una vez que el colector individual sea estable, investigar concurrencia.
-
-Posibles escenarios:
-
-```text
-multiple queries
-multiple users
-multiple time ranges
-multiple pages
-```
-
-Diseñar un scheduler simple.
-
-No introducir concurrencia antes de tener un pipeline individual estable.
-
-Prioridad:
-
-```text
-correct collector
-↓
-streaming collector
-↓
-checkpointing
-↓
-concurrency
-```
-
----
-
-# 28. ERRORES
-
-Crear clases de errores claras.
-
-Por ejemplo:
-
-```text
-LPD_CONNECTION_ERROR
-CDP_ERROR
-PAGE_LOAD_ERROR
-NETWORK_ERROR
-AUTH_REQUIRED
-LAYOUT_CHANGED
-PARSER_ERROR
-CURSOR_ERROR
-TIMEOUT
-NO_NEW_DATA
-UNSUPPORTED_PAGE
-```
-
-Desde R usar condiciones específicas cuando resulte conveniente.
-
-No usar simplemente:
-
-```text
-stop("failed")
-```
-
----
-
-# 29. LOGGING
-
-Usar `cli`.
-
-Ejemplo:
-
-```text
-✓ Lightpanda conectado
-✓ CDP conectado
-→ abriendo X
-→ búsqueda: protesta
-→ 521 posts
-→ 1,204 posts
-→ 2,843 posts
-→ checkpoint
-→ 5,000 posts
-✓ colección terminada
-```
-
-Permitir:
-
-```r
-quiet = TRUE
-```
-
----
-
-# 30. DIAGNÓSTICO
-
-Implementar:
-
-```r
-x_doctor()
-```
-
-Salida esperada:
-
-```text
-R ................ OK
-Node.js .......... OK
-Lightpanda ....... OK
-CDP .............. OK
-Sidecar .......... OK
-Network capture .. OK
-X navigation ..... OK
-```
-
-También considerar:
-
-```r
-x_debug_session()
-```
-
----
-
-# 31. NODE/TYPESCRIPT SIDECAR
-
-Si los experimentos muestran que TypeScript es la mejor opción, estructurar:
-
-```text
-inst/
-  node/
-    package.json
-    tsconfig.json
-
-    src/
-      index.ts
-
-      browser/
-        browser.ts
-        cdp.ts
-        network.ts
-
-      x/
-        search.ts
-        user.ts
-        timeline.ts
-        post.ts
-        parser.ts
-        selectors.ts
-        normalize.ts
-```
-
-Usar TypeScript:
-
-```text
-strict = true
-```
-
----
-
-# 32. COMUNICACIÓN R ↔ NODE
-
-Preferir un protocolo simple y robusto.
-
-Evaluar:
-
-```text
-JSON Lines
-JSON-RPC
-stdin/stdout
-named pipes
-WebSocket local
-```
-
-Hipótesis inicial:
-
-```text
-R
-↓
-persistent Node process
-↓
-JSONL stdin/stdout
-```
-
-Cada mensaje debería tener:
-
-```json
-{
-  "id": "...",
-  "method": "...",
-  "params": {}
-}
-```
-
-Respuesta:
-
-```json
-{
-  "id": "...",
-  "result": {}
-}
-```
-
-Errores:
-
-```json
-{
-  "id": "...",
-  "error": {
-    "code": "...",
-    "message": "..."
-  }
-}
-```
-
-Logs:
-
-```text
-stderr
-```
-
-Datos/protocolo:
-
-```text
-stdout
-```
-
-No mezclar ambos.
-
----
-
-# 33. PROCESO PERSISTENTE
-
-Evitar iniciar Node para cada post.
-
-Crear un sidecar persistente mientras exista:
-
-```r
-x_session()
-```
-
-Conceptualmente:
-
-```text
-x_session()
-    ↓
-Node process
-    ↓
-Lightpanda connection
-    ↓
-browser context
-```
-
-Cerrar todo con:
-
-```r
-x_close()
-```
-
----
-
-# 34. X_SESSION
-
-Diseñar una clase R.
-
-Ejemplo:
-
-```r
-session <- x_session()
-
-print(session)
-```
-
-Salida:
-
-```text
-<xtweets_session>
-Backend: Lightpanda
-Status: connected
-Endpoint: localhost
-Pages: 1
-```
-
-Puede utilizar:
-
-```text
-R6
-environment
-S3
-```
-
-Elegir la opción más simple y mantenible.
-
----
-
-# 35. PAQUETE R
-
-Seguir estándares actuales:
-
-```text
-DESCRIPTION
-NAMESPACE
-R/
-man/
-tests/testthat/
-inst/
-vignettes/
-README.Rmd o README.qmd
-NEWS.md
-LICENSE
-```
-
-Usar:
-
-```text
-roxygen2
-testthat edition 3
-cli
-processx
-jsonlite
-```
-
-Agregar otras dependencias solamente cuando estén justificadas.
-
----
-
-# 36. TESTS
-
-Crear varios niveles.
-
-## Unit tests
-
-Para:
-
-```text
-post parsing
-user parsing
-dates
-metrics
-URLs
-hashtags
-mentions
-media
-IDs
-normalization
-deduplication
-pagination
-```
-
-## Fixture tests
-
-Guardar pequeños fragmentos reales necesarios para reproducir parsers.
-
-## Browser integration tests
-
-Crear páginas locales controladas.
-
-## X integration tests
-
-Crear tests específicos contra X.
-
-Separarlos de los unit tests.
-
----
-
-# 37. MOCK X
-
-Crear una pequeña aplicación local que imite características necesarias.
-
-Por ejemplo:
-
-```text
-test-server/
-```
-
-Debe simular:
-
-- posts;
-- infinite scroll;
-- lazy loading;
-- network JSON;
-- cursors;
-- posts duplicados;
-- delayed responses;
-- errores;
-- cambios de DOM.
-
-Esto permite desarrollar el motor sin depender continuamente de X.
-
----
-
-# 38. NETWORK FIXTURES
-
-Crear fixtures de respuestas estructuradas.
-
-Ejemplo:
-
-```text
-tests/fixtures/network/
-```
-
-Los fixtures deben servir para probar parsers independientemente del browser.
-
----
-
-# 39. DETECCIÓN DE CAMBIOS
-
-El sistema debe detectar cuándo un parser deja de reconocer respuestas.
-
-Por ejemplo:
-
-```text
-expected post object not found
-unknown timeline structure
-cursor missing
-unexpected response schema
-```
-
-Cuando esto ocurra:
-
-- guardar información diagnóstica;
-- emitir error útil;
-- indicar parser afectado.
-
----
-
-# 40. VERSIONADO DE PARSERS
-
-Asignar versión interna:
-
-```text
-parser_version
-schema_version
-```
-
-Así una colección podrá registrar:
-
-```text
-xtweetsR 0.1.0
-parser 3
-schema 2
-```
-
----
-
-# 41. GITHUB ACTIONS
-
-Configurar CI.
-
-Pipeline:
-
-```text
-R CMD check
-testthat
-TypeScript compile
-Node tests
-lint
-```
-
-Los tests que dependan de acceso externo pueden configurarse separadamente.
-
----
-
-# 42. DOCUMENTACIÓN
-
-Crear README práctico.
-
-Primer ejemplo:
-
-```r
-library(xtweetsR)
-
-x <- x_session()
-
-posts <- x_search(
-  x,
-  query = '"paro general"',
-  limit = 1000
-)
-
-posts
-```
-
-Mostrar:
-
-```r
-posts |>
-  dplyr::count(username, sort = TRUE)
-```
-
-Crear vignettes:
-
-```text
-getting-started
-searching-x
-user-timelines
-large-collections
-storage
-architecture
-```
-
----
-
-# 43. CASO DE USO PRINCIPAL
-
-Pensar particularmente en investigación social.
-
-Consultas típicas:
-
-```text
-protesta
-huelga
-manifestación
-movilización
-conflicto laboral
-paro
-piquete
-```
-
-Ejemplo:
-
-```r
-tweets <- x_search(
-  x,
-  query = '("paro" OR "huelga") lang:es',
-  since = as.Date("2026-01-01"),
-  until = as.Date("2026-02-01"),
-  limit = 10000,
-  checkpoint = "data/huelgas"
-)
-```
-
-Objetivo posterior:
-
-analizar estos datos con:
-
-```text
-quanteda
-tidytext
-igraph
-network
-sf
-arrow
-duckdb
-LLMs
-```
-
----
-
-# 44. METADATA PARA INVESTIGACIÓN
-
-Cada observación debe poder vincularse con su colección.
-
-Guardar:
-
-```text
-collection_id
-query
-collected_at
-collector_version
-```
-
-Cada colección debe permitir reconstruir:
-
-```text
-qué se buscó
-cuándo
-cómo
-con qué versión
-cuántos posts aparecieron
-qué errores ocurrieron
-```
-
----
-
-# 45. NO SOBREINGENIERÍA
-
-Trabajar mediante vertical slices.
-
-## Iteración 1
-
-```text
-R
-↓
-Node/CDP
-↓
-Lightpanda
-↓
-local test page
-↓
-tibble
-```
-
-## Iteración 2
-
-```text
-Lightpanda
-↓
-X
-↓
-capturar HTML
-```
-
-## Iteración 3
-
-```text
-Lightpanda
-↓
-X
-↓
-capturar network
-```
-
-## Iteración 4
-
-```text
-identificar posts
-↓
-parser
-↓
-tibble
-```
-
-## Iteración 5
-
-```text
-search
-↓
-scroll
-↓
-multiple posts
-```
-
-## Iteración 6
-
-```text
-cursor detection
-↓
-pagination
-```
-
-## Iteración 7
-
-```text
-deduplication
-↓
-limit
-```
-
-## Iteración 8
-
-```text
-incremental storage
-↓
-checkpoints
-```
-
-## Iteración 9
-
-```text
-resume
-```
-
-## Iteración 10
-
-```text
-optimization
-```
-
-No construir diez abstracciones antes de conseguir una extracción end-to-end.
-
----
-
-# 46. RALPH LOOP
-
-Después de cada iteración:
-
-## OBSERVE
-
-Revisar:
-
-```text
-code
-tests
-logs
-errors
-TODOs
-git diff
-architecture
-```
-
-## SELECT
-
-Elegir el problema que actualmente más impide llegar al MVP.
-
-Trabajar sobre un cuello de botella principal por ciclo.
-
-## IMPLEMENT
-
-Implementar el cambio mínimo que produzca progreso observable.
-
-## RUN
-
-Ejecutar realmente el código.
-
-## TEST
-
-Ejecutar los tests relevantes.
-
-## DIAGNOSE
-
-Si algo falla:
-
-```text
-reproduce
-isolate
-inspect
-identify root cause
-fix
-regression test
-```
-
-No ocultar fallos mediante `tryCatch()` genérico.
-
-## REFACTOR
-
-Con tests verdes:
-
-```text
-remove duplication
-improve names
-improve types
-simplify
-reduce coupling
-```
-
-## DOCUMENT
-
-Actualizar:
-
-```text
-README
-architecture
-TODO
-RALPH_PROGRESS.md
-```
-
-## LOOP
-
-Volver inmediatamente a OBSERVE.
-
----
-
-# 47. RALPH_PROGRESS.md
-
-Mantener obligatoriamente:
+**Actions:**
+Update `RALPH_PROGRESS.md` with:
 
 ```markdown
-# Ralph Progress
+## MVP status
 
-## Estado actual
-
-...
-
-## Último ciclo
-
-...
-
-## Funciona
-
+### Working
 - ...
 
-## No funciona todavía
-
+### Partially working
 - ...
 
-## Tests
-
+### Not working
 - ...
 
-## Descubrimientos sobre X
-
+### Tests
 - ...
 
-## Descubrimientos sobre Lightpanda
-
+### X observations
 - ...
 
-## Decisiones arquitectónicas
-
+### Lightpanda observations
 - ...
 
-## Performance
-
+### Known limitations
 - ...
 
-## Próximo cuello de botella
-
-...
+### Recommended next task
+- ...
 ```
 
-Actualizarlo después de cada ciclo significativo.
+**Acceptance criteria:**
+- Status matches executed evidence.
+- No unverified feature is marked as working.
 
 ---
 
-# 48. PRIORIDADES
+## Post-MVP backlog
 
-Ante cualquier conflicto:
+Do not execute these until Tasks 1–78 are complete unless a previous task explicitly requires one as a dependency.
 
-```text
-1. extracción funcional
-2. integridad de datos
-3. reproducibilidad
-4. arquitectura desacoplada
-5. recuperación ante errores
-6. performance
-7. API R limpia
-8. documentación
-9. features adicionales
-```
+### Iteration 79: Add date-range query helpers
 
----
+Add `since` and `until` query helpers with unit tests.
 
-# 49. PRINCIPIOS DE IMPLEMENTACIÓN
+### Iteration 80: Add language query helper
 
-No:
+Add `lang` handling with unit tests.
 
-- crear un único script gigante;
-- mezclar browser automation con parsing;
-- mezclar parsing con almacenamiento;
-- usar selectores CSS por todo el proyecto;
-- almacenar IDs como doubles;
-- perder progreso si el proceso se interrumpe;
-- depender exclusivamente del DOM;
-- asumir cómo funciona X sin observar el tráfico real;
-- asumir que scrolling físico es la única paginación;
-- agregar Selenium sin demostrar que es necesario;
-- agregar dependencias innecesarias;
-- afirmar que algo funciona sin ejecutarlo.
+### Iteration 81: Add search mode
 
-Sí:
+Add `latest` and `top` where technically supported.
 
-- experimentar;
-- medir;
-- inspeccionar network;
-- usar CDP;
-- crear fixtures;
-- testear parsers;
-- persistir incrementalmente;
-- registrar provenance;
-- desacoplar componentes.
+### Iteration 82: Add thread extraction
 
----
+Implement `x_thread()` by reusing the canonical parser.
 
-# 50. INVESTIGACIÓN NETWORK ES PRIORITARIA
+### Iteration 83: Add replies extraction
 
-Antes de invertir demasiado tiempo en scraping DOM, comprobar qué ocurre al realizar:
+Implement `x_replies()` without creating a second post schema.
 
-```text
-X search
-user timeline
-open post
-scroll timeline
-```
+### Iteration 84: Add quote-post extraction
 
-Capturar todas las respuestas relevantes.
+Implement `x_quotes()`.
 
-Crear un pequeño programa de exploración capaz de mostrar algo como:
+### Iteration 85: Normalize users into a separate table
 
-```text
-[XHR] 200 ...
-[fetch] 200 ...
-[graphql] ...
-[json] ...
-```
+Add a relational users representation while preserving the simple tibble API.
 
-Identificar cuáles contienen:
+### Iteration 86: Normalize media into a separate table
 
-```text
-post IDs
-text
-users
-timestamps
-metrics
-cursors
-```
+Add relational media output.
 
-A partir de esa investigación decidir el extractor principal.
+### Iteration 87: Add collection/post relation table
+
+Represent posts appearing in multiple queries or collection runs.
+
+### Iteration 88: Add Arrow dataset partitioning
+
+Support optional partitioning by collection/date.
+
+### Iteration 89: Improve DuckDB schema
+
+Add collections and post-collection relation tables.
+
+### Iteration 90: Add bounded concurrency experiments
+
+Experiment with multiple independent queries only after single-session collection is stable.
+
+### Iteration 91: Add recovery tests for sidecar crashes
+
+Verify state persistence and restart behavior.
+
+### Iteration 92: Add recovery tests for Lightpanda disconnects
+
+Verify failure classification and session cleanup.
+
+### Iteration 93: Add response fixture refresh tooling
+
+Create developer tooling for updating parser fixtures after frontend changes.
+
+### Iteration 94: Add parser diagnostics export
+
+Export minimal diagnostic artifacts for debugging schema changes.
+
+### Iteration 95: Add package website
+
+Configure pkgdown after the public API stabilizes.
 
 ---
 
-# 51. CRITERIOS DE ACEPTACIÓN DEL MVP
+# Definition of MVP completion
 
-No declarar terminado el MVP hasta demostrar mediante ejecución real que:
+The MVP is complete only when the repository can demonstrate all of the following with executed evidence:
 
-1. Existe un paquete R instalable.
-2. `x_session()` funciona.
-3. R puede iniciar o conectarse a Lightpanda.
-4. Existe comunicación estable R ↔ browser backend.
-5. Lightpanda puede cargar una página dinámica.
-6. Se pueden ejecutar scripts JavaScript.
-7. Se pueden observar eventos de red.
-8. Se puede navegar a X.
-9. Se puede abrir una búsqueda de X.
-10. Se pueden identificar posts.
-11. `x_search()` devuelve múltiples posts.
-12. Los resultados se devuelven como `tibble`.
-13. `post_id` es `character`.
-14. Existe scroll incremental.
-15. Existe deduplicación por `post_id`.
-16. Existe un criterio determinista de terminación.
-17. `limit` funciona.
-18. Existe persistencia incremental.
-19. Existe checkpoint.
-20. Una ejecución puede reanudarse.
-21. Los parsers pueden probarse usando fixtures.
-22. Existen unit tests.
-23. Existen integration tests.
-24. `R CMD check` no presenta errores.
-25. Existe `x_doctor()`.
-26. README contiene un ejemplo real.
-27. La arquitectura permite cambiar el backend sin modificar la API pública principal.
+- valid installable R package;
+- working R ↔ TypeScript sidecar protocol;
+- Lightpanda CDP connection;
+- browser navigation;
+- JavaScript evaluation;
+- network event capture;
+- response body capture;
+- canonical post parser;
+- tibble output;
+- real `x_session()`;
+- real `x_search()`;
+- `x_user_posts()` implemented;
+- deduplication by `post_id`;
+- bounded scrolling;
+- deterministic termination;
+- `limit`;
+- collection provenance;
+- incremental persistence;
+- checkpoint;
+- resume;
+- `x_doctor()`;
+- local integration tests;
+- parser fixture tests;
+- no `R CMD check` errors;
+- README matching the implemented API;
+- one documented real X search execution attempt;
+- one documented real X user timeline execution attempt.
 
----
-
-# 52. SEGUNDA ETAPA
-
-Una vez alcanzado el MVP investigar mejoras como:
-
-```text
-parallel searches
-multiple sessions
-query partitioning
-date partitioning
-distributed collection
-Arrow datasets
-DuckDB collections
-streaming interfaces
-async R API
-progress bars
-recovery
-automatic parser diagnostics
-benchmarking
-```
-
-No comenzar estas optimizaciones antes del MVP.
-
----
-
-# 53. ENTREGABLES
-
-Al finalizar deben existir:
-
-```text
-paquete R funcional
-Node/TypeScript sidecar si corresponde
-Lightpanda integration
-CDP integration
-x_session()
-x_search()
-x_user_posts()
-x_doctor()
-network inspector
-parsers
-fixtures
-unit tests
-integration tests
-checkpoints
-resume
-README
-vignettes
-CI
-architecture.md
-RALPH_PROGRESS.md
-benchmark inicial
-```
-
----
-
-# 54. INSTRUCCIÓN FINAL
-
-Comenzá inspeccionando el repositorio.
-
-Si el repositorio está vacío:
-
-1. inicializá el paquete R;
-2. inicializá el sidecar si es necesario;
-3. comprobá que Lightpanda esté disponible;
-4. construí el experimento mínimo R → Lightpanda;
-5. ejecutalo;
-6. corregí errores;
-7. avanzá hacia X.
-
-No me entregues solamente recomendaciones.
-
-**Programá. Ejecutá. Inspeccioná. Testeá. Corregí.**
-
-Cuando una estrategia falle, no te detengas inmediatamente.
-
-Investigá la causa raíz y probá una alternativa técnicamente razonable.
-
-Cuando exista incertidumbre sobre cómo funciona X:
-
-**inspeccioná el comportamiento real del navegador, especialmente CDP y network traffic.**
-
-Cuando exista incertidumbre sobre Lightpanda:
-
-**creá un experimento mínimo reproducible.**
-
-No supongas.
-
-Medí.
-
-No declares funcional algo que no hayas ejecutado.
-
-Continuá el Ralph Loop hasta alcanzar el MVP verificable o hasta identificar una limitación técnica concreta y reproducible que requiera una decisión arquitectónica diferente.
+Do not skip tasks by claiming a later implementation implicitly satisfies them. Each task must be explicitly verified and recorded.
