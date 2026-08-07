@@ -78,7 +78,7 @@ NULL
         cur <- if (is.null(state$endpoint)) "default endpoint (ws://127.0.0.1:21111)" else state$endpoint
         warning("Already connected to ", cur, ". Call close() first to reconnect with a different endpoint.")
       }
-      return(invisible())
+      return(invisible(backend))
     }
 
     if (is.null(state$.sidecar)) {
@@ -113,6 +113,7 @@ NULL
       .rx_stop_sidecar(proc)
       state$.proc <- NULL
       state$connected <- FALSE
+      state$endpoint <- NULL
       backend$connected <- FALSE
       stop(
         paste0("CDP connection failed: ", resp$error$message),
