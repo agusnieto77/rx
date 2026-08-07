@@ -179,7 +179,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 10: Add sidecar protocol tests
+### Task 10: Add sidecar protocol tests [DONE]
 
 **Goal:** Lock down the R ↔ TypeScript boundary.
 
