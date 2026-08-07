@@ -1164,6 +1164,7 @@ test_that(".rx_collection_metadata creates a valid provenance object", {
   expect_true(nzchar(meta$package_version))
   expect_equal(meta$backend, "lightpanda")
   expect_true(nzchar(meta$parser_version))
+  expect_true(nzchar(meta$schema_version))
   expect_equal(meta$records, 42L)
 })
 
@@ -1191,6 +1192,7 @@ test_that(".rx_collection_metadata uses sensible defaults", {
   expect_true(nzchar(meta$package_version))
   expect_equal(meta$backend, "unknown")
   expect_true(nzchar(meta$parser_version))
+  expect_true(nzchar(meta$schema_version))
   expect_equal(meta$records, 0L)
 })
 
@@ -1248,6 +1250,7 @@ test_that("x_search attaches provenance to the returned tibble", {
   expect_true(nzchar(provenance$collection_id))
   expect_true(nzchar(provenance$package_version))
   expect_true(nzchar(provenance$parser_version))
+  expect_true(nzchar(provenance$schema_version))
   expect_equal(provenance$records, nrow(result))
 })
 
@@ -1274,7 +1277,48 @@ test_that("navigation failure result carries provenance with zero records", {
   expect_equal(provenance$records, 0L)
 })
 
-# --- Test 48: Observation-level provenance fields are populated (Task 46) ---
+# --- Test 48: schema_version is present in collection metadata (Task 64) ---
+test_that(".rx_collection_metadata includes schema_version", {
+  meta <- .rx_collection_metadata(
+    collection_id = "schema-test-001",
+    query = "r language",
+    backend = "lightpanda",
+    record_count = 10L
+  )
+
+  expect_true(nzchar(meta$schema_version))
+  expect_type(meta$schema_version, "character")
+  expect_equal(length(meta$schema_version), 1L)
+})
+
+# --- Test 49: parser_version and schema_version match expected format (Task 64) ---
+test_that("parser and schema versions are non-empty strings", {
+  meta <- .rx_collection_metadata()
+
+  expect_true(nzchar(meta$parser_version))
+  expect_true(nzchar(meta$schema_version))
+  # Both should be semver-like strings.
+  expect_true(grepl("^[0-9]+\\.[0-9]+\\.[0-9]+$", meta$parser_version))
+  expect_true(grepl("^[0-9]+\\.[0-9]+\\.[0-9]+$", meta$schema_version))
+})
+
+# --- Test 50: print includes schema_version (Task 64) ---
+test_that("print.rx_collection_provenance includes schema_version", {
+  meta <- .rx_collection_metadata(
+    collection_id = "print-schema-test",
+    query = "test query",
+    backend = "lightpanda",
+    record_count = 5L
+  )
+
+  output <- capture.output(print(meta))
+  output_text <- paste(output, collapse = "\n")
+
+  expect_true(grepl("schema_version", output_text))
+  expect_true(grepl(meta$schema_version, output_text))
+})
+
+# --- Test 51: Observation-level provenance fields are populated (Task 46) ---
 test_that("x_search populates collected_at, collection_query, collection_id on post rows", {
   fixture_path <- file.path(
     testthat::test_path("..", ".."),
@@ -1320,7 +1364,7 @@ test_that("x_search populates collected_at, collection_query, collection_id on p
   expect_true(all(nzchar(result$collected_at)))
 })
 
-# --- Test 49: Observation-level provenance on empty result (Task 46) ---
+# --- Test 52: Observation-level provenance on empty result (Task 46) ---
 test_that("empty result has observation provenance columns", {
   mock_session <- new.env(parent = emptyenv())
   mock_session$connected <- TRUE
@@ -1348,7 +1392,7 @@ test_that("empty result has observation provenance columns", {
 # Resume support tests (Task 49)
 # ===================================================================
 
-# --- Test 50: resume=TRUE with no checkpoint behaves like normal search ---
+# --- Test 53: resume=TRUE with no checkpoint behaves like normal search ---
 test_that("x_search with resume=TRUE and no checkpoint behaves normally", {
   fixture_path <- file.path(
     testthat::test_path("..", ".."),
@@ -1390,7 +1434,7 @@ test_that("x_search with resume=TRUE and no checkpoint behaves normally", {
   file.remove(checkpoint_file, jsonl_file)
 })
 
-# --- Test 51: Resume restores seen_post_ids from checkpoint ---
+# --- Test 54: Resume restores seen_post_ids from checkpoint ---
 test_that("x_search with resume restores seen_post_ids from checkpoint", {
   fixture_path <- file.path(
     testthat::test_path("..", ".."),
@@ -1442,7 +1486,7 @@ test_that("x_search with resume restores seen_post_ids from checkpoint", {
   file.remove(checkpoint_file, jsonl_file)
 })
 
-# --- Test 52: Resume with existing checkpoint preserves collection_id ---
+# --- Test 55: Resume with existing checkpoint preserves collection_id ---
 test_that("resumed search preserves the checkpoint collection_id", {
   fixture_path <- file.path(
     testthat::test_path("..", ".."),
@@ -1490,7 +1534,7 @@ test_that("resumed search preserves the checkpoint collection_id", {
   file.remove(checkpoint_file, jsonl_file)
 })
 
-# --- Test 53: Checkpoint is written at end of resumed search with updated state ---
+# --- Test 56: Checkpoint is written at end of resumed search with updated state ---
 test_that("checkpoint written at end of resumed search contains updated state", {
   fixture_path <- file.path(
     testthat::test_path("..", ".."),
@@ -1543,7 +1587,7 @@ test_that("checkpoint written at end of resumed search contains updated state", 
   file.remove(checkpoint_file, jsonl_file)
 })
 
-# --- Test 54: resume=FALSE does not write checkpoint ---
+# --- Test 57: resume=FALSE does not write checkpoint ---
 test_that("x_search with resume=FALSE does not write checkpoint file", {
   fixture_path <- file.path(
     testthat::test_path("..", ".."),
@@ -1583,13 +1627,13 @@ test_that("x_search with resume=FALSE does not write checkpoint file", {
 # Progress output tests (Task 60)
 # ===================================================================
 
-# --- Test 55: .rx_progress suppresses output when quiet=TRUE ---
+# --- Test 58: .rx_progress suppresses output when quiet=TRUE ---
 test_that(".rx_progress does not emit messages when quiet=TRUE", {
   msgs <- capture_messages(.rx_progress("should not appear", quiet = TRUE))
   expect_equal(length(msgs), 0L)
 })
 
-# --- Test 56: .rx_progress emits messages when quiet=FALSE ---
+# --- Test 59: .rx_progress emits messages when quiet=FALSE ---
 test_that(".rx_progress emits messages when quiet=FALSE", {
   msgs <- capture_messages(.rx_progress("test message", quiet = FALSE))
   expect_equal(length(msgs), 1L)
@@ -1604,7 +1648,7 @@ test_that(".rx_progress emits messages when quiet=FALSE", {
 # The file lives alongside testthat tests and is not a test itself (prefixed with _).
 source(file.path(testthat::test_path(), "_mock-infinite-scroll.R"))
 
-# --- Test 57: rx_mock_batch generates correct number of posts ---
+# --- Test 60: rx_mock_batch generates correct number of posts ---
 test_that("rx_mock_batch generates the requested number of posts", {
   batch <- rx_mock_batch(id_start = 10L, n = 5L, prefix = "test")
 
@@ -1618,7 +1662,7 @@ test_that("rx_mock_batch generates the requested number of posts", {
   expect_equal(post_ids, c("test-10", "test-11", "test-12", "test-13", "test-14"))
 })
 
-# --- Test 58: rx_mock_batch with duplicates includes extra entries ---
+# --- Test 61: rx_mock_batch with duplicates includes extra entries ---
 test_that("rx_mock_batch with include_duplicates adds 2 extra entries", {
   batch <- rx_mock_batch(id_start = 1L, n = 3L, prefix = "dup",
                           include_duplicates = TRUE)
@@ -1634,7 +1678,7 @@ test_that("rx_mock_batch with include_duplicates adds 2 extra entries", {
   expect_true("dup-dup-b" %in% post_ids)
 })
 
-# --- Test 59: rx_mock_session returns a valid session ---
+# --- Test 62: rx_mock_session returns a valid session ---
 test_that("rx_mock_session creates a valid xtweetsR_session", {
   batch <- rx_mock_batch(id_start = 1L, n = 2L, prefix = "s")
   session <- rx_mock_session(list(batch))
@@ -1650,7 +1694,7 @@ test_that("rx_mock_session creates a valid xtweetsR_session", {
   expect_true(is.function(session$backend$navigate))
 })
 
-# --- Test 60: Multi-batch mock drives x_search with deduplication ---
+# --- Test 63: Multi-batch mock drives x_search with deduplication ---
 test_that("multi-batch mock: deduplication across batches is correct", {
   # Batch 1: 3 posts (a-1, a-2, a-3).
   batch1 <- rx_mock_batch(id_start = 1L, n = 3L, prefix = "a")
@@ -1667,7 +1711,7 @@ test_that("multi-batch mock: deduplication across batches is correct", {
   expect_true(all(c("a-1", "a-2", "a-3", "a-4") %in% result$post_id))
 })
 
-# --- Test 61: Multi-batch mock verifies scroll loop termination ---
+# --- Test 64: Multi-batch mock verifies scroll loop termination ---
 test_that("multi-batch mock: scroll loop terminates on no-new-data", {
   # 2 batches with unique posts, then 2 empty batches.
   batch1 <- rx_mock_batch(id_start = 1L, n = 3L, prefix = "term")
@@ -1688,7 +1732,7 @@ test_that("multi-batch mock: scroll loop terminates on no-new-data", {
   # triggering stall detection (no_new_data_cycles >= 2).
 })
 
-# --- Test 62: Realistic scenario produces expected unique count ---
+# --- Test 65: Realistic scenario produces expected unique count ---
 test_that("rx_mock_realistic_scenario: exercises full collection pipeline", {
   session <- rx_mock_realistic_scenario(delay_between_batches = 0.005)
 
@@ -1706,7 +1750,7 @@ test_that("rx_mock_realistic_scenario: exercises full collection pipeline", {
 # Cursor-aware mock tests (Task 62)
 # ===================================================================
 
-# --- Test 63: Cursor values differ across batches ---
+# --- Test 66: Cursor values differ across batches ---
 test_that("mock cursors change across batches", {
   batch1 <- rx_mock_batch(id_start = 1L, n = 3L, prefix = "c1")
   batch2 <- rx_mock_batch(id_start = 4L, n = 2L, prefix = "c2")
@@ -1749,7 +1793,7 @@ test_that("mock cursors change across batches", {
   expect_equal(as.character(cursor3["Bottom"]), "cursor-batch-3")
 })
 
-# --- Test 64: No cursor when include_cursor=FALSE ---
+# --- Test 67: No cursor when include_cursor=FALSE ---
 test_that("mock returns no cursors when include_cursor=FALSE", {
   batch1 <- rx_mock_batch(id_start = 1L, n = 3L, prefix = "nc")
   batch2 <- rx_mock_batch(id_start = 4L, n = 2L, prefix = "nc")
@@ -1766,7 +1810,7 @@ test_that("mock returns no cursors when include_cursor=FALSE", {
   expect_equal(length(cursors), 0L, info = "no cursors when include_cursor=FALSE")
 })
 
-# --- Test 65: Final batch (empty) has no cursor — terminal state ---
+# --- Test 68: Final batch (empty) has no cursor — terminal state ---
 test_that("empty final batch signals end of cursors", {
   batch1 <- rx_mock_batch(id_start = 1L, n = 2L, prefix = "end")
   empty_batch <- rx_mock_batch(id_start = 1L, n = 0L, prefix = "end")
@@ -1792,7 +1836,7 @@ test_that("empty final batch signals end of cursors", {
                info = "empty final batch should have no cursor — terminal state")
 })
 
-# --- Test 66: Scroll state tracks cursors across batches ---
+# --- Test 69: Scroll state tracks cursors across batches ---
 test_that("scroll state captures cursor after parsing", {
   batch1 <- rx_mock_batch(id_start = 1L, n = 3L, prefix = "sst")
   batch2 <- rx_mock_batch(id_start = 4L, n = 2L, prefix = "sst")
@@ -1818,7 +1862,7 @@ test_that("scroll state captures cursor after parsing", {
   expect_true(inherits(result, "tbl_df"))
 })
 
-# --- Test 67: Realistic scenario with cursors exercises extraction ---
+# --- Test 70: Realistic scenario with cursors exercises extraction ---
 test_that("rx_mock_realistic_scenario with cursors: extraction works end-to-end", {
   session <- rx_mock_realistic_scenario(
     delay_between_batches = 0.005,

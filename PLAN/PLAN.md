@@ -1233,20 +1233,24 @@ Detect:
 
 ---
 
-### Task 64: Add parser and schema versions [ ]
+### Task 64: Add parser and schema versions [x]
 
 **Goal:** Make collection provenance auditable.
 
 **Actions:**
 Define internal:
-- `parser_version`
-- `schema_version`
+- [x] `parser_version` (`.rx_parser_version()`)
+- [x] `schema_version` (`.rx_schema_version()`)
 
 Add both to collection metadata.
 
 **Acceptance criteria:**
-- Versions appear in provenance.
-- Unit tests verify their presence.
+- [x] Versions appear in provenance (`schema_version` added to `.rx_collection_metadata()`).
+- [x] Unit tests verify their presence (Tests 48-50: 3 new tests + 3 existing tests updated).
+
+**Files changed:**
+- `R/search.R` — added `schema_version` field to `.rx_collection_metadata()`, `print.rx_collection_provenance()` output, module docs
+- `tests/testthat/test-search.R` — added Tests 48-50 (schema_version tests), updated Tests 42/44/46 to check schema_version, renumbered Tests 48-70
 
 ---
 

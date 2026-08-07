@@ -23,11 +23,11 @@
 #   `collection_id` — allowing per-row traceability to the collection
 #   that produced it. These are injected before normalization.
 #
-# Collection provenance (Task 45):
+# Collection provenance (Task 45, Task 64):
 #   Each search result carries collection metadata as an attribute
 #   (`rx_collection_provenance`). The metadata is a list with:
 #   - collection_id, started_at, query, package_version, backend,
-#     parser_version, records
+#     parser_version, schema_version, records
 #   This makes the provenance auditable without changing the tibble
 #   return type (backward-compatible).
 #
@@ -108,7 +108,7 @@ NULL
     hex4(), hex4(), "-",
     hex4(), "-",
     "4", hex3(), "-",
-    sprintf("%02x", sample(8:11, 1, replace = TRUE)), hex2(), "-",
+    sprintf("%x", sample(8:11, 1, replace = TRUE)), hex2(), "-",
     hex4(), hex4(), hex4()
   )
 }
@@ -133,6 +133,7 @@ NULL
 #'   - `backend`: Character description of the backend in use
 #'     (e.g. "lightpanda").
 #'   - `parser_version`: Internal parser version string.
+#'   - `schema_version`: Internal canonical schema version string.
 #'   - `records`: Named integer giving the total post count.
 #'
 #' @param collection_id Optional character string with a collection ID.
@@ -179,6 +180,7 @@ NULL
       package_version = pkg_version,
       backend         = as.character(backend),
       parser_version  = .rx_parser_version(),
+      schema_version  = .rx_schema_version(),
       records         = as.integer(record_count)
     ),
     class = "rx_collection_provenance"
@@ -198,6 +200,7 @@ print.rx_collection_provenance <- function(x, ...) {
   cat(sprintf("  package_version: %s\n", x$package_version))
   cat(sprintf("  backend       : %s\n", x$backend))
   cat(sprintf("  parser_version: %s\n", x$parser_version))
+  cat(sprintf("  schema_version: %s\n", x$schema_version))
   cat(sprintf("  records       : %d\n", x$records))
   invisible(x)
 }
@@ -359,9 +362,6 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     error_info <- if (!is.null(nav_result$error)) nav_result$error$code else "unknown"
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No posts returned.")
-  } else {
-    .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
-  }
     empty <- .rx_search_empty_tibble()
     provenance <- .rx_collection_metadata(
       collection_id = collection_id,
@@ -372,6 +372,8 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     )
     attr(empty, "rx_collection_provenance") <- provenance
     return(empty)
+  } else {
+    .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
   }
 
   # 4. Wait for initial network responses to arrive (X search loads content
@@ -489,6 +491,8 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     all_hashtags     <- lapply(all_batches, `[[`, "hashtags")
     all_mentions     <- lapply(all_batches, `[[`, "mentions")
     all_urls         <- lapply(all_batches, `[[`, "urls")
+    all_media_types  <- lapply(all_batches, `[[`, "media_type")
+    all_media_urls   <- lapply(all_batches, `[[`, "media_urls")
 
     merged_posts <- list(
       post_id        = unlist(all_post_ids, use.names = FALSE),
@@ -512,7 +516,10 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
       # Entity fields (Task 56)
       hashtags       = unlist(all_hashtags, recursive = FALSE),
       mentions       = unlist(all_mentions, recursive = FALSE),
-      urls           = unlist(all_urls, recursive = FALSE)
+      urls           = unlist(all_urls, recursive = FALSE),
+      # Media fields (Task 57)
+      media_type     = unlist(all_media_types, recursive = FALSE),
+      media_urls     = unlist(all_media_urls, recursive = FALSE)
     )
   } else {
     # No batches collected at all (scroll=FALSE, no initial posts).
@@ -538,7 +545,10 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
       # Entity fields (Task 56)
       hashtags       = list(),
       mentions       = list(),
-      urls           = list()
+      urls           = list(),
+      # Media fields (Task 57)
+      media_type     = list(),
+      media_urls     = list()
     )
   }
 
@@ -687,9 +697,6 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
     error_info <- if (!is.null(nav_result$error)) nav_result$error$code else "unknown"
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No post returned.")
-  } else {
-    .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
-  }
     empty <- .rx_search_empty_tibble()
     provenance <- .rx_collection_metadata(
       collection_id = collection_id,
@@ -700,6 +707,8 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
     )
     attr(empty, "rx_collection_provenance") <- provenance
     return(empty)
+  } else {
+    .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
   }
 
   # 4. Wait for network responses to arrive (post pages load asynchronously).
@@ -785,6 +794,9 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
     hashtags         = list(),
     mentions         = list(),
     urls             = list(),
+    # Media fields (Task 57)
+    media_type       = list(),
+    media_urls       = list(),
     # Observation-level provenance (Task 46)
     collected_at     = character(0),
     collection_query = character(0),
@@ -843,6 +855,8 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
     reply_to_post_id = character(0), quoted_post_id = character(0),
     # Entity fields (Task 56)
     hashtags = list(), mentions = list(), urls = list(),
+    # Media fields (Task 57)
+    media_type = list(), media_urls = list(),
     # Observation-level provenance (Task 46) — placeholders;
     # populated later from search context.
     collected_at = character(0),
@@ -919,6 +933,8 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
     all_parsed$hashtags <- c(all_parsed$hashtags, parsed$hashtags)
     all_parsed$mentions <- c(all_parsed$mentions, parsed$mentions)
     all_parsed$urls     <- c(all_parsed$urls,     parsed$urls)
+    all_parsed$media_type <- c(all_parsed$media_type, parsed$media_type)
+    all_parsed$media_urls <- c(all_parsed$media_urls, parsed$media_urls)
   }
 
   all_parsed
@@ -1344,9 +1360,6 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     error_info <- if (!is.null(nav_result$error)) nav_result$error$code else "unknown"
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No posts returned.")
-  } else {
-    .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
-  }
     empty <- .rx_search_empty_tibble()
     provenance <- .rx_collection_metadata(
       collection_id = collection_id,
@@ -1357,6 +1370,8 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     )
     attr(empty, "rx_collection_provenance") <- provenance
     return(empty)
+  } else {
+    .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
   }
 
   # 4. Wait for initial network responses to arrive.
@@ -1455,6 +1470,8 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     all_hashtags     <- lapply(all_batches, `[[`, "hashtags")
     all_mentions     <- lapply(all_batches, `[[`, "mentions")
     all_urls         <- lapply(all_batches, `[[`, "urls")
+    all_media_types  <- lapply(all_batches, `[[`, "media_type")
+    all_media_urls   <- lapply(all_batches, `[[`, "media_urls")
 
     merged_posts <- list(
       post_id        = unlist(all_post_ids, use.names = FALSE),
@@ -1478,7 +1495,10 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
       # Entity fields (Task 56)
       hashtags       = unlist(all_hashtags, recursive = FALSE),
       mentions       = unlist(all_mentions, recursive = FALSE),
-      urls           = unlist(all_urls, recursive = FALSE)
+      urls           = unlist(all_urls, recursive = FALSE),
+      # Media fields (Task 57)
+      media_type     = unlist(all_media_types, recursive = FALSE),
+      media_urls     = unlist(all_media_urls, recursive = FALSE)
     )
   } else {
     merged_posts <- list(
@@ -1503,7 +1523,10 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
       # Entity fields (Task 56)
       hashtags       = list(),
       mentions       = list(),
-      urls           = list()
+      urls           = list(),
+      # Media fields (Task 57)
+      media_type     = list(),
+      media_urls     = list()
     )
   }
 
