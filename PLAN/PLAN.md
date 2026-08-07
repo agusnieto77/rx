@@ -907,17 +907,31 @@ Add:
 
 ---
 
-### Task 50: Add Parquet export [ ]
+### Task 50: Add Parquet export [x]
 
 **Goal:** Provide modern columnar output.
 
 **Actions:**
-- Implement `x_save()` support for `.parquet` when Arrow is installed.
-- Keep Arrow optional.
+- [x] Implement `x_save()` in `R/export.R` with `.parquet` support when Arrow is installed.
+- [x] Keep Arrow optional (falls back to JSONL with warning).
+- [x] Add Arrow to `Suggests` in `DESCRIPTION`.
+- [x] Export `x_save` in `NAMESPACE`.
+- [x] 8 tests in `tests/testthat/test-export.R` covering round-trip, fallback, JSONL path, type preservation, input validation, and zero-row handling.
 
 **Acceptance criteria:**
-- A small tibble can be saved and read back as Parquet.
-- Package still loads without Arrow installed.
+- [x] A small tibble can be saved and read back as Parquet (Test 1, Test 7).
+- [x] Package still loads without Arrow installed (Arrow is in Suggests, `.rx_save_parquet()` falls back to JSONL with warning).
+- [x] JSONL path always works (Test 3).
+- [x] Input validation: non-tibble rejected (Test 4), unsupported extension rejected (Test 5), invalid path rejected (Test 8).
+- [x] Zero-row tibble handled gracefully (Test 6).
+
+**Files created:**
+- `R/export.R` — `x_save()`, `.rx_save_parquet()` (90 lines)
+- `tests/testthat/test-export.R` — 8 tests (Tests 1-8)
+
+**Files changed:**
+- `DESCRIPTION` — added `arrow` to Suggests
+- `NAMESPACE` — added `export(x_save)`
 
 ---
 
