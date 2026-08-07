@@ -1392,20 +1392,25 @@ x_quotes <- function(session, post_id, limit = NULL, quiet = FALSE) {
   tibble::as_tibble(cols)
 }
 
-#' Wrap posts and users into a relational result object.
+#' Wrap posts and related tables into a relational result object.
 #'
-#' Takes a post tibble and the parsed posts list, extracts unique
-#' users, and returns a `rx_relational` object that holds both.
-#' The object inherits from `tbl_df` so that existing code that
-#' treats the result as a tibble continues to work. The `users`
-#' tibble is accessible via `$rx_users` or the `rx_users()`
-#' accessor.
+#' Takes a post tibble and the parsed posts list, extracts users,
+#' media, and collection-post relations, and returns an `rx_relational`
+#' object that holds all of them. The object inherits from `tbl_df`
+#' so that existing code that treats the result as a tibble continues
+#' to work.
+#'
+#' Tables:
+#'   - `rx_users` — unique users (via `rx_users()` accessor)
+#'   - `rx_media` — attached media (via `rx_media()` accessor)
+#'   - `rx_collection_posts` — collection-post relations
+#'     (via `rx_collection_posts()` accessor)
 #'
 #' @param posts A tibble of posts (from `.rx_deduplicate_posts()`).
 #' @param parsed The parsed posts list (from `.rx_search_extract_from_events()`),
-#'   used to extract unique users.
-#' @return An `rx_relational` object: a tibble with an additional
-#'   `rx_users` attribute holding a users tibble.
+#'   used to extract users, media, and collection-post relations.
+#' @return An `rx_relational` object: a tibble with additional
+#'   `rx_users`, `rx_media`, and `rx_collection_posts` attributes.
 #'
 #' @noRd
 .rx_relational_result <- function(posts, parsed) {
@@ -1416,6 +1421,10 @@ x_quotes <- function(session, post_id, limit = NULL, quiet = FALSE) {
   media <- .rx_extract_media(parsed)
   media_tbl <- .rx_media_to_tibble(media)
   attr(posts, "rx_media") <- media_tbl
+
+  relations <- .rx_extract_collection_posts(parsed)
+  relations_tbl <- .rx_collection_posts_to_tibble(relations)
+  attr(posts, "rx_collection_posts") <- relations_tbl
 
   class(posts) <- c("rx_relational", class(posts))
   posts
@@ -1458,6 +1467,30 @@ rx_media <- function(x) {
   media
 }
 
+#' Extract the collection-post relations tibble from a relational result.
+#'
+#' Each row records that a specific post was found during a specific
+#' collection run, along with the query and timestamp. This enables
+#' tracking posts across multiple queries or collection runs.
+#'
+#' @param x An `rx_relational` object (or any object).
+#' @return A tibble with 4 columns (post_id, collection_id,
+#'   collection_query, collected_at) when `x` is an `rx_relational`,
+#'   otherwise `tibble::tibble()`.
+#' @export
+rx_collection_posts <- function(x) {
+  rels <- attr(x, "rx_collection_posts")
+  if (is.null(rels)) {
+    return(tibble::tibble(
+      post_id = character(0),
+      collection_id = character(0),
+      collection_query = character(0),
+      collected_at = character(0)
+    ))
+  }
+  rels
+}
+
 #' Print method for `rx_relational` objects.
 #'
 #' Prints the posts tibble and the users tibble side by side.
@@ -1480,6 +1513,11 @@ print.rx_relational <- function(x, ...) {
   if (!is.null(media) && nrow(media) > 0L) {
     cat("\n# Media (", nrow(media), " media item(s))\n", sep = "")
     print(as.data.frame(media), ...)
+  }
+  rels <- attr(x, "rx_collection_posts")
+  if (!is.null(rels) && nrow(rels) > 0L) {
+    cat("\n# Collection-Post Relations (", nrow(rels), " row(s))\n", sep = "")
+    print(as.data.frame(rels), ...)
   }
   invisible(x)
 }

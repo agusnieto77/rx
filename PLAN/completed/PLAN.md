@@ -1675,9 +1675,28 @@ Add a relational users representation while preserving the simple tibble API.
 
 Add relational media output.
 
-### Iteration 87: Add collection/post relation table [ ]
+### Iteration 87: Add collection/post relation table [x]
 
 Represent posts appearing in multiple queries or collection runs.
+
+**Acceptance criteria:**
+- [x] `.rx_collection_posts_fields()` returns canonical fields (4 fields: post_id, collection_id, collection_query, collected_at).
+- [x] `.rx_extract_collection_posts()` extracts collection-post relations from parsed posts, handling NULL, empty, and NA values gracefully.
+- [x] `.rx_collection_posts_to_tibble()` converts relations list to a tibble with 4 columns.
+- [x] `.rx_relational_result()` wraps posts with collection-post relations as `rx_collection_posts` attribute.
+- [x] `rx_collection_posts()` exported accessor extracts relations tibble from relational result.
+- [x] `print.rx_relational()` prints collection-post relations section alongside posts, users, and media.
+- [x] All 6 search functions (`x_search`, `x_post`, `x_thread`, `x_replies`, `x_quotes`, `x_user_posts`) return relational results with collection_posts (via `.rx_relational_result()`).
+- [x] 23 tests in `tests/testthat/test-collection-posts.R` covering: schema (1), empty input (2-3), valid extraction (4), NA handling (5-7), tibble conversion (8-12), relational wrapping (13-14), accessor (15-16), full pipeline (17), column preservation (18), print method (19-20), multi-collection tracking (21), edge cases (22-23).
+- [x] TypeScript compiles cleanly (34/34 tests pass).
+
+**Files created:**
+- `R/collection_posts.R` — `.rx_collection_posts_fields()`, `.rx_extract_collection_posts()`, `.rx_collection_posts_to_tibble()` (100 lines)
+
+**Files changed:**
+- `R/search.R` — updated `.rx_relational_result()` to include collection_posts, added `rx_collection_posts()` accessor, updated `print.rx_relational()` with relations section
+- `tests/testthat/test-collection-posts.R` — 23 tests (Tests 1-23)
+- `NAMESPACE` — added `export(rx_collection_posts)`
 
 ### Iteration 88: Add Arrow dataset partitioning [ ]
 
