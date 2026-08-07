@@ -77,7 +77,7 @@ test_that("valid ping request returns expected response", {
 
   # id should be echoed back
   testthat::expect_equal(
-    resp$id, pre_id + 1L,
+    resp$id, as.numeric(pre_id + 1L),
     info = "id is echoed back"
   )
 })
