@@ -57,7 +57,7 @@ NULL
 
   # 3. Local default.
   list(
-    endpoint = "http://127.0.0.1:21111",
+    endpoint = "ws://127.0.0.1:21111",
     token    = .rx_get_token(),
     source   = "default"
   )

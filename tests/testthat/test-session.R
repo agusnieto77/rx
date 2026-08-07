@@ -7,6 +7,11 @@
 # In those cases, the protocol is still verified by the Node-based
 # integration tests in inst/node/src/protocol.test.ts.
 
+# Load the package in development mode so internal functions are available.
+if (requireNamespace("pkgload", quietly = TRUE)) {
+  pkgload::load_all(quiet = TRUE)
+}
+
 if (tolower(Sys.getenv("SKIP_PROTOCOL_TESTS", unset = "false")) == "true") {
   testthat::skip("session tests skipped (SKIP_PROTOCOL_TESTS=true)")
 }

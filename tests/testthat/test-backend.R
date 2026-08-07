@@ -2,6 +2,11 @@
 # Verifies the backend contract exists and has the required methods.
 # Connection tests are skipped when processx segfaults (Windows/WSL infra).
 
+# Load the package in development mode so internal functions are available.
+if (requireNamespace("pkgload", quietly = TRUE)) {
+  pkgload::load_all(quiet = TRUE)
+}
+
 test_that("backend object has connect, navigate, evaluate, close methods", {
   skip_if_not(
     requireNamespace("jsonlite", quietly = TRUE) &&

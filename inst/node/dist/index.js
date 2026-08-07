@@ -120,6 +120,7 @@ function handleNavigate(id, params) {
             if (!settled) {
                 settled = true;
                 cdpConnection.removeListener("Page.loadEventFired", onLoad);
+                cdpConnection.removeListener("Page.frameStoppedLoading", onFrameStopped);
                 reject(new Error(`Navigation timeout after ${NAVIGATE_TIMEOUT_MS}ms to ${url}`));
             }
         }, NAVIGATE_TIMEOUT_MS);
