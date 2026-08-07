@@ -1715,9 +1715,23 @@ Support optional partitioning by collection/date.
 - `R/export.R` — added `.rx_save_partitioned()`, `.rx_read_partitioned()`, updated `x_save()` with `.parquetds` routing, updated documentation
 - `tests/testthat/test-export.R` — added Tests 15-22 (8 new tests covering partitioned dataset workflow)
 
-### Iteration 89: Improve DuckDB schema [ ]
+### Iteration 89: Improve DuckDB schema [x]
 
 Add collections and post-collection relation tables.
+
+**Acceptance criteria:**
+- [x] `.rx_save_duckdb()` extracts `rx_collection_provenance` attribute and writes a `collections` table (8 columns: collection_id, started_at, query, package_version, backend, parser_version, schema_version, records).
+- [x] `.rx_save_duckdb()` extracts `rx_collection_posts` attribute and writes a `post_collection_relations` table (4 columns: post_id, collection_id, collection_query, collected_at).
+- [x] `.rx_save_duckdb()` creates both tables even for zero-row tibbles (collections table written, posts table created with canonical schema).
+- [x] `.rx_duckdb_tables()` added to `R/export.R` — reads posts, collections, and post_collection_relations tables and reconstructs the `rx_relational` object with provenance and relations attributes.
+- [x] Backward-compatible: `.rx_save_duckdb()` works without relational attributes (only writes `posts` table).
+- [x] `.rx_duckdb_tables()` returns empty `rx_relational` tibble for non-existent files.
+- [x] 8 new tests (Tests 23-30) in `tests/testthat/test-export.R` covering: collections table write, post_collection_relations table write, backward compat without attributes, full round-trip reconstruction, posts-only read, missing file, zero-row with provenance, and non-tibble rejection.
+- [x] TypeScript compiles cleanly (34/34 tests pass).
+
+**Files changed:**
+- `R/export.R` — extended `.rx_save_duckdb()` with collections and post_collection_relations table writes (added ~110 lines), added `.rx_duckdb_tables()` function (added ~95 lines)
+- `tests/testthat/test-export.R` — added Tests 23-30 (8 new tests)
 
 ### Iteration 90: Add bounded concurrency experiments [ ]
 

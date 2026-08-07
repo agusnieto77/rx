@@ -807,3 +807,372 @@ test_that("x_save validates path parameter", {
     info = "rejects NA path"
   )
 })
+
+# --- Test 23: .rx_save_duckdb writes collections table from provenance ---
+test_that(".rx_save_duckdb writes a collections table from provenance attribute", {
+  skip_if_not(requireNamespace("duckdb", quietly = TRUE))
+
+  fields <- xtweetsR:::.rx_canonical_fields()
+  n <- 2L
+  df <- data.frame(
+    post_id       = paste0("post-", 1:n),
+    text          = paste0("text ", 1:n),
+    author_id     = paste0("auth-", 1:n),
+    username      = paste0("user", 1:n),
+    display_name  = paste0("User ", 1:n),
+    created_at    = paste0("2025-01-0", 1:n, "T00:00:00Z"),
+    reply_count   = (1:n) * 2L,
+    repost_count  = (1:n) * 3L,
+    like_count    = (1:n) * 5L,
+    quote_count   = (1:n) * 1L,
+    bookmark_count = (1:n) * 4L,
+    view_count    = (1:n) * 10L,
+    conversation_id = paste0("conv-", 1:n),
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = format(Sys.time(), iso8601 = TRUE),
+    collection_query = "r programming",
+    collection_id    = "test-uuid-coll",
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  # Attach provenance.
+  provenance <- structure(
+    list(
+      collection_id   = "test-uuid-coll",
+      started_at      = Sys.time(),
+      query           = "r programming",
+      package_version = "0.1.0",
+      backend         = "lightpanda",
+      parser_version  = "0.1.0",
+      schema_version  = "0.1.0",
+      records         = 2L
+    ),
+    class = "rx_collection_provenance"
+  )
+  attr(tbl, "rx_collection_provenance") <- provenance
+
+  tmp <- tempfile(fileext = ".duckdb")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  xtweetsR:::x_save(tbl, tmp)
+
+  # Verify collections table was written.
+  con <- duckdb::dbConnect(duckdb::DuckDB(), tmp)
+  on.exit(duckdb::dbDisconnect(con), add = TRUE)
+
+  collections <- duckdb::dbGetQuery(con, "SELECT * FROM collections")
+  testthat::expect_true(nrow(collections) >= 1L, info = "collections table has rows")
+  testthat::expect_equal(collections$collection_id, "test-uuid-coll", info = "collection_id matches")
+  testthat::expect_equal(collections$query, "r programming", info = "query matches")
+  testthat::expect_equal(collections$backend, "lightpanda", info = "backend matches")
+  testthat::expect_equal(as.integer(collections$records), 2L, info = "records count matches")
+})
+
+# --- Test 24: .rx_save_duckdb writes post_collection_relations table ---
+test_that(".rx_save_duckdb writes post_collection_relations from attribute", {
+  skip_if_not(requireNamespace("duckdb", quietly = TRUE))
+
+  fields <- xtweetsR:::.rx_canonical_fields()
+  n <- 2L
+  df <- data.frame(
+    post_id       = paste0("post-", 1:n),
+    text          = paste0("text ", 1:n),
+    author_id     = paste0("auth-", 1:n),
+    username      = paste0("user", 1:n),
+    display_name  = paste0("User ", 1:n),
+    created_at    = paste0("2025-01-0", 1:n, "T00:00:00Z"),
+    reply_count   = (1:n) * 2L,
+    repost_count  = (1:n) * 3L,
+    like_count    = (1:n) * 5L,
+    quote_count   = (1:n) * 1L,
+    bookmark_count = (1:n) * 4L,
+    view_count    = (1:n) * 10L,
+    conversation_id = paste0("conv-", 1:n),
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = format(Sys.time(), iso8601 = TRUE),
+    collection_query = "r programming",
+    collection_id    = "test-uuid-rel",
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  # Attach collection_posts relations.
+  relations <- tibble::tibble(
+    post_id          = c("post-1", "post-2"),
+    collection_id    = rep("test-uuid-rel", 2L),
+    collection_query = rep("r programming", 2L),
+    collected_at     = rep(format(Sys.time(), iso8601 = TRUE), 2L)
+  )
+  attr(tbl, "rx_collection_posts") <- relations
+
+  tmp <- tempfile(fileext = ".duckdb")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  xtweetsR:::x_save(tbl, tmp)
+
+  # Verify post_collection_relations table.
+  con <- duckdb::dbConnect(duckdb::DuckDB(), tmp)
+  on.exit(duckdb::dbDisconnect(con), add = TRUE)
+
+  rels <- duckdb::dbGetQuery(con, "SELECT * FROM post_collection_relations")
+  testthat::expect_equal(nrow(rels), 2L, info = "2 relation rows")
+  testthat::expect_equal(sort(rels$post_id), c("post-1", "post-2"), info = "post_ids match")
+})
+
+# --- Test 25: .rx_save_duckdb without relational attributes (backward compat) ---
+test_that(".rx_save_duckdb works without relational attributes", {
+  skip_if_not(requireNamespace("duckdb", quietly = TRUE))
+
+  fields <- xtweetsR:::.rx_canonical_fields()
+  df <- data.frame(
+    post_id       = "post-noprov",
+    text          = "no provenance test",
+    author_id     = "auth-np",
+    username      = "usernp",
+    display_name  = "User Np",
+    created_at    = "2025-01-01T00:00:00Z",
+    reply_count   = 1L,
+    repost_count  = 2L,
+    like_count    = 3L,
+    quote_count   = 0L,
+    bookmark_count = 0L,
+    view_count    = 100L,
+    conversation_id = "conv-np",
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = format(Sys.time(), iso8601 = TRUE),
+    collection_query = "test",
+    collection_id    = "test-uuid-np",
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+  # No relational attributes attached.
+
+  tmp <- tempfile(fileext = ".duckdb")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  # Should not error.
+  xtweetsR:::x_save(tbl, tmp)
+
+  # Posts table should exist and be readable.
+  loaded <- xtweetsR:::.rx_duckdb_read(tmp)
+  testthat::expect_equal(nrow(loaded), 1L, info = "1 post row")
+  testthat::expect_equal(loaded$post_id, "post-noprov", info = "post_id matches")
+})
+
+# --- Test 26: .rx_duckdb_tables reads all tables and reconstructs relational ---
+test_that(".rx_duckdb_tables reconstructs relational result from all tables", {
+  skip_if_not(requireNamespace("duckdb", quietly = TRUE))
+
+  fields <- xtweetsR:::.rx_canonical_fields()
+  n <- 2L
+  df <- data.frame(
+    post_id       = paste0("post-", 1:n),
+    text          = paste0("text ", 1:n),
+    author_id     = paste0("auth-", 1:n),
+    username      = paste0("user", 1:n),
+    display_name  = paste0("User ", 1:n),
+    created_at    = paste0("2025-01-0", 1:n, "T00:00:00Z"),
+    reply_count   = (1:n) * 2L,
+    repost_count  = (1:n) * 3L,
+    like_count    = (1:n) * 5L,
+    quote_count   = (1:n) * 1L,
+    bookmark_count = (1:n) * 4L,
+    view_count    = (1:n) * 10L,
+    conversation_id = paste0("conv-", 1:n),
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = format(Sys.time(), iso8601 = TRUE),
+    collection_query = "r programming",
+    collection_id    = "test-uuid-all",
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  # Attach all relational attributes.
+  provenance <- structure(
+    list(
+      collection_id   = "test-uuid-all",
+      started_at      = Sys.time(),
+      query           = "r programming",
+      package_version = "0.1.0",
+      backend         = "lightpanda",
+      parser_version  = "0.1.0",
+      schema_version  = "0.1.0",
+      records         = 2L
+    ),
+    class = "rx_collection_provenance"
+  )
+  attr(tbl, "rx_collection_provenance") <- provenance
+
+  relations <- tibble::tibble(
+    post_id          = c("post-1", "post-2"),
+    collection_id    = rep("test-uuid-all", 2L),
+    collection_query = rep("r programming", 2L),
+    collected_at     = rep(format(Sys.time(), iso8601 = TRUE), 2L)
+  )
+  attr(tbl, "rx_collection_posts") <- relations
+
+  tmp <- tempfile(fileext = ".duckdb")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  xtweetsR:::x_save(tbl, tmp)
+
+  # Read back with .rx_duckdb_tables.
+  result <- xtweetsR:::.rx_duckdb_tables(tmp)
+
+  testthat::expect_true(inherits(result, "rx_relational"), info = "returns rx_relational")
+  testthat::expect_true(inherits(result, "tbl_df"), info = "inherits tbl_df")
+  testthat::expect_equal(nrow(result), 2L, info = "2 post rows")
+  testthat::expect_equal(result$post_id[1L], "post-1", info = "post-1")
+  testthat::expect_equal(result$post_id[2L], "post-2", info = "post-2")
+
+  # Check provenance was restored.
+  prov <- attr(result, "rx_collection_provenance")
+  testthat::expect_true(!is.null(prov), info = "provenance attribute present")
+  testthat::expect_equal(prov$collection_id, "test-uuid-all", info = "collection_id in provenance")
+  testthat::expect_equal(prov$query, "r programming", info = "query in provenance")
+  testthat::expect_true(inherits(prov, "rx_collection_provenance"), info = "provenance class")
+
+  # Check relations were restored.
+  rels <- attr(result, "rx_collection_posts")
+  testthat::expect_true(!is.null(rels), info = "relations attribute present")
+  testthat::expect_true(inherits(rels, "tbl_df"), info = "relations is tibble")
+  testthat::expect_equal(nrow(rels), 2L, info = "2 relation rows")
+})
+
+# --- Test 27: .rx_duckdb_tables reads only posts when no relational tables ---
+test_that(".rx_duckdb_tables returns posts-only when no collections/relations tables", {
+  skip_if_not(requireNamespace("duckdb", quietly = TRUE))
+
+  fields <- xtweetsR:::.rx_canonical_fields()
+  df <- data.frame(
+    post_id       = "post-simple",
+    text          = "simple test",
+    author_id     = "auth-simple",
+    username      = "usersimple",
+    display_name  = "User Simple",
+    created_at    = "2025-01-01T00:00:00Z",
+    reply_count   = 1L,
+    repost_count  = 2L,
+    like_count    = 3L,
+    quote_count   = 0L,
+    bookmark_count = 0L,
+    view_count    = 100L,
+    conversation_id = "conv-simple",
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = format(Sys.time(), iso8601 = TRUE),
+    collection_query = "test",
+    collection_id    = "test-uuid-simple",
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+  # No relational attributes.
+
+  tmp <- tempfile(fileext = ".duckdb")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  xtweetsR:::x_save(tbl, tmp)
+
+  result <- xtweetsR:::.rx_duckdb_tables(tmp)
+
+  testthat::expect_true(inherits(result, "rx_relational"), info = "still returns rx_relational")
+  testthat::expect_equal(nrow(result), 1L, info = "1 post row")
+  testthat::expect_equal(result$post_id, "post-simple", info = "post_id matches")
+})
+
+# --- Test 28: .rx_duckdb_tables returns empty for non-existent file ---
+test_that(".rx_duckdb_tables returns empty tibble for missing file", {
+  tmp <- tempfile(fileext = ".duckdb")
+  # Do NOT create the file.
+
+  loaded <- xtweetsR:::.rx_duckdb_tables(tmp)
+  testthat::expect_true(inherits(loaded, "tbl_df"), info = "returns tibble")
+  testthat::expect_equal(nrow(loaded), 0L, info = "zero rows for missing file")
+})
+
+# --- Test 29: .rx_save_duckdb zero-row with provenance writes collections table ---
+test_that(".rx_save_duckdb zero-row writes collections table when provenance present", {
+  skip_if_not(requireNamespace("duckdb", quietly = TRUE))
+
+  empty_tbl <- xtweetsR:::.rx_canonical_fields() |>
+    lapply(function(f) {
+      switch(xtweetsR:::.rx_type_map()[[f]],
+        character = character(0),
+        integer = integer(0),
+        logical = logical(0),
+        list = list()
+      )
+    }) |>
+    setNames(xtweetsR:::.rx_canonical_fields()) |>
+    tibble::as_tibble()
+
+  provenance <- structure(
+    list(
+      collection_id   = "test-uuid-empty",
+      started_at      = Sys.time(),
+      query           = "zero row collection",
+      package_version = "0.1.0",
+      backend         = "lightpanda",
+      parser_version  = "0.1.0",
+      schema_version  = "0.1.0",
+      records         = 0L
+    ),
+    class = "rx_collection_provenance"
+  )
+  attr(empty_tbl, "rx_collection_provenance") <- provenance
+
+  tmp <- tempfile(fileext = ".duckdb")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  xtweetsR:::x_save(empty_tbl, tmp)
+
+  # Verify collections table was written despite zero posts.
+  con <- duckdb::dbConnect(duckdb::DuckDB(), tmp)
+  on.exit(duckdb::dbDisconnect(con), add = TRUE)
+
+  collections <- duckdb::dbGetQuery(con, "SELECT * FROM collections")
+  testthat::expect_true(nrow(collections) >= 1L, info = "collections table has rows")
+  testthat::expect_equal(collections$collection_id, "test-uuid-empty", info = "collection_id matches")
+
+  # Posts table should have zero rows.
+  posts <- duckdb::dbGetQuery(con, "SELECT * FROM posts")
+  testthat::expect_equal(nrow(posts), 0L, info = "zero post rows")
+})
+
+# --- Test 30: x_save rejects non-tibble input for DuckDB path ---
+test_that("x_save rejects non-tibble input for .duckdb", {
+  tmp <- tempfile(fileext = ".duckdb")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  testthat::expect_error(
+    xtweetsR:::x_save(list(post_id = "1"), tmp),
+    "must be a tibble",
+    info = "rejects list input for .duckdb"
+  )
+
+  testthat::expect_error(
+    xtweetsR:::x_save(data.frame(post_id = "1"), tmp),
+    "must be a tibble",
+    info = "rejects data.frame input for .duckdb"
+  )
+})

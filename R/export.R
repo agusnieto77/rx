@@ -141,16 +141,23 @@ x_save <- function(posts, path) {
 
 #' Save a tibble as a DuckDB database.
 #'
-#' Writes a post tibble to a DuckDB database file containing a single
-#' `posts` table.  This is an internal helper used by [x_save()] when
-#' the target path ends with `.duckdb`.
+#' Writes a post tibble to a DuckDB database file containing a `posts`
+#' table.  When the tibble carries an `rx_relational` attribute
+#' (`rx_collection_provenance` or `rx_collection_posts`), the function
+#' also writes `collections` and `post_collection_relations` tables so
+#' the full relational result can be read back with
+#' [.rx_duckdb_tables()].
+#'
+#' This is an internal helper used by [x_save()] when the target path
+#' ends with `.duckdb`.
 #'
 #' # Optional dependency
 #' If the `duckdb` package is not installed, this function falls back
 #' to writing JSONL with a `.jsonl` extension instead.  A warning is
 #' issued to inform the user that DuckDB is missing.
 #'
-#' @param posts A tibble with the canonical post schema.
+#' @param posts A tibble with the canonical post schema (and optionally
+#'   `rx_collection_provenance` / `rx_collection_posts` attributes).
 #' @param path Character string with the output `.duckdb` path.
 #'
 #' @return Invisible NULL.
@@ -177,7 +184,7 @@ x_save <- function(posts, path) {
   )
   on.exit(duckdb::dbDisconnect(con), add = TRUE)
 
-  # Guard: zero-row tibble — drop any existing table and create with canonical schema.
+  # Guard: zero-row tibble — drop any existing tables and create with canonical schema.
   if (nrow(posts) == 0L) {
     duckdb::dbExecute(con, "DROP TABLE IF EXISTS posts")
     fields <- .rx_canonical_fields()
@@ -196,11 +203,40 @@ x_save <- function(posts, path) {
       collapse = ", "
     )
     duckdb::dbExecute(con, paste0("CREATE TABLE posts (", col_defs, ")"))
+
+    # Write collections table from provenance (if present).
+    provenance <- attr(posts, "rx_collection_provenance")
+    if (!is.null(provenance) && is.list(provenance)) {
+      duckdb::dbExecute(con, "DROP TABLE IF EXISTS collections")
+      collections_df <- data.frame(
+        collection_id   = as.character(provenance$collection_id),
+        started_at      = as.character(format(provenance$started_at)),
+        query           = as.character(provenance$query),
+        package_version = as.character(provenance$package_version),
+        backend         = as.character(provenance$backend),
+        parser_version  = as.character(provenance$parser_version),
+        schema_version  = as.character(provenance$schema_version),
+        records         = as.integer(provenance$records),
+        stringsAsFactors = FALSE
+      )
+      duckdb::dbWriteTable(con, "collections", collections_df, row.names = FALSE, overwrite = TRUE)
+    }
+
+    # Write post_collection_relations table (if present).
+    rels_attr <- attr(posts, "rx_collection_posts")
+    if (!is.null(rels_attr) && is.data.frame(rels_attr) && nrow(rels_attr) > 0L) {
+      duckdb::dbExecute(con, "DROP TABLE IF EXISTS post_collection_relations")
+      duckdb::dbWriteTable(
+        con, "post_collection_relations",
+        rels_attr, row.names = FALSE, overwrite = TRUE
+      )
+    }
+
     return(invisible(NULL))
   }
 
   # Write the posts table.
-  # Drop existing table first to guarantee the canonical 26-column schema
+  # Drop existing tables first to guarantee the canonical 26-column schema
   # regardless of what a previous export (possibly with fewer columns) left behind.
   duckdb::dbExecute(con, "DROP TABLE IF EXISTS posts")
   tryCatch(
@@ -209,6 +245,44 @@ x_save <- function(posts, path) {
       stop(.rx_error_cdp(paste0("Failed to write posts table: ", e$message)))
     }
   )
+
+  # Write collections table from provenance (if present).
+  provenance <- attr(posts, "rx_collection_provenance")
+  if (!is.null(provenance) && is.list(provenance)) {
+    duckdb::dbExecute(con, "DROP TABLE IF EXISTS collections")
+    collections_df <- data.frame(
+      collection_id   = as.character(provenance$collection_id),
+      started_at      = as.character(format(provenance$started_at)),
+      query           = as.character(provenance$query),
+      package_version = as.character(provenance$package_version),
+      backend         = as.character(provenance$backend),
+      parser_version  = as.character(provenance$parser_version),
+      schema_version  = as.character(provenance$schema_version),
+      records         = as.integer(provenance$records),
+      stringsAsFactors = FALSE
+    )
+    tryCatch(
+      duckdb::dbWriteTable(con, "collections", collections_df, row.names = FALSE, overwrite = TRUE),
+      error = function(e) {
+        warning("Failed to write collections table: ", e$message)
+      }
+    )
+  }
+
+  # Write post_collection_relations table (if present).
+  rels_attr <- attr(posts, "rx_collection_posts")
+  if (!is.null(rels_attr) && is.data.frame(rels_attr) && nrow(rels_attr) > 0L) {
+    duckdb::dbExecute(con, "DROP TABLE IF EXISTS post_collection_relations")
+    tryCatch(
+      duckdb::dbWriteTable(
+        con, "post_collection_relations",
+        rels_attr, row.names = FALSE, overwrite = TRUE
+      ),
+      error = function(e) {
+        warning("Failed to write post_collection_relations table: ", e$message)
+      }
+    )
+  }
 
   invisible(NULL)
 }
@@ -389,4 +463,105 @@ x_save <- function(posts, path) {
   }
 
   tibble::as_tibble(result)
+}
+
+#' Read all tables from a DuckDB database and reconstruct a relational result.
+#'
+#' Opens a DuckDB database file, reads the `posts`, `collections`,
+#' and `post_collection_relations` tables, and reassembles them into
+#' an `rx_relational` object (a tibble with `rx_users`, `rx_media`,
+#' and `rx_collection_posts` attributes).
+#'
+#' When collections or relations tables are missing, the corresponding
+#' attributes are omitted.  This function is the counterpart to
+#' [.rx_save_duckdb()] when the full relational result was saved.
+#'
+#' @param path Character string with the `.duckdb` file path.
+#' @return An `rx_relational` tibble (posts with relational attributes).
+#'   Returns an empty canonical tibble when the file does not exist
+#'   or DuckDB is unavailable.
+#'
+#' @noRd
+.rx_duckdb_tables <- function(path) {
+  # Guard: file does not exist.
+  if (!file.exists(path)) {
+    return(.rx_jsonl_empty_tibble())
+  }
+
+  if (!requireNamespace("duckdb", quietly = TRUE)) {
+    return(.rx_jsonl_empty_tibble())
+  }
+
+  con <- tryCatch(
+    duckdb::dbConnect(duckdb::DuckDB(), path),
+    error = function(e) {
+      warning("Failed to connect to DuckDB at '", path, "': ", e$message)
+      return(NULL)
+    }
+  )
+
+  if (is.null(con)) {
+    return(.rx_jsonl_empty_tibble())
+  }
+
+  on.exit(duckdb::dbDisconnect(con), add = TRUE)
+
+  # Read posts table.
+  posts <- tryCatch(
+    duckdb::dbGetQuery(con, "SELECT * FROM posts"),
+    error = function(e) {
+      warning("Failed to query DuckDB posts table: ", e$message)
+      return(NULL)
+    }
+  )
+
+  if (is.null(posts) || !is.data.frame(posts) || nrow(posts) == 0L) {
+    return(.rx_jsonl_empty_tibble())
+  }
+
+  posts <- tibble::as_tibble(posts)
+
+  # Read collections table (if present).
+  collections <- tryCatch({
+    collections_df <- duckdb::dbGetQuery(con, "SELECT * FROM collections")
+    if (is.data.frame(collections_df) && nrow(collections_df) > 0L) {
+      collections_df <- collections_df[1L, ]
+      structure(
+        list(
+          collection_id   = as.character(collections_df$collection_id),
+          started_at      = as.POSIXct(collections_df$started_at, tz = "UTC"),
+          query           = as.character(collections_df$query),
+          package_version = as.character(collections_df$package_version),
+          backend         = as.character(collections_df$backend),
+          parser_version  = as.character(collections_df$parser_version),
+          schema_version  = as.character(collections_df$schema_version),
+          records         = as.integer(collections_df$records)
+        ),
+        class = "rx_collection_provenance"
+      )
+    } else {
+      NULL
+    }
+  }, error = function(e) NULL)
+
+  if (!is.null(collections)) {
+    attr(posts, "rx_collection_provenance") <- collections
+  }
+
+  # Read post_collection_relations table (if present).
+  relations <- tryCatch({
+    rels_df <- duckdb::dbGetQuery(con, "SELECT * FROM post_collection_relations")
+    if (is.data.frame(rels_df) && nrow(rels_df) > 0L) {
+      tibble::as_tibble(rels_df)
+    } else {
+      NULL
+    }
+  }, error = function(e) NULL)
+
+  if (!is.null(relations)) {
+    attr(posts, "rx_collection_posts") <- relations
+  }
+
+  class(posts) <- c("rx_relational", class(posts))
+  posts
 }
