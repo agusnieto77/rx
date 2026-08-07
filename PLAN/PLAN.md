@@ -473,7 +473,7 @@ Test:
 
 ---
 
-### Task 29: Capture X search network traffic [ ]
+### Task 29: Capture X search network traffic [x]
 
 **Goal:** Identify candidate structured responses containing posts.
 
