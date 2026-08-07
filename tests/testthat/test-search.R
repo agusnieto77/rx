@@ -1078,3 +1078,66 @@ test_that("x_search with scroll=FALSE performs no scroll iterations", {
   x_search(mock_session, "test", scroll = FALSE, max_scrolls = 10L)
   expect_equal(evaluate_count, 0L, info = "evaluate should never be called when scroll=FALSE")
 })
+
+# ===================================================================
+# Limit enforcement tests (Task 43)
+# ===================================================================
+
+# --- Test 40: limit=1 returns exactly one post ---
+test_that("limit=1 returns exactly one post", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed_fixture <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list(
+    list(requestId = "req-1", url = "https://x.com/graphql/test", contentType = "application/json")
+  )
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    list(requestId = requestId, body = parsed_fixture, contentType = "application/json", error = NULL)
+  }
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  result <- x_search(mock_session, "test", limit = 1L)
+
+  expect_true(inherits(result, "tbl_df"))
+  expect_equal(nrow(result), 1L, info = "limit=1 must return exactly one post")
+})
+
+# --- Test 41: limit larger than available returns all posts ---
+test_that("limit larger than available fixture results returns all posts", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed_fixture <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list(
+    list(requestId = "req-1", url = "https://x.com/graphql/test", contentType = "application/json")
+  )
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    list(requestId = requestId, body = parsed_fixture, contentType = "application/json", error = NULL)
+  }
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  result <- x_search(mock_session, "test", limit = 100L)
+
+  expect_true(inherits(result, "tbl_df"))
+  # The fixture has 4 unique posts; limit=100 should not cap them.
+  expect_equal(nrow(result), 4L, info = "limit larger than available should return all 4 posts")
+})
