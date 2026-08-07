@@ -1,8 +1,10 @@
-# Tests for the X search response post parser (Tasks 31–33).
+# Tests for the X search response post parser (Tasks 31–34).
 #
 # These tests validate the post discovery parser that extracts
-# post_id, text, author_id, username, display_name, and created_at
-# from the X GraphQL timeline fixture.
+# post_id, text, author_id, username, display_name, created_at,
+# and engagement metrics (reply_count, repost_count, like_count,
+# quote_count, bookmark_count, view_count) from the X GraphQL
+# timeline fixture.
 #
 # All tests use the local fixture only. No browser or CDP connection is needed.
 
@@ -25,6 +27,12 @@ test_that("parser extracts all fields from x-search-response.json", {
   testthat::expect_true("username" %in% names(result), info = "result has username")
   testthat::expect_true("display_name" %in% names(result), info = "result has display_name")
   testthat::expect_true("created_at" %in% names(result), info = "result has created_at")
+  testthat::expect_true("reply_count" %in% names(result), info = "result has reply_count")
+  testthat::expect_true("repost_count" %in% names(result), info = "result has repost_count")
+  testthat::expect_true("like_count" %in% names(result), info = "result has like_count")
+  testthat::expect_true("quote_count" %in% names(result), info = "result has quote_count")
+  testthat::expect_true("bookmark_count" %in% names(result), info = "result has bookmark_count")
+  testthat::expect_true("view_count" %in% names(result), info = "result has view_count")
   testthat::expect_true(length(result$post_id) >= 1, info = "at least one post returned")
   testthat::expect_true(length(result$text) >= 1, info = "at least one text returned")
   testthat::expect_equal(
@@ -46,6 +54,30 @@ test_that("parser extracts all fields from x-search-response.json", {
   testthat::expect_equal(
     length(result$post_id), length(result$created_at),
     info = "post_id and created_at have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$reply_count),
+    info = "post_id and reply_count have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$repost_count),
+    info = "post_id and repost_count have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$like_count),
+    info = "post_id and like_count have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$quote_count),
+    info = "post_id and quote_count have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$bookmark_count),
+    info = "post_id and bookmark_count have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$view_count),
+    info = "post_id and view_count have same length"
   )
 })
 
@@ -425,4 +457,143 @@ test_that("empty legacy returns NA for created_at", {
     all(is.na(result$created_at)),
     info = "created_at is NA when legacy is absent"
   )
+})
+
+# --- Test 15: Engagement metrics extracted from fixture ---
+test_that("engagement metrics are extracted correctly from x-search-response.json", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  result <- xtweetsR:::.rx_parse_posts(parsed)
+
+  # reply_count: 12, 5, 20
+  testthat::expect_equal(
+    result$reply_count,
+    c(12L, 5L, 20L),
+    info = "reply_count matches fixture"
+  )
+
+  # repost_count (from retweet_count): 45, 8, 30
+  testthat::expect_equal(
+    result$repost_count,
+    c(45L, 8L, 30L),
+    info = "repost_count matches fixture"
+  )
+
+  # like_count (from favorite_count): 230, 67, 150
+  testthat::expect_equal(
+    result$like_count,
+    c(230L, 67L, 150L),
+    info = "like_count matches fixture"
+  )
+
+  # quote_count: 3, 1, 5
+  testthat::expect_equal(
+    result$quote_count,
+    c(3L, 1L, 5L),
+    info = "quote_count matches fixture"
+  )
+
+  # bookmark_count: 18, 4, 42
+  testthat::expect_equal(
+    result$bookmark_count,
+    c(18L, 4L, 42L),
+    info = "bookmark_count matches fixture"
+  )
+
+  # view_count (from views$count): 15420, 4210, 28500
+  testthat::expect_equal(
+    result$view_count,
+    c(15420L, 4210L, 28500L),
+    info = "view_count matches fixture"
+  )
+
+  # All engagement metrics should be integer type.
+  testthat::expect_true(all(is.integer(result$reply_count)), info = "reply_count is integer")
+  testthat::expect_true(all(is.integer(result$repost_count)), info = "repost_count is integer")
+  testthat::expect_true(all(is.integer(result$like_count)), info = "like_count is integer")
+  testthat::expect_true(all(is.integer(result$quote_count)), info = "quote_count is integer")
+  testthat::expect_true(all(is.integer(result$bookmark_count)), info = "bookmark_count is integer")
+  testthat::expect_true(all(is.integer(result$view_count)), info = "view_count is integer")
+})
+
+# --- Test 16: Missing engagement metrics return 0L ---
+test_that("missing engagement metrics return 0L rather than crashing", {
+  # Tweet entry with empty legacy (no engagement data).
+  response_no_metrics <- list(
+    data = list(
+      timeline = list(
+        instructions = list(
+          list(
+            type = "TimelineAddEntries",
+            entries = list(
+              list(
+                entryId = "tweet-400",
+                content = list(
+                  itemContent = list(
+                    tweet_results = list(
+                      result = list(
+                        rest_id = "400",
+                        legacy = list(full_text = "No metrics here")
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+
+  result <- xtweetsR:::.rx_parse_posts(response_no_metrics)
+
+  testthat::expect_equal(length(result$post_id), 1L, info = "post extracted despite missing metrics")
+  testthat::expect_equal(result$reply_count, 0L, info = "reply_count is 0L when missing")
+  testthat::expect_equal(result$repost_count, 0L, info = "repost_count is 0L when missing")
+  testthat::expect_equal(result$like_count, 0L, info = "like_count is 0L when missing")
+  testthat::expect_equal(result$quote_count, 0L, info = "quote_count is 0L when missing")
+  testthat::expect_equal(result$bookmark_count, 0L, info = "bookmark_count is 0L when missing")
+  testthat::expect_equal(result$view_count, 0L, info = "view_count is 0L when missing")
+})
+
+# --- Test 17: Engagement metrics helpers handle edge cases ---
+test_that(".rx_extract_int returns 0L for invalid input", {
+  testthat::expect_equal(xtweetsR:::.rx_extract_int(NULL, "reply_count"), 0L, info = "NULL legacy returns 0L")
+  testthat::expect_equal(xtweetsR:::.rx_extract_int(list(), "reply_count"), 0L, info = "empty legacy returns 0L")
+  testthat::expect_equal(xtweetsR:::.rx_extract_int(list(full_text = "hi"), "reply_count"), 0L, info = "missing field returns 0L")
+  testthat::expect_equal(xtweetsR:::.rx_extract_int(list(reply_count = NA), "reply_count"), 0L, info = "NA field returns 0L")
+  testthat::expect_equal(xtweetsR:::.rx_extract_int(list(reply_count = 42), "reply_count"), 42L, info = "numeric value coerced to integer")
+})
+
+test_that(".rx_extract_view_count returns 0L for missing views", {
+  testthat::expect_equal(xtweetsR:::.rx_extract_view_count(NULL), 0L, info = "NULL legacy returns 0L")
+  testthat::expect_equal(xtweetsR:::.rx_extract_view_count(list()), 0L, info = "empty legacy returns 0L")
+  testthat::expect_equal(xtweetsR:::.rx_extract_view_count(list(views = NULL)), 0L, info = "views=NULL returns 0L")
+  testthat::expect_equal(xtweetsR:::.rx_extract_view_count(list(views = list())), 0L, info = "empty views returns 0L")
+  testthat::expect_equal(xtweetsR:::.rx_extract_view_count(list(views = list(count = NA))), 0L, info = "count=NA returns 0L")
+  testthat::expect_equal(xtweetsR:::.rx_extract_view_count(list(views = list(count = 999))), 999L, info = "nested count extracted correctly")
+})
+
+# --- Test 18: Empty response returns all twelve empty vectors ---
+test_that("empty response returns all twelve empty vectors", {
+  result_null <- xtweetsR:::.rx_parse_posts(NULL)
+  testthat::expect_equal(length(result_null$post_id), 0L, info = "NULL returns empty post_id")
+  testthat::expect_equal(length(result_null$text), 0L, info = "NULL returns empty text")
+  testthat::expect_equal(length(result_null$author_id), 0L, info = "NULL returns empty author_id")
+  testthat::expect_equal(length(result_null$username), 0L, info = "NULL returns empty username")
+  testthat::expect_equal(length(result_null$display_name), 0L, info = "NULL returns empty display_name")
+  testthat::expect_equal(length(result_null$created_at), 0L, info = "NULL returns empty created_at")
+  testthat::expect_equal(length(result_null$reply_count), 0L, info = "NULL returns empty reply_count")
+  testthat::expect_equal(length(result_null$repost_count), 0L, info = "NULL returns empty repost_count")
+  testthat::expect_equal(length(result_null$like_count), 0L, info = "NULL returns empty like_count")
+  testthat::expect_equal(length(result_null$quote_count), 0L, info = "NULL returns empty quote_count")
+  testthat::expect_equal(length(result_null$bookmark_count), 0L, info = "NULL returns empty bookmark_count")
+  testthat::expect_equal(length(result_null$view_count), 0L, info = "NULL returns empty view_count")
 })

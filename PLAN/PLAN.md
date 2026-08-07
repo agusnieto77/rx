@@ -554,7 +554,7 @@ Extract:
 
 ---
 
-### Task 34: Extend parser with engagement metrics [ ]
+### Task 34: Extend parser with engagement metrics [x]
 
 **Goal:** Add post metrics.
 
@@ -568,8 +568,18 @@ Extract when available:
 - view_count
 
 **Acceptance criteria:**
-- Metrics are numeric/integer-compatible.
-- Missing metrics do not break parsing.
+- [x] Metrics are integer-compatible (6 new integer fields added to parser return).
+- [x] Missing metrics return 0L rather than breaking parsing (4 new tests: fixture match, missing metrics, helper edge cases).
+- [x] `reply_count`, `repost_count` (from `retweet_count`), `like_count` (from `favorite_count`), `quote_count`, `bookmark_count` extracted from `legacy` directly.
+- [x] `view_count` extracted from nested `legacy$views$count`.
+- [x] Two new helper functions: `.rx_extract_int()`, `.rx_extract_view_count()`.
+- [x] Parser now returns 12 fields instead of 6.
+- [x] Tests updated: Test 1 checks all 12 fields exist; Test 18 checks all 12 empty vectors on NULL input.
+- [x] New tests 15-18: fixture value match, missing metrics, helper edge cases.
+
+**Files changed:**
+- `R/parser.R` — added 6 metric extraction calls, 2 helper functions, updated return values
+- `tests/testthat/test-parser.R` — added 4 new tests (15-18), updated tests 1 and 11
 
 ---
 
