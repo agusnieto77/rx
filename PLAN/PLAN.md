@@ -507,7 +507,7 @@ Test:
 
 ---
 
-### Task 31: Implement minimal post discovery parser [ ]
+### Task 31: Implement minimal post discovery parser [x]
 
 **Goal:** Locate post objects inside one known X fixture.
 
