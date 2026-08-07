@@ -1671,7 +1671,7 @@ Add a relational users representation while preserving the simple tibble API.
 - `tests/testthat/test-users.R` — 20 tests (Tests 1-20)
 - `NAMESPACE` — added `export(rx_users)`
 
-### Iteration 86: Normalize media into a separate table [ ]
+### Iteration 86: Normalize media into a separate table [x]
 
 Add relational media output.
 

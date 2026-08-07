@@ -1412,6 +1412,11 @@ x_quotes <- function(session, post_id, limit = NULL, quiet = FALSE) {
   users <- .rx_extract_users(parsed)
   users_tbl <- .rx_users_to_tibble(users)
   attr(posts, "rx_users") <- users_tbl
+
+  media <- .rx_extract_media(parsed)
+  media_tbl <- .rx_media_to_tibble(media)
+  attr(posts, "rx_media") <- media_tbl
+
   class(posts) <- c("rx_relational", class(posts))
   posts
 }
@@ -1434,6 +1439,25 @@ rx_users <- function(x) {
   users
 }
 
+#' Extract the media tibble from a relational result.
+#'
+#' @param x An `rx_relational` object (or any object).
+#' @return A tibble with media columns when `x` is an `rx_relational`,
+#'   otherwise `tibble::tibble()`.
+#' @export
+rx_media <- function(x) {
+  media <- attr(x, "rx_media")
+  if (is.null(media)) {
+    return(tibble::tibble(
+      media_id = character(0),
+      media_type = character(0),
+      media_url = character(0),
+      post_id = character(0)
+    ))
+  }
+  media
+}
+
 #' Print method for `rx_relational` objects.
 #'
 #' Prints the posts tibble and the users tibble side by side.
@@ -1451,6 +1475,11 @@ print.rx_relational <- function(x, ...) {
   if (!is.null(users) && nrow(users) > 0L) {
     cat("\n# Users (", nrow(users), " unique user(s))\n", sep = "")
     print(as.data.frame(users), ...)
+  }
+  media <- attr(x, "rx_media")
+  if (!is.null(media) && nrow(media) > 0L) {
+    cat("\n# Media (", nrow(media), " media item(s))\n", sep = "")
+    print(as.data.frame(media), ...)
   }
   invisible(x)
 }
