@@ -24,11 +24,12 @@ const EXT_CONTENT_TYPES: Record<string, string> = {
 };
 
 function serveFile(dir: string, pathname: string): { status: number; body?: Buffer; contentType?: string } {
-  // Prevent path traversal: use path.join for safe resolution, then
-  // verify the resolved path is still inside the serving directory.
+  // Prevent path traversal: resolve the canonical absolute path and
+  // verify it is inside the serving directory (or equals it).
   const resolved = join(dir, pathname);
-  const rel = relative(dir, resolved);
-  if (rel.startsWith("..") || !rel) {
+  const normalized = resolved.replace(/\\/g, "/").replace(/\/+/g, "/");
+  const baseNormalized = dir.replace(/\\/g, "/").replace(/\/+/g, "/");
+  if (!normalized.startsWith(baseNormalized + "/") && normalized !== baseNormalized) {
     return { status: 403 };
   }
 

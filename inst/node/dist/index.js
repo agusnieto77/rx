@@ -91,7 +91,7 @@ function handleConnect(id, params) {
 }
 // ── navigate handler ─────────────────────────────────────────────────
 const NAVIGATE_TIMEOUT_MS = 30_000;
-function handleNavigate(id, params) {
+async function handleNavigate(id, params) {
     // Validate params first (before connection check).
     let url;
     if (typeof params === "object" && params !== null) {
@@ -162,18 +162,18 @@ function handleNavigate(id, params) {
             reject(err);
         });
     });
-    navPromise
-        .then((result) => {
+    try {
+        const result = await navPromise;
         respond(id, { url, navigated: true, result });
         log("info", "navigated to", url);
-    })
-        .catch((err) => {
+    }
+    catch (err) {
         respondError(id, "PAGE_LOAD_ERROR", `Navigation failed: ${err.message}`);
         log("error", "navigation failed for", url, err.message);
-    });
+    }
 }
 // ── evaluate handler ─────────────────────────────────────────────────
-function handleEvaluate(id, params) {
+async function handleEvaluate(id, params) {
     // Validate params first (before connection check).
     let expr;
     if (typeof params === "object" && params !== null) {
@@ -195,19 +195,18 @@ function handleEvaluate(id, params) {
         log("warn", "evaluate failed — not connected");
         return;
     }
-    // Use Page.enable + Runtime.evaluate via CDP.
-    cdpConnection
-        .sendCommand("Runtime.enable")
-        .then(() => cdpConnection.sendCommand("Page.enable"))
-        .then(() => cdpConnection.sendCommand("Runtime.evaluate", { expression: expr, returnByValue: true }))
-        .then((result) => {
+    try {
+        // Use Page.enable + Runtime.evaluate via CDP.
+        await cdpConnection.sendCommand("Runtime.enable");
+        await cdpConnection.sendCommand("Page.enable");
+        const result = await cdpConnection.sendCommand("Runtime.evaluate", { expression: expr, returnByValue: true });
         respond(id, { evaluated: true, result });
         log("debug", "evaluate succeeded for expression length", expr.length);
-    })
-        .catch((err) => {
+    }
+    catch (err) {
         respondError(id, "CDP_ERROR", `JavaScript evaluation failed: ${err.message}`);
         log("error", "evaluate failed", expr.slice(0, 120), err.message);
-    });
+    }
 }
 // ── ping handler ─────────────────────────────────────────────────────
 function handlePing(id) {
@@ -258,10 +257,10 @@ async function main() {
                 handleClose(id);
                 break;
             case "navigate":
-                handleNavigate(id, req.params);
+                await handleNavigate(id, req.params);
                 break;
             case "evaluate":
-                handleEvaluate(id, req.params);
+                await handleEvaluate(id, req.params);
                 break;
             default:
                 respondError(id, "UNKNOWN_METHOD", `Method "${method}" is not implemented`);

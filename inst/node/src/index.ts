@@ -136,7 +136,7 @@ function handleConnect(id: unknown, params?: unknown): void {
 
 const NAVIGATE_TIMEOUT_MS = 30_000;
 
-function handleNavigate(id: unknown, params?: unknown): void {
+async function handleNavigate(id: unknown, params?: unknown): Promise<void> {
   // Validate params first (before connection check).
   let url: string;
   if (typeof params === "object" && params !== null) {
@@ -213,20 +213,19 @@ function handleNavigate(id: unknown, params?: unknown): void {
       });
   });
 
-  navPromise
-    .then((result) => {
-      respond(id, { url, navigated: true, result });
-      log("info", "navigated to", url);
-    })
-    .catch((err: Error) => {
-      respondError(id, "PAGE_LOAD_ERROR", `Navigation failed: ${err.message}`);
-      log("error", "navigation failed for", url, err.message);
-    });
+  try {
+    const result = await navPromise;
+    respond(id, { url, navigated: true, result });
+    log("info", "navigated to", url);
+  } catch (err) {
+    respondError(id, "PAGE_LOAD_ERROR", `Navigation failed: ${(err as Error).message}`);
+    log("error", "navigation failed for", url, (err as Error).message);
+  }
 }
 
 // ── evaluate handler ─────────────────────────────────────────────────
 
-function handleEvaluate(id: unknown, params?: unknown): void {
+async function handleEvaluate(id: unknown, params?: unknown): Promise<void> {
   // Validate params first (before connection check).
   let expr: string;
   if (typeof params === "object" && params !== null) {
@@ -248,19 +247,17 @@ function handleEvaluate(id: unknown, params?: unknown): void {
     return;
   }
 
-  // Use Page.enable + Runtime.evaluate via CDP.
-  cdpConnection
-    .sendCommand("Runtime.enable")
-    .then(() => cdpConnection!.sendCommand("Page.enable"))
-    .then(() => cdpConnection!.sendCommand("Runtime.evaluate", { expression: expr, returnByValue: true }))
-    .then((result) => {
-      respond(id, { evaluated: true, result });
-      log("debug", "evaluate succeeded for expression length", expr.length);
-    })
-    .catch((err: Error) => {
-      respondError(id, "CDP_ERROR", `JavaScript evaluation failed: ${err.message}`);
-      log("error", "evaluate failed", expr.slice(0, 120), err.message);
-    });
+  try {
+    // Use Page.enable + Runtime.evaluate via CDP.
+    await cdpConnection.sendCommand("Runtime.enable");
+    await cdpConnection.sendCommand("Page.enable");
+    const result = await cdpConnection.sendCommand("Runtime.evaluate", { expression: expr, returnByValue: true });
+    respond(id, { evaluated: true, result });
+    log("debug", "evaluate succeeded for expression length", expr.length);
+  } catch (err) {
+    respondError(id, "CDP_ERROR", `JavaScript evaluation failed: ${(err as Error).message}`);
+    log("error", "evaluate failed", expr.slice(0, 120), (err as Error).message);
+  }
 }
 
 // ── ping handler ─────────────────────────────────────────────────────
@@ -323,10 +320,10 @@ async function main(): Promise<void> {
         handleClose(id);
         break;
       case "navigate":
-        handleNavigate(id, req.params);
+        await handleNavigate(id, req.params);
         break;
       case "evaluate":
-        handleEvaluate(id, req.params);
+        await handleEvaluate(id, req.params);
         break;
       default:
         respondError(id, "UNKNOWN_METHOD", `Method "${method}" is not implemented`);

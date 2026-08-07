@@ -40,7 +40,7 @@ test_that("local default used when no argument and no env var", {
     list(LPD_ENDPOINT = ""),
     {
       result <- .rx_resolve_endpoint()
-      expect_equal(result$endpoint, "http://127.0.0.1:21111")
+      expect_equal(result$endpoint, "ws://127.0.0.1:21111")
       expect_equal(result$source, "default")
     }
   )
@@ -75,7 +75,7 @@ test_that("whitespace-only falls to default when no env var", {
     list(LPD_ENDPOINT = "", LPD_TOKEN = ""),
     {
       result <- .rx_resolve_endpoint(endpoint = "\t\n")
-      expect_equal(result$endpoint, "http://127.0.0.1:21111")
+      expect_equal(result$endpoint, "ws://127.0.0.1:21111")
       expect_equal(result$source, "default")
     }
   )

@@ -6,7 +6,7 @@
 // Defaults: port 8765
 import { createServer } from "node:http";
 import { readFileSync, statSync } from "node:fs";
-import { extname, join, relative } from "node:path";
+import { extname, join } from "node:path";
 const EXT_CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
     ".htm": "text/html; charset=utf-8",
@@ -21,11 +21,12 @@ const EXT_CONTENT_TYPES = {
     ".txt": "text/plain; charset=utf-8",
 };
 function serveFile(dir, pathname) {
-    // Prevent path traversal: use path.join for safe resolution, then
-    // verify the resolved path is still inside the serving directory.
+    // Prevent path traversal: resolve the canonical absolute path and
+    // verify it is inside the serving directory (or equals it).
     const resolved = join(dir, pathname);
-    const rel = relative(dir, resolved);
-    if (rel.startsWith("..") || !rel) {
+    const normalized = resolved.replace(/\\/g, "/").replace(/\/+/g, "/");
+    const baseNormalized = dir.replace(/\\/g, "/").replace(/\/+/g, "/");
+    if (!normalized.startsWith(baseNormalized + "/") && normalized !== baseNormalized) {
         return { status: 403 };
     }
     try {

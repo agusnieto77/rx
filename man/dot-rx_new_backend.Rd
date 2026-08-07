@@ -15,7 +15,9 @@ installed package's sidecar is used.}
 A list with \verb{$connected} (logical) and the four contract methods.
 }
 \description{
-Connect to the sidecar and return the backend invisibly.
+Create a backend object that manages the sidecar process and provides browser
+operations. The backend does NOT connect on creation — call the
+\code{connect()} method to establish the CDP connection.
 
 Navigate to a URL. Returns a list with url and status.
 
