@@ -415,7 +415,7 @@ Test:
 
 ---
 
-### Task 25: Create `x_debug_network()` [ ]
+### Task 25: Create `x_debug_network()` [x]
 
 **Goal:** Expose network inspection for development.
 
@@ -424,8 +424,8 @@ Test:
 - Return a tibble/data frame of captured requests.
 
 **Acceptance criteria:**
-- Running it against the local fixture returns structured rows.
-- At minimum include URL, method, resource type, and status when available.
+- [x] Running it against the local fixture returns structured rows.
+- [x] At minimum include URL, method, resource type, and status when available.
 
 ---
 
