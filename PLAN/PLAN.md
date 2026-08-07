@@ -214,7 +214,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 12: Add Lightpanda configuration discovery
+### Task 12: Add Lightpanda configuration discovery [DONE]
 
 **Goal:** Resolve how the package finds Lightpanda.
 

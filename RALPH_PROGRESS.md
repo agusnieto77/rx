@@ -114,3 +114,24 @@ Started: 2026-08-07
 - R-side tests cannot execute (R not installed in current shell environment). Code verified syntactically.
 - No orphan sidecar processes remain after tests (verified by both Node and R test suites).
 - Acceptance criteria met: "All protocol tests pass" (Node: 5/5). "No orphan process" (verified).
+
+## Task 12: Add Lightpanda configuration discovery - COMPLETED
+
+- Created `R/config.R` with two internal functions:
+  - `.rx_resolve_endpoint(endpoint)` — resolves Lightpanda endpoint with strict precedence:
+    explicit argument > `LPD_ENDPOINT` env var > local default (`http://127.0.0.1:21111`)
+  - `.rx_get_token()` — reads `LPD_TOKEN` env var, returns NULL if unset
+- No secrets hardcoded. Token is optional.
+- Created `tests/testthat/test-config.R` with 8 tests (15 assertions):
+  - Argument precedence over env var
+  - Env var used when no argument
+  - Local default when no argument and no env var
+  - Empty string falls through to next level
+  - Token NULL when LPD_TOKEN not set
+  - Token returned when LPD_TOKEN set
+  - Token independent of endpoint source
+  - Config inspectable without starting browser
+- Added `withr` to Suggests in DESCRIPTION for env var manipulation in tests.
+- All R tests pass: 31 pass, 2 skip (processx segfault), 0 fail.
+- TypeScript compiles clean, 5/5 Node integration tests pass.
+- `R CMD build` produces `xtweetsR_0.1.0.tar.gz` without errors.
