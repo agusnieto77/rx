@@ -3,3 +3,5 @@
 ^PLAN$
 ^RALPH_PROGRESS\.md$
 ^\.gitignore$
+^xtweetsR_.*\.tar\.gz$
+^.*\.Rproj$

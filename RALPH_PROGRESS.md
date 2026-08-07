@@ -1,6 +1,6 @@
 # Ralphex Progress Log
 
-Plan: G:\RALPHEX\rx\PLAN\PLAN.md
+Plan: PLAN/PLAN.md
 Branch: PLAN
 Mode: full
 Task model: qwen-remoto

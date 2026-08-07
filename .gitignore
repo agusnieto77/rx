@@ -1,0 +1,8 @@
+.env
+.ralphex/
+inst/secrets.env
+*.rds
+*.rds.lock
+.Rproj.user
+.rvc/
+*.tar.gz

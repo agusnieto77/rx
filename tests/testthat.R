@@ -1,4 +1,4 @@
 library(testthat)
 library(xtweetsR)
 
-test_check("xtweetsR", reporter = "progress")
+test_check("xtweetsR")
