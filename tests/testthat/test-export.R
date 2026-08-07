@@ -45,7 +45,7 @@ test_that(".rx_save_parquet writes a tibble that can be read back", {
 
   loaded <- arrow::read_parquet(tmp)
   testthat::expect_equal(nrow(loaded), n, info = "row count matches")
-  testthat::expect_equal(ncol(loaded), 24L, info = "24 columns")
+  testthat::expect_equal(ncol(loaded), 26L, info = "26 columns")
   testthat::expect_equal(
     loaded$post_id,
     paste0("post-", 1:n),
@@ -220,7 +220,7 @@ test_that("x_save handles zero-row tibble", {
         list = list()
       )
     }) |>
-    (`names<-`(xtweetsR:::.rx_canonical_fields())) |>
+    setNames(xtweetsR:::.rx_canonical_fields()) |>
     tibble::as_tibble()
 
   tmp_jsonl <- tempfile(fileext = ".jsonl")
@@ -368,7 +368,7 @@ test_that(".rx_save_duckdb writes a tibble that can be read back", {
 
   loaded <- xtweetsR:::.rx_duckdb_read(tmp)
   testthat::expect_equal(nrow(loaded), n, info = "row count matches")
-  testthat::expect_equal(ncol(loaded), 24L, info = "24 columns")
+  testthat::expect_equal(ncol(loaded), 26L, info = "26 columns")
   testthat::expect_equal(
     loaded$post_id,
     paste0("post-", 1:n),
@@ -472,7 +472,7 @@ test_that("x_save handles zero-row tibble via DuckDB", {
         list = list()
       )
     }) |>
-    (`names<-`(xtweetsR:::.rx_canonical_fields())) |>
+    setNames(xtweetsR:::.rx_canonical_fields()) |>
     tibble::as_tibble()
 
   tmp <- tempfile(fileext = ".duckdb")

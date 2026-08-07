@@ -5,11 +5,11 @@
 # Arrow or DuckDB.
 
 # --- Test 1: .rx_jsonl_empty_tibble returns empty tibble with canonical schema ---
-test_that(".rx_jsonl_empty_tibble returns a tibble with 24 canonical columns", {
+test_that(".rx_jsonl_empty_tibble returns a tibble with 26 canonical columns", {
   tbl <- xtweetsR:::.rx_jsonl_empty_tibble()
 
   testthat::expect_s3_class(tbl, "tbl_df", info = "returns a tibble")
-  testthat::expect_equal(ncol(tbl), 24L, info = "24 canonical columns")
+  testthat::expect_equal(ncol(tbl), 26L, info = "26 canonical columns")
   testthat::expect_equal(nrow(tbl), 0L, info = "zero rows")
   testthat::expect_equal(
     colnames(tbl),
@@ -211,7 +211,7 @@ test_that("reading a non-existent file returns an empty canonical tibble", {
 
   testthat::expect_s3_class(loaded, "tbl_df", info = "returns a tibble")
   testthat::expect_equal(nrow(loaded), 0L, info = "zero rows")
-  testthat::expect_equal(ncol(loaded), 24L, info = "24 columns")
+  testthat::expect_equal(ncol(loaded), 26L, info = "26 columns")
 })
 
 # --- Test 7: Column types are preserved through round-trip ---

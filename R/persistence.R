@@ -165,7 +165,7 @@ NULL
 
 #' Return an empty tibble with the canonical post schema.
 #'
-#' @return A tibble with 21 columns matching the canonical schema,
+#' @return A tibble with 26 columns matching the canonical schema,
 #'   zero rows.
 #' @noRd
 .rx_jsonl_empty_tibble <- function() {
@@ -175,7 +175,8 @@ NULL
     switch(type_map[[f]],
       character = character(0),
       integer = integer(0),
-      logical = logical(0)
+      logical = logical(0),
+      list      = list()
     )
   })
   names(cols) <- fields

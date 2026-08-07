@@ -11,7 +11,6 @@
 #   Note: observation-level provenance fields (collected_at, collection_query,
 #   collection_id) are injected by the search pipeline before normalization
 #   (Task 46). The normalizer handles them as regular character fields.
-#   dedup   -> removes duplicate posts by post_id, first-seen order
 #
 # Every output row (column in the list) has the same columns.
 # Missing values are represented consistently:
@@ -63,7 +62,7 @@ NULL
 #'   - collection_query — character (search query string, Task 46)
 #'   - collection_id — character (UUID, Task 46)
 #'
-#' @return A character vector of 24 field names in canonical order.
+#' @return A character vector of 26 field names in canonical order.
 #' @keywords internal
 .rx_canonical_fields <- function() {
   c(

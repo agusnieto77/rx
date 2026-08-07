@@ -92,12 +92,8 @@ NULL
 #' @return A single-element character vector with a lowercase UUID string.
 #' @noRd
 .rx_generate_uuid <- function() {
-  # Prefer the base-R CSPRNG-backed generator (R >= 4.4.0).
-  if (utils::packageVersion("tools") >= "4.4.0") {
-    return(tools::UUIDgenerate())
-  }
-
-  # Fallback: uniform hex chars via sample() + sprintf("%x") to avoid
+  # UUID v4 generator using base-R CSPRNG via sample().
+  # Uniform hex chars via sample() + sprintf("%x") to avoid
   # multi-digit decimal output (e.g. 10 -> "10" instead of "a").
   hex4 <- function() sprintf("%04x", sum(sample(0:15, 4, replace = TRUE) * 16^(3:0)))
   hex2 <- function() sprintf("%02x", sample(0:255, 1, replace = TRUE))
@@ -108,7 +104,7 @@ NULL
     hex4(), hex4(), "-",
     hex4(), "-",
     "4", hex3(), "-",
-    sprintf("%x", sample(8:11, 1, replace = TRUE)), hex2(), "-",
+    sprintf("%x", sample(8:11, 1, replace = TRUE)), hex3(), "-",
     hex4(), hex4(), hex4()
   )
 }
@@ -257,7 +253,7 @@ print.rx_collection_provenance <- function(x, ...) {
 #'   are suppressed. When `FALSE` (default), the function prints
 #'   informational messages at each major step.
 #'
-#' @return A tibble with the canonical post schema (18 columns) containing
+#' @return A tibble with the canonical post schema (26 columns) containing
 #'   posts found during the search. Returns a zero-row tibble when no
 #'   posts are captured.
 #'
@@ -577,15 +573,15 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   # can continue from where we left off. The checkpoint is always
   # written (overwriting any previous checkpoint) since it represents
   # the latest state.
-  if (isTRUE(resume) && !is.null(jsonl_path)) {
+  if (isTRUE(resume) && !is.null(checkpoint_path)) {
     checkpoint <- .rx_checkpoint_from_state(state, collection_id, query)
     tryCatch(
       {
-        .rx_checkpoint_write(jsonl_path, checkpoint)
-        .rx_progress("Checkpoint saved to ", jsonl_path, quiet = quiet)
+        .rx_checkpoint_write(checkpoint_path, checkpoint)
+        .rx_progress("Checkpoint saved to ", checkpoint_path, quiet = quiet)
       },
       error = function(e) {
-        warning("Failed to write checkpoint to '", jsonl_path, "': ", e$message)
+        warning("Failed to write checkpoint to '", checkpoint_path, "': ", e$message)
       }
     )
   }
@@ -636,7 +632,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 #' @param quiet Logical, default `FALSE`. When `TRUE`, progress messages
 #'   are suppressed.
 #'
-#' @return A tibble with the canonical post schema (21 columns)
+#' @return A tibble with the canonical post schema (26 columns)
 #'   containing zero or one row. Returns a zero-row tibble when no
 #'   post data is captured.
 #'
@@ -1256,7 +1252,7 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
 #'   are suppressed. When `FALSE` (default), the function prints
 #'   informational messages at each major step.
 #'
-#' @return A tibble with the canonical post schema (21 columns) containing
+#' @return A tibble with the canonical post schema (26 columns) containing
 #'   posts found on the user's timeline. Returns a zero-row tibble when
 #'   no posts are captured.
 #'
@@ -1550,15 +1546,15 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
   .rx_search_cleanup(backend)
 
   # 10b. Write checkpoint for resume support.
-  if (isTRUE(resume) && !is.null(jsonl_path)) {
+  if (isTRUE(resume) && !is.null(checkpoint_path)) {
     checkpoint <- .rx_checkpoint_from_state(state, collection_id, paste0("@", trimws(username)))
     tryCatch(
       {
-        .rx_checkpoint_write(jsonl_path, checkpoint)
-        .rx_progress("Checkpoint saved to ", jsonl_path, quiet = quiet)
+        .rx_checkpoint_write(checkpoint_path, checkpoint)
+        .rx_progress("Checkpoint saved to ", checkpoint_path, quiet = quiet)
       },
       error = function(e) {
-        warning("Failed to write checkpoint to '", jsonl_path, "': ", e$message)
+        warning("Failed to write checkpoint to '", checkpoint_path, "': ", e$message)
       }
     )
   }

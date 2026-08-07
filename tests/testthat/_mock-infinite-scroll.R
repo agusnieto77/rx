@@ -67,49 +67,71 @@ rx_mock_batch <- function(id_start = 1L, n = 10L, prefix = NULL,
     author_base <- prefix
   }
 
+  make_tweet <- function(post_id, full_text, created_at, user_id,
+                         screen_name, name, reply_count, retweet_count,
+                         favorite_count, quote_count, bookmark_count,
+                         conversation_id_str, in_reply_to_status_id_str,
+                         is_quote_status) {
+    list(
+      `__typename` = "Tweet",
+      rest_id = post_id,
+      core = list(
+        user_results = list(
+          result = list(
+            id = user_id,
+            legacy = list(
+              screen_name = screen_name,
+              name = name
+            )
+          )
+        )
+      ),
+      legacy = list(
+        full_text = full_text,
+        created_at = created_at,
+        user_id_str = user_id,
+        screen_name = screen_name,
+        name = name,
+        reply_count = reply_count,
+        retweet_count = retweet_count,
+        favorite_count = favorite_count,
+        quote_count = quote_count,
+        bookmark_count = bookmark_count,
+        conversation_id_str = conversation_id_str,
+        in_reply_to_status_id_str = in_reply_to_status_id_str,
+        is_quote_status = is_quote_status
+      )
+    )
+  }
+
   entries <- vector("list", n)
   for (i in seq_len(n)) {
     post_id <- paste0(prefix, "-", id_start + i - 1L)
+    user_id <- paste0("author-", post_id)
     entries[[i]] <- list(
       entryId = paste0("tweet-", post_id),
       content = list(
-        __typename = "TimelineTimelineItem",
+        `__typename` = "TimelineTimelineItem",
         itemContent = list(
           tweet_results = list(
-            result = list(
-              __typename = "TweetWithVisibilityResults",
-              tweet = list(
-                rest_id = post_id,
-                legacy = list(
-                  full_text = paste0("Mock post ", post_id),
-                  created_at = paste0(
-                    "Mon Jul ", sprintf("%02d", 1 + (i %% 28)),
-                    " 00:00:00 +0000 2026"
-                  ),
-                  user_id_str = paste0("author-", post_id),
-                  screen_name = paste0(author_base, i),
-                  name = paste("Author", i),
-                  reply_count = as.integer(i),
-                  retweet_count = as.integer(i) * 2L,
-                  favorite_count = as.integer(i) * 3L,
-                  quote_count = as.integer(i),
-                  bookmark_count = as.integer(i),
-                  conversation_id_str = post_id,
-                  in_reply_to_status_id_str = NA_character_,
-                  is_quote_status = FALSE
-                ),
-                core = list(
-                  user_results = list(
-                    result = list(
-                      legacy = list(
-                        id_str = paste0("author-", post_id),
-                        screen_name = paste0(author_base, i),
-                        name = paste("Author", i)
-                      )
-                    )
-                  )
-                )
-              )
+            result = make_tweet(
+              post_id = post_id,
+              full_text = paste0("Mock post ", post_id),
+              created_at = paste0(
+                "Mon Jul ", sprintf("%02d", 1 + (i %% 28)),
+                " 00:00:00 +0000 2026"
+              ),
+              user_id = user_id,
+              screen_name = paste0(author_base, i),
+              name = paste("Author", i),
+              reply_count = as.integer(i),
+              retweet_count = as.integer(i) * 2L,
+              favorite_count = as.integer(i) * 3L,
+              quote_count = as.integer(i),
+              bookmark_count = as.integer(i),
+              conversation_id_str = post_id,
+              in_reply_to_status_id_str = NA_character_,
+              is_quote_status = FALSE
             )
           )
         )
@@ -124,38 +146,22 @@ rx_mock_batch <- function(id_start = 1L, n = 10L, prefix = NULL,
     entries[[n + 1L]] <- list(
       entryId = paste0("tweet-", dup_id_1),
       content = list(
-        __typename = "TimelineTimelineItem",
+        `__typename` = "TimelineTimelineItem",
         itemContent = list(
           tweet_results = list(
-            result = list(
-              __typename = "TweetWithVisibilityResults",
-              tweet = list(
-                rest_id = dup_id_1,
-                legacy = list(
-                  full_text = paste0("Mock post ", dup_id_1),
-                  created_at = "Mon Jul 15 00:00:00 +0000 2026",
-                  user_id_str = paste0("author-", dup_id_1),
-                  screen_name = paste0(author_base, "dup-a"),
-                  name = paste("Author Dup A"),
-                  reply_count = 0L, retweet_count = 0L,
-                  favorite_count = 0L, quote_count = 0L,
-                  bookmark_count = 0L,
-                  conversation_id_str = dup_id_1,
-                  in_reply_to_status_id_str = NA_character_,
-                  is_quote_status = FALSE
-                ),
-                core = list(
-                  user_results = list(
-                    result = list(
-                      legacy = list(
-                        id_str = paste0("author-", dup_id_1),
-                        screen_name = paste0(author_base, "dup-a"),
-                        name = paste("Author Dup A")
-                      )
-                    )
-                  )
-                )
-              )
+            result = make_tweet(
+              post_id = dup_id_1,
+              full_text = paste0("Mock post ", dup_id_1),
+              created_at = "Mon Jul 15 00:00:00 +0000 2026",
+              user_id = paste0("author-", dup_id_1),
+              screen_name = paste0(author_base, "dup-a"),
+              name = paste("Author Dup A"),
+              reply_count = 0L, retweet_count = 0L,
+              favorite_count = 0L, quote_count = 0L,
+              bookmark_count = 0L,
+              conversation_id_str = dup_id_1,
+              in_reply_to_status_id_str = NA_character_,
+              is_quote_status = FALSE
             )
           )
         )
@@ -164,38 +170,22 @@ rx_mock_batch <- function(id_start = 1L, n = 10L, prefix = NULL,
     entries[[n + 2L]] <- list(
       entryId = paste0("tweet-", dup_id_2),
       content = list(
-        __typename = "TimelineTimelineItem",
+        `__typename` = "TimelineTimelineItem",
         itemContent = list(
           tweet_results = list(
-            result = list(
-              __typename = "TweetWithVisibilityResults",
-              tweet = list(
-                rest_id = dup_id_2,
-                legacy = list(
-                  full_text = paste0("Mock post ", dup_id_2),
-                  created_at = "Mon Jul 16 00:00:00 +0000 2026",
-                  user_id_str = paste0("author-", dup_id_2),
-                  screen_name = paste0(author_base, "dup-b"),
-                  name = paste("Author Dup B"),
-                  reply_count = 0L, retweet_count = 0L,
-                  favorite_count = 0L, quote_count = 0L,
-                  bookmark_count = 0L,
-                  conversation_id_str = dup_id_2,
-                  in_reply_to_status_id_str = NA_character_,
-                  is_quote_status = FALSE
-                ),
-                core = list(
-                  user_results = list(
-                    result = list(
-                      legacy = list(
-                        id_str = paste0("author-", dup_id_2),
-                        screen_name = paste0(author_base, "dup-b"),
-                        name = paste("Author Dup B")
-                      )
-                    )
-                  )
-                )
-              )
+            result = make_tweet(
+              post_id = dup_id_2,
+              full_text = paste0("Mock post ", dup_id_2),
+              created_at = "Mon Jul 16 00:00:00 +0000 2026",
+              user_id = paste0("author-", dup_id_2),
+              screen_name = paste0(author_base, "dup-b"),
+              name = paste("Author Dup B"),
+              reply_count = 0L, retweet_count = 0L,
+              favorite_count = 0L, quote_count = 0L,
+              bookmark_count = 0L,
+              conversation_id_str = dup_id_2,
+              in_reply_to_status_id_str = NA_character_,
+              is_quote_status = FALSE
             )
           )
         )
@@ -206,7 +196,7 @@ rx_mock_batch <- function(id_start = 1L, n = 10L, prefix = NULL,
   list(
     TimelineResult = list(
       result = list(
-        __typename = "TimelineTimelineItem",
+        `__typename` = "TimelineTimelineItem",
         timeline_instructions = list(
           list(
             type = "TimelineAddEntries",
@@ -338,7 +328,7 @@ rx_mock_session <- function(batches, delays = NULL, end_at = NULL,
                 entryId = paste0("cursor-bottom-", batch_idx),
                 sortIndex = as.character(Sys.time()),
                 content = list(
-                  __typename = "TimelineTimelineModuleItemCursor",
+                  `__typename` = "TimelineTimelineModuleItemCursor",
                   cursorType = "Bottom",
                   value = cursor_val
                 )
@@ -407,38 +397,35 @@ rx_mock_session <- function(batches, delays = NULL, end_at = NULL,
 rx_mock_realistic_scenario <- function(delay_between_batches = 0.01,
                                          include_cursor = TRUE) {
   # Batch 1: 5 posts (IDs 1-5).
-  batch1 <- rx_mock_batch(id_start = 1L, n = 5L, prefix = "b1",
-                           include_cursor = include_cursor)
+  batch1 <- rx_mock_batch(id_start = 1L, n = 5L, prefix = "b1")
 
   # Batch 2: 6 posts, 4 new (IDs 6-10) + 2 duplicated from batch1 (IDs 4-5).
-  batch2 <- rx_mock_batch(id_start = 4L, n = 6L, prefix = "b2",
-                           include_cursor = include_cursor)
+  batch2 <- rx_mock_batch(id_start = 4L, n = 6L, prefix = "b2")
   # Override IDs 1-2 of batch2 to be duplicates of b1-4 and b1-5.
   batch2$TimelineResult$result$timeline_instructions[[1L]]$entries[[1L]]$content$itemContent$
-    tweet_results$result$tweet$rest_id <- "b1-4"
+    tweet_results$result$rest_id <- "b1-4"
   batch2$TimelineResult$result$timeline_instructions[[1L]]$entries[[1L]]$content$itemContent$
-    tweet_results$result$tweet$legacy$full_text <- "Mock post b1-4"
+    tweet_results$result$legacy$full_text <- "Mock post b1-4"
   batch2$TimelineResult$result$timeline_instructions[[1L]]$entries[[1L]]$entryId <- "tweet-b1-4"
   batch2$TimelineResult$result$timeline_instructions[[1L]]$entries[[2L]]$content$itemContent$
-    tweet_results$result$tweet$rest_id <- "b1-5"
+    tweet_results$result$rest_id <- "b1-5"
   batch2$TimelineResult$result$timeline_instructions[[1L]]$entries[[2L]]$content$itemContent$
-    tweet_results$result$tweet$legacy$full_text <- "Mock post b1-5"
+    tweet_results$result$legacy$full_text <- "Mock post b1-5"
   batch2$TimelineResult$result$timeline_instructions[[1L]]$entries[[2L]]$entryId <- "tweet-b1-5"
 
   # Batch 3: 4 posts, 3 new (IDs 11-13) + 1 duplicated (ID 9).
-  batch3 <- rx_mock_batch(id_start = 9L, n = 4L, prefix = "b3",
-                           include_cursor = include_cursor)
+  batch3 <- rx_mock_batch(id_start = 9L, n = 4L, prefix = "b3")
   batch3$TimelineResult$result$timeline_instructions[[1L]]$entries[[1L]]$content$itemContent$
-    tweet_results$result$tweet$rest_id <- "b2-6"
+    tweet_results$result$rest_id <- "b2-6"
   batch3$TimelineResult$result$timeline_instructions[[1L]]$entries[[1L]]$content$itemContent$
-    tweet_results$result$tweet$legacy$full_text <- "Mock post b2-6"
+    tweet_results$result$legacy$full_text <- "Mock post b2-6"
   batch3$TimelineResult$result$timeline_instructions[[1L]]$entries[[1L]]$entryId <- "tweet-b2-6"
 
   # Batch 4: empty (end of results).
   batch4 <- list(
     TimelineResult = list(
       result = list(
-        __typename = "TimelineTimelineItem",
+        `__typename` = "TimelineTimelineItem",
         timeline_instructions = list(
           list(
             type = "TimelineAddEntries",

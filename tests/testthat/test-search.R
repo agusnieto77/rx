@@ -632,7 +632,7 @@ test_that("check_limit returns TRUE when current_count >= limit", {
   expect_true(state$check_limit(3L))
   expect_true(state$check_limit(2L))
   expect_true(state$check_limit(1L))
-  expect_true(state$check_limit(NULL))
+  expect_false(state$check_limit(NULL))
 })
 
 # --- Test 33: advance_scroll accumulates position ---

@@ -172,8 +172,9 @@ x_save <- function(posts, path) {
   )
   on.exit(duckdb::dbDisconnect(con), add = TRUE)
 
-  # Guard: zero-row tibble — create an empty posts table with canonical schema.
+  # Guard: zero-row tibble — drop any existing table and create with canonical schema.
   if (nrow(posts) == 0L) {
+    duckdb::dbExecute(con, "DROP TABLE IF EXISTS posts")
     fields <- .rx_canonical_fields()
     type_map <- .rx_type_map()
     col_defs <- paste(
@@ -183,17 +184,20 @@ x_save <- function(posts, path) {
           character = "VARCHAR",
           integer = "BIGINT",
           logical = "BOOLEAN",
+          list = "JSON",
           "VARCHAR"
         )
       }),
       collapse = ", "
     )
-    duckdb::dbExecute(con, paste0("CREATE TABLE IF NOT EXISTS posts (", col_defs, ")"))
+    duckdb::dbExecute(con, paste0("CREATE TABLE posts (", col_defs, ")"))
     return(invisible(NULL))
   }
 
   # Write the posts table.
-  # dbWriteTable creates the table and writes all rows in one call.
+  # Drop existing table first to guarantee the canonical 26-column schema
+  # regardless of what a previous export (possibly with fewer columns) left behind.
+  duckdb::dbExecute(con, "DROP TABLE IF EXISTS posts")
   tryCatch(
     duckdb::dbWriteTable(con, "posts", posts, row.names = FALSE, overwrite = TRUE),
     error = function(e) {
