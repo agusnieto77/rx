@@ -302,7 +302,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 18: Create `x_session()`
+### Task 18: Create `x_session()` [DONE]
 
 **Goal:** Expose the first public R API.
 

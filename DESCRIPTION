@@ -13,6 +13,8 @@ Imports:
     jsonlite,
     processx
 Suggests:
+    curl,
+    pkgload,
     testthat (>= 3.0.0),
     withr
 Config/testthat/edition: 3

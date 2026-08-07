@@ -1,3 +1,7 @@
+#' @import jsonlite
+#' @import processx
+NULL
+
 # Internal: R-sidecar communication layer
 # Manages the TypeScript sidecar process and implements the JSONL
 # request/response protocol defined in inst/node/src/index.ts.

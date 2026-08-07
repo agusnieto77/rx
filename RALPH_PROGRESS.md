@@ -135,3 +135,19 @@ Started: 2026-08-07
 - All R tests pass: 31 pass, 2 skip (processx segfault), 0 fail.
 - TypeScript compiles clean, 5/5 Node integration tests pass.
 - `R CMD build` produces `xtweetsR_0.1.0.tar.gz` without errors.
+
+## Task 18: Create x_session() - COMPLETED
+
+- Created `R/session.R` with two exported functions:
+  - `x_session(endpoint, sidecar_path)` — first public R API, starts sidecar, connects backend, returns session object
+  - `print.xtweetsR_session()` — S3 print method showing backend type, endpoint, connection status
+- Session object has `$backend`, `$endpoint`, `$connected`, `$close()`
+- Created `tests/testthat/test-session.R` — 7 tests (export check, object structure, print, close cleanup, idempotent close, endpoint param, return value)
+- Updated `NAMESPACE` with `export(x_session)` and `S3method(base::print,xtweetsR_session)`
+- Updated `NAMESPACE` with proper roxygen `@import jsonlite` and `@import processx`
+- Fixed Rd cross-reference warnings (replaced broken `\link{}` to `@noRd` functions)
+- Added `curl` and `pkgload` to `Suggests` in DESCRIPTION
+- Added `node_modules/` to `.Rbuildignore`
+- R CMD check: 0 errors, 0 warnings, 2 cosmetic notes (Windows time sync, license format)
+- Node tests: 17/17 pass
+- TypeScript compiles clean

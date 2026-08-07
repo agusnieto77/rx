@@ -38,7 +38,7 @@ NULL
 #'
 #' @return A list with `$connected` (logical) and the four contract methods.
 #'
-#' @seealso \code{\link{.rx_start_sidecar}}
+#' @seealso The sidecar client in \code{R/sidecar.R}
 #' @keywords internal
 .rx_new_backend <- function(sidecar_path = NULL) {
   # Resolve sidecar path using the same logic as .rx_start_sidecar.
