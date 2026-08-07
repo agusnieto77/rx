@@ -1,14 +1,15 @@
-# Tests for the X search response post parser (Task 31).
+# Tests for the X search response post parser (Tasks 31–32).
 #
-# These tests validate the minimal post discovery parser that extracts
-# only post_id and text from the X GraphQL timeline fixture.
+# These tests validate the post discovery parser that extracts
+# post_id, text, author_id, username, and display_name from the
+# X GraphQL timeline fixture.
 #
 # All tests use the local fixture only. No browser or CDP connection is needed.
 
-# --- Test 1: Parser returns posts with post_id and text from the fixture ---
-test_that("parser extracts post_id and text from x-search-response.json", {
+# --- Test 1: Parser returns posts with all fields from the fixture ---
+test_that("parser extracts all fields from x-search-response.json", {
   fixture_path <- file.path(
-    dirname(dirname(getwd())),
+    testthat::test_path("..", ".."),
     "inst", "tests", "fixtures", "x-search-response.json"
   )
 
@@ -20,15 +21,33 @@ test_that("parser extracts post_id and text from x-search-response.json", {
   testthat::expect_true(is.list(result), info = "result is a list")
   testthat::expect_true("post_id" %in% names(result), info = "result has post_id")
   testthat::expect_true("text" %in% names(result), info = "result has text")
+  testthat::expect_true("author_id" %in% names(result), info = "result has author_id")
+  testthat::expect_true("username" %in% names(result), info = "result has username")
+  testthat::expect_true("display_name" %in% names(result), info = "result has display_name")
   testthat::expect_true(length(result$post_id) >= 1, info = "at least one post returned")
   testthat::expect_true(length(result$text) >= 1, info = "at least one text returned")
-  testthat::expect_equal(length(result$post_id), length(result$text), info = "post_id and text have same length")
+  testthat::expect_equal(
+    length(result$post_id), length(result$text),
+    info = "post_id and text have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$author_id),
+    info = "post_id and author_id have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$username),
+    info = "post_id and username have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$display_name),
+    info = "post_id and display_name have same length"
+  )
 })
 
 # --- Test 2: post_id values are character strings ---
 test_that("post_id values are character strings, not numeric", {
   fixture_path <- file.path(
-    dirname(dirname(getwd())),
+    testthat::test_path("..", ".."),
     "inst", "tests", "fixtures", "x-search-response.json"
   )
 
@@ -50,7 +69,7 @@ test_that("post_id values are character strings, not numeric", {
 # --- Test 3: Extracted post_ids match the fixture's rest_id values ---
 test_that("extracted post_ids match fixture rest_id values exactly", {
   fixture_path <- file.path(
-    dirname(dirname(getwd())),
+    testthat::test_path("..", ".."),
     "inst", "tests", "fixtures", "x-search-response.json"
   )
 
@@ -75,7 +94,7 @@ test_that("extracted post_ids match fixture rest_id values exactly", {
 # --- Test 4: Extracted texts match the fixture's full_text values ---
 test_that("extracted text values match fixture full_text values exactly", {
   fixture_path <- file.path(
-    dirname(dirname(getwd())),
+    testthat::test_path("..", ".."),
     "inst", "tests", "fixtures", "x-search-response.json"
   )
 
@@ -187,4 +206,111 @@ test_that(".rx_find_tweet_result returns NULL when nesting is missing", {
   result <- xtweetsR:::.rx_find_tweet_result(valid_entry)
   testthat::expect_true(is.list(result), info = "valid entry returns a list")
   testthat::expect_equal(result$rest_id, "456", info = "rest_id is preserved")
+})
+
+# --- Test 8: Author fields extracted correctly from fixture ---
+test_that("author fields are extracted correctly from x-search-response.json", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  result <- xtweetsR:::.rx_parse_posts(parsed)
+
+  testthat::expect_true(
+    all(is.character(result$author_id)),
+    info = "all author_id values are character"
+  )
+  testthat::expect_true(
+    all(is.character(result$username)),
+    info = "all username values are character"
+  )
+  testthat::expect_true(
+    all(is.character(result$display_name)),
+    info = "all display_name values are character"
+  )
+  testthat::expect_equal(
+    result$username,
+    c("rstudio", "rstats_david", "landc"),
+    info = "usernames match fixture"
+  )
+  testthat::expect_equal(
+    result$display_name,
+    c("RStudio", "David Robinson", "Lionel Henry"),
+    info = "display names match fixture"
+  )
+})
+
+# --- Test 9: Missing author fields return NA ---
+test_that("missing author fields return NA rather than crashing", {
+  # Tweet entry without core/user_results (no author data).
+  response_no_author <- list(
+    data = list(
+      timeline = list(
+        instructions = list(
+          list(
+            type = "TimelineAddEntries",
+            entries = list(
+              list(
+                entryId = "tweet-100",
+                content = list(
+                  itemContent = list(
+                    tweet_results = list(
+                      result = list(
+                        rest_id = "100",
+                        legacy = list(full_text = "Hello without author")
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+
+  result <- xtweetsR:::.rx_parse_posts(response_no_author)
+
+  testthat::expect_equal(length(result$post_id), 1L, info = "post extracted despite missing author")
+  testthat::expect_equal(length(result$text), 1L, info = "text extracted despite missing author")
+  testthat::expect_true(
+    all(is.na(result$author_id)),
+    info = "author_id is NA when core is missing"
+  )
+  testthat::expect_true(
+    all(is.na(result$username)),
+    info = "username is NA when core is missing"
+  )
+  testthat::expect_true(
+    all(is.na(result$display_name)),
+    info = "display_name is NA when core is missing"
+  )
+})
+
+# --- Test 10: Author extraction helpers handle edge cases ---
+test_that("author extraction helpers return NULL for invalid input", {
+  testthat::expect_null(xtweetsR:::.rx_extract_author_id(NULL), info = "NULL result returns NULL")
+  testthat::expect_null(xtweetsR:::.rx_extract_author_id(list()), info = "empty list returns NULL")
+  testthat::expect_null(xtweetsR:::.rx_extract_author_id(list(core = NULL)), info = "no core returns NULL")
+
+  testthat::expect_null(xtweetsR:::.rx_extract_username(NULL), info = "NULL result returns NULL")
+  testthat::expect_null(xtweetsR:::.rx_extract_username(list()), info = "empty list returns NULL")
+
+  testthat::expect_null(xtweetsR:::.rx_extract_display_name(NULL), info = "NULL result returns NULL")
+  testthat::expect_null(xtweetsR:::.rx_extract_display_name(list()), info = "empty list returns NULL")
+})
+
+# --- Test 11: Empty response returns all five empty vectors ---
+test_that("empty response returns all five empty vectors", {
+  result_null <- xtweetsR:::.rx_parse_posts(NULL)
+  testthat::expect_equal(length(result_null$post_id), 0L, info = "NULL returns empty post_id")
+  testthat::expect_equal(length(result_null$text), 0L, info = "NULL returns empty text")
+  testthat::expect_equal(length(result_null$author_id), 0L, info = "NULL returns empty author_id")
+  testthat::expect_equal(length(result_null$username), 0L, info = "NULL returns empty username")
+  testthat::expect_equal(length(result_null$display_name), 0L, info = "NULL returns empty display_name")
 })

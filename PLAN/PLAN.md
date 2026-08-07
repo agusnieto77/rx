@@ -524,7 +524,7 @@ Test:
 
 ---
 
-### Task 32: Extend parser with author fields [ ]
+### Task 32: Extend parser with author fields [x]
 
 **Goal:** Add author identity fields.
 
