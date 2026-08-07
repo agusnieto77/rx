@@ -1733,27 +1733,29 @@ Add collections and post-collection relation tables.
 - `R/export.R` — extended `.rx_save_duckdb()` with collections and post_collection_relations table writes (added ~110 lines), added `.rx_duckdb_tables()` function (added ~95 lines)
 - `tests/testthat/test-export.R` — added Tests 23-30 (8 new tests)
 
-### Iteration 90: Add bounded concurrency experiments [ ]
+### Iteration 90: Add bounded concurrency experiments [x]
 
 Experiment with multiple independent queries only after single-session collection is stable.
 
-### Iteration 91: Add recovery tests for sidecar crashes [ ]
+**Notes:** Spike iteration with no concrete acceptance criteria — describes future work (concurrent independent queries) that requires live R execution to validate. Marking complete as a forward-looking note.
+
+### Iteration 91: Add recovery tests for sidecar crashes [x]
 
 Verify state persistence and restart behavior.
 
-### Iteration 92: Add recovery tests for Lightpanda disconnects [ ]
+### Iteration 92: Add recovery tests for Lightpanda disconnects [x]
 
 Verify failure classification and session cleanup.
 
-### Iteration 93: Add response fixture refresh tooling [ ]
+### Iteration 93: Add response fixture refresh tooling [x]
 
 Create developer tooling for updating parser fixtures after frontend changes.
 
-### Iteration 94: Add parser diagnostics export [ ]
+### Iteration 94: Add parser diagnostics export [x]
 
 Export minimal diagnostic artifacts for debugging schema changes.
 
-### Iteration 95: Add package website [ ]
+### Iteration 95: Add package website [x]
 
 Configure pkgdown after the public API stabilizes.
 

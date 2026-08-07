@@ -17,32 +17,32 @@
                       "core": {
                         "user_results": {
                           "result": {
-                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMzAw",
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAzMDA=",
                             "legacy": {
-                              "screen_name": "data_scientist_01",
-                              "name": "Data Scientist"
+                              "screen_name": "tech_enthusiast",
+                              "name": "Tech Enthusiast"
                             }
                           }
                         }
                       },
                       "legacy": {
-                        "created_at": "Wed Aug 06 08:00:00 +0000 2026",
-                        "full_text": "This is a great analysis! https://x.com/rstudio/status/1900000000000000100",
+                        "created_at": "Tue Aug 05 12:00:00 +0000 2026",
+                        "full_text": "This is a brilliant post about R programming! Everyone should read this.",
                         "conversation_id_str": "1900000000000000300",
-                        "reply_count": 0,
-                        "retweet_count": 3,
-                        "favorite_count": 12,
+                        "quoted_status_id_str": "1900000000000000100",
+                        "reply_count": 3,
+                        "retweet_count": 15,
+                        "favorite_count": 45,
                         "quote_count": 0,
-                        "bookmark_count": 1,
-                        "views": { "count": "1500" },
+                        "bookmark_count": 7,
+                        "views": { "count": "8900" },
                         "entities": {
                           "hashtags": [],
-                          "user_mentions": [],
-                          "urls": [
-                            { "url": "https://t.co/xyz789", "expanded_url": "https://x.com/rstudio/status/1900000000000000100" }
-                          ]
-                        },
-                        "quoted_status_id_str": "1900000000000000100"
+                          "user_mentions": [
+                            { "screen_name": "rstudio", "name": "RStudio", "id_str": "910000000000000100" }
+                          ],
+                          "urls": []
+                        }
                       }
                     }
                   }
@@ -62,27 +62,31 @@
                       "core": {
                         "user_results": {
                           "result": {
-                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMzAx",
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAzMDE=",
                             "legacy": {
-                              "screen_name": "r_community",
-                              "name": "R Community"
+                              "screen_name": "data_nerd",
+                              "name": "Data Nerd"
                             }
                           }
                         }
                       },
                       "legacy": {
-                        "created_at": "Wed Aug 06 09:00:00 +0000 2026",
-                        "full_text": "Agree with this perspective on browser automation in R. The future is bright!",
+                        "created_at": "Tue Aug 05 12:30:00 +0000 2026",
+                        "full_text": "Just discovered this thread about data visualization in R. Amazing content!",
                         "conversation_id_str": "1900000000000000301",
                         "reply_count": 1,
-                        "retweet_count": 5,
-                        "favorite_count": 25,
+                        "retweet_count": 2,
+                        "favorite_count": 10,
                         "quote_count": 0,
-                        "bookmark_count": 2,
-                        "views": { "count": "3200" },
+                        "bookmark_count": 1,
+                        "views": { "count": "1500" },
                         "entities": {
-                          "hashtags": [],
-                          "user_mentions": [],
+                          "hashtags": [
+                            { "text": "RStats" }
+                          ],
+                          "user_mentions": [
+                            { "screen_name": "rstudio", "name": "RStudio", "id_str": "910000000000000100" }
+                          ],
                           "urls": []
                         }
                       }
@@ -104,32 +108,30 @@
                       "core": {
                         "user_results": {
                           "result": {
-                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMzAy",
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAzMDI=",
                             "legacy": {
-                              "screen_name": "hadleywickham",
-                              "name": "Hadley Wickham"
+                              "screen_name": "r_developer",
+                              "name": "R Developer"
                             }
                           }
                         }
                       },
                       "legacy": {
-                        "created_at": "Wed Aug 06 10:00:00 +0000 2026",
-                        "full_text": "Finally someone building proper tooling for this! https://x.com/rstudio/status/1900000000000000100",
+                        "created_at": "Tue Aug 05 13:00:00 +0000 2026",
+                        "full_text": "Absolutely agree with this take on tidyverse best practices. Sharing with the team.",
                         "conversation_id_str": "1900000000000000302",
-                        "reply_count": 2,
-                        "retweet_count": 15,
-                        "favorite_count": 80,
+                        "quoted_status_id_str": "1900000000000000100",
+                        "reply_count": 0,
+                        "retweet_count": 8,
+                        "favorite_count": 22,
                         "quote_count": 1,
-                        "bookmark_count": 10,
-                        "views": { "count": "12000" },
+                        "bookmark_count": 4,
+                        "views": { "count": "5600" },
                         "entities": {
                           "hashtags": [],
                           "user_mentions": [],
-                          "urls": [
-                            { "url": "https://t.co/abc456", "expanded_url": "https://x.com/rstudio/status/1900000000000000100" }
-                          ]
-                        },
-                        "quoted_status_id_str": "1900000000000000100"
+                          "urls": []
+                        }
                       }
                     }
                   }
@@ -149,28 +151,33 @@
                       "core": {
                         "user_results": {
                           "result": {
-                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMzAz",
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAzMDM=",
                             "legacy": {
-                              "screen_name": "tech_blogger",
-                              "name": "Tech Blogger"
+                              "screen_name": "stats_guru",
+                              "name": "Stats Guru"
                             }
                           }
                         }
                       },
                       "legacy": {
-                        "created_at": "Wed Aug 06 11:00:00 +0000 2026",
-                        "full_text": "Interesting thread on data science tools. Worth checking out for anyone doing web scraping.",
+                        "created_at": "Tue Aug 05 13:30:00 +0000 2026",
+                        "full_text": "The new R package ecosystem keeps getting better. Great to see the community growing.",
                         "conversation_id_str": "1900000000000000303",
-                        "reply_count": 0,
-                        "retweet_count": 8,
-                        "favorite_count": 35,
+                        "reply_count": 2,
+                        "retweet_count": 4,
+                        "favorite_count": 18,
                         "quote_count": 0,
-                        "bookmark_count": 5,
-                        "views": { "count": "5600" },
+                        "bookmark_count": 2,
+                        "views": { "count": "3200" },
                         "entities": {
-                          "hashtags": [],
+                          "hashtags": [
+                            { "text": "rstats" },
+                            { "text": "dataScience" }
+                          ],
                           "user_mentions": [],
-                          "urls": []
+                          "urls": [
+                            { "url": "https://t.co/xyz789", "expanded_url": "https://rstats.example.com/ecosystem" }
+                          ]
                         }
                       }
                     }
@@ -191,32 +198,32 @@
                       "core": {
                         "user_results": {
                           "result": {
-                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMzA0",
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAzMDQ=",
                             "legacy": {
-                              "screen_name": "rstats_david",
-                              "name": "David Robinson"
+                              "screen_name": "hadleywickham",
+                              "name": "Hadley Wickham"
                             }
                           }
                         }
                       },
                       "legacy": {
-                        "created_at": "Wed Aug 06 12:00:00 +0000 2026",
-                        "full_text": "This is exactly what I've been looking for! https://x.com/rstudio/status/1900000000000000100",
+                        "created_at": "Tue Aug 05 14:00:00 +0000 2026",
+                        "full_text": "This is exactly the kind of content the R community needs more of. Well said!",
                         "conversation_id_str": "1900000000000000304",
-                        "reply_count": 1,
-                        "retweet_count": 7,
-                        "favorite_count": 45,
-                        "quote_count": 0,
-                        "bookmark_count": 8,
-                        "views": { "count": "7800" },
+                        "quoted_status_id_str": "1900000000000000100",
+                        "reply_count": 5,
+                        "retweet_count": 20,
+                        "favorite_count": 89,
+                        "quote_count": 2,
+                        "bookmark_count": 12,
+                        "views": { "count": "15000" },
                         "entities": {
                           "hashtags": [],
-                          "user_mentions": [],
-                          "urls": [
-                            { "url": "https://t.co/def789", "expanded_url": "https://x.com/rstudio/status/1900000000000000100" }
-                          ]
-                        },
-                        "quoted_status_id_str": "1900000000000000100"
+                          "user_mentions": [
+                            { "screen_name": "rstudio", "name": "RStudio", "id_str": "910000000000000100" }
+                          ],
+                          "urls": []
+                        }
                       }
                     }
                   }
