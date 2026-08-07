@@ -82,7 +82,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 4: Add the first package smoke test
+### Task 4: Add the first package smoke test [DONE]
 
 **Goal:** Verify the test infrastructure itself works.
 

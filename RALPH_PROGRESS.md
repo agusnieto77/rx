@@ -55,3 +55,8 @@ Started: 2026-08-07
 - Node.js v24 is very recent. tsc not globally installed but can be added via npm.
 - R package dependencies (testthat, roxygen2, tibble) need to be installed.
 - Minimal repo — clean slate for building the package.
+
+## Task 4: Add the first package smoke test - COMPLETED
+
+- Created `tests/testthat/test-smoke.R` with a trivial smoke test (`requireNamespace("xtweetsR")`).
+- `testthat::test_local()` executes and passes successfully.
