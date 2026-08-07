@@ -48,7 +48,10 @@ x_doctor <- function() {
 
   # -- 2. Node.js -------------------------------------------------------------
   checks <- c(checks, "nodejs")
-  node_out <- system2("node", "--version", stdout = TRUE, stderr = TRUE)
+  node_out <- tryCatch(
+    system2("node", "--version", stdout = TRUE, stderr = TRUE),
+    error = function(e) character(0)
+  )
   if (length(node_out) > 0 && nzchar(trimws(node_out[[1]]))) {
     results <- c(results, "ok")
     details <- c(details, trimws(node_out[[1]]))
@@ -75,6 +78,7 @@ x_doctor <- function() {
     details <- c(details, "skipped -- sidecar files not present")
   } else {
     ping_result <- NULL
+    proc <- NULL
     tryCatch({
       proc <- .rx_start_sidecar(sidecar_path = sc_dir)
       if (proc$is_alive()) {
@@ -82,7 +86,6 @@ x_doctor <- function() {
           .rx_send_request(proc, "ping", reqId = function() 1L),
           error = function(e) list(error = list(code = "PING_ERROR", message = e$message))
         )
-        .rx_stop_sidecar(proc)
         ping_result <- resp
       } else {
         # processx segfault on some platforms — sidecar can't be started.
@@ -93,6 +96,11 @@ x_doctor <- function() {
       results <<- c(results, "n/a")
       details <<- c(details, paste0("sidecar ping unavailable: ", e$message))
       return(NULL)
+    }, finally = {
+      # Always clean up the sidecar process to prevent orphan leaks.
+      # proc may be NULL if .rx_start_sidecar threw, or non-NULL if it
+      # succeeded but an inner call (proc$is_alive, .rx_send_request) failed.
+      tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
     })
     if (!is.null(ping_result)) {
       if (!is.null(ping_result$error)) {

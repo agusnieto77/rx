@@ -248,6 +248,13 @@ export class DefaultCdpConnection {
       return;
     }
 
+    // Guard against primitives (42, "str", null, []) — the "in" operator
+    // throws TypeError on non-objects, which would kill the event handler.
+    if (typeof msg !== "object" || msg === null || Array.isArray(msg)) {
+      log("debug", "non-object CDP message:", JSON.stringify(msg));
+      return;
+    }
+
     if ("id" in msg && msg.id !== undefined) {
       // Response — match to pending command.
       const id = typeof msg.id === "number" ? msg.id : -1;

@@ -698,14 +698,19 @@ async function handleEvaluate(id: unknown, params?: unknown): Promise<void> {
 // ── domInspect handler ────────────────────────────────────────────────
 
 async function handleDomInspect(id: unknown, params?: unknown): Promise<void> {
-  // Validate params — selector is optional.
+  // Validate params — selector must be a single non-empty string, or absent.
   let selector: string | null = null;
   if (typeof params === "object" && params !== null) {
     const p = params as Record<string, unknown>;
     if (typeof p.selector === "string" && p.selector.length > 0) {
       selector = p.selector;
+    } else if (p.selector !== undefined && p.selector !== null) {
+      // Non-string, empty, or multi-element selector — reject instead of
+      // silently falling back to full HTML, which confuses debug users.
+      respondError(id, "INVALID_REQUEST", "selector must be a single non-empty string or omitted");
+      return;
     }
-    // If selector is present but empty, treat as null (full HTML).
+    // selector === undefined or null → full HTML mode (null default)
   }
 
   if (cdpConnection === null || !cdpConnection.isConnected) {

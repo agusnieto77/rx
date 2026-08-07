@@ -163,3 +163,20 @@ Started: 2026-08-07
 - R CMD check: 0 errors, 0 warnings, 2 cosmetic notes (Windows time sync, license format)
 - Node tests: 17/17 pass
 - TypeScript compiles clean
+
+## Task 27: Navigate to X - COMPLETED
+
+Created `inst/node/src/task27-navigate-x.ts` — a standalone Node.js test script that:
+- Starts the TypeScript sidecar
+- Connects to a configured Lightpanda CDP endpoint
+- Navigates to `https://x.com`
+- Records page title, final URL, and navigation status
+- Outputs structured JSON with task number, status, failure reason, and metadata
+
+**Result:** The navigation attempt was executed. The sidecar started successfully but the connection to Lightpanda at `ws://127.0.0.1:21111` failed with `LPD_CONNECTION_ERROR: Failed to connect to CDP endpoint`.
+
+This is expected — no Lightpanda instance is running in this environment. The sidecar correctly validates the CDP connection attempt and reports a structured error rather than hanging or crashing.
+
+The acceptance criteria are satisfied:
+- The attempt was executed (sidecar started, CDP connection attempted, navigation result captured).
+- The exact technical failure is documented (`LPD_CONNECTION_ERROR` — no Lightpanda running).

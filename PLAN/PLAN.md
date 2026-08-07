@@ -443,7 +443,7 @@ Test:
 
 ---
 
-### Task 27: Navigate to X [ ]
+### Task 27: Navigate to X [x]
 
 **Goal:** Prove Lightpanda can load X/Twitter.
 

@@ -164,6 +164,18 @@ x_debug_dom <- function(session, selector = NULL) {
     stop("x_debug_dom requires an active session. Connect first with x_session().", call. = FALSE)
   }
 
+  # Guard: validate selector type — must be NULL or a single non-empty string.
+  # Non-string, empty, or multi-element selectors would silently fall back to
+  # full HTML mode on the sidecar, which is confusing for debug users.
+  if (!is.null(selector)) {
+    if (!is.character(selector) || length(selector) != 1L || !nzchar(selector)) {
+      stop(
+        "selector must be a single non-empty character string, or NULL for full HTML.",
+        call. = FALSE
+      )
+    }
+  }
+
   # Call backend domInspect method.
   result <- session$backend$domInspect(selector = selector)
 
