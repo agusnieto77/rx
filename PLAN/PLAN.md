@@ -611,7 +611,7 @@ Extract when available:
 
 ---
 
-### Task 36: Add canonical post normalization [ ]
+### Task 36: Add canonical post normalization [x]
 
 **Goal:** Convert parsed raw posts to one stable schema.
 

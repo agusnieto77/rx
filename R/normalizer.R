@@ -1,0 +1,219 @@
+# Internal: Canonical post normalizer
+#
+# This module converts parsed raw posts (the list-of-vectors output from
+# `.rx_parse_posts`) into one stable canonical schema.  The parser and
+# normalizer are deliberately separate:
+#
+#   parser  -> list of 18 named character/integer/logical vectors
+#   normalizer -> validated, type-coerced, consistently-represented output
+#
+# Every output row (column in the list) has the same columns.
+# Missing values are represented consistently:
+#   - character fields: NA_character_
+#   - integer fields:   0L
+#   - logical fields:   FALSE
+#
+# @name normalizer
+# @aliases normalizer
+# @keywords internal
+# @examples
+#   # Internal use only — not exported.
+#   # parsed <- xtweetsR:::.rx_parse_posts(response)
+#   # normalized <- xtweetsR:::.rx_normalize_posts(parsed)
+NULL
+
+#' Canonical field schema for post normalizer.
+#'
+# Defines the authoritative field order, types, and NA defaults used by
+# `.rx_normalize_posts()`.  The normalizer enforces this schema.
+#'
+#' Fields:
+#'   - post_id — character
+#'   - text — character
+#'   - author_id — character
+#'   - username — character
+#'   - display_name — character
+#'   - created_at — character
+#'   - reply_count — integer
+#'   - repost_count — integer
+#'   - like_count — integer
+#'   - quote_count — integer
+#'   - bookmark_count — integer
+#'   - view_count — integer
+#'   - conversation_id — character
+#'   - is_reply — logical
+#'   - is_repost — logical
+#'   - is_quote — logical
+#'   - reply_to_post_id — character
+#'   - quoted_post_id — character
+#'
+#' @return A character vector of 18 field names in canonical order.
+#' @keywords internal
+.rx_canonical_fields <- function() {
+  c(
+    "post_id", "text",
+    "author_id", "username", "display_name",
+    "created_at",
+    "reply_count", "repost_count", "like_count", "quote_count",
+    "bookmark_count", "view_count",
+    "conversation_id",
+    "is_reply", "is_repost", "is_quote",
+    "reply_to_post_id", "quoted_post_id"
+  )
+}
+
+#' Type map for the canonical schema.
+#'
+# Returns a named character vector mapping each canonical field to its
+# expected R type ("character", "integer", or "logical").
+#'
+#' @return A named character vector.
+#' @noRd
+.rx_type_map <- function() {
+  c(
+    post_id = "character", text = "character",
+    author_id = "character", username = "character",
+    display_name = "character", created_at = "character",
+    reply_count = "integer", repost_count = "integer",
+    like_count = "integer", quote_count = "integer",
+    bookmark_count = "integer", view_count = "integer",
+    conversation_id = "character",
+    is_reply = "logical", is_repost = "logical", is_quote = "logical",
+    reply_to_post_id = "character", quoted_post_id = "character"
+  )
+}
+
+#' NA defaults for the canonical schema.
+#'
+# Returns a named list mapping each canonical field to its default
+# "empty" value when the input vector is shorter than expected.
+#'
+#' @return A named list of default values.
+#' @noRd
+.rx_na_defaults <- function() {
+  c(
+    post_id = NA_character_, text = NA_character_,
+    author_id = NA_character_, username = NA_character_,
+    display_name = NA_character_, created_at = NA_character_,
+    reply_count = 0L, repost_count = 0L,
+    like_count = 0L, quote_count = 0L,
+    bookmark_count = 0L, view_count = 0L,
+    conversation_id = NA_character_,
+    is_reply = FALSE, is_repost = FALSE, is_quote = FALSE,
+    reply_to_post_id = NA_character_, quoted_post_id = NA_character_
+  )
+}
+
+#' Normalize parsed posts into a canonical schema.
+#'
+# Takes the list-of-vectors output from `.rx_parse_posts()` and:
+# 1. Validates that all canonical fields are present.
+# 2. Coerces each field to its expected type.
+# 3. Pads shorter vectors with consistent NA defaults.
+# 4. Reorders fields to canonical order.
+#
+# This is the bridge between the parser's raw extraction and the tibble
+# output expected by downstream code (Task 37).
+#'
+#' @param parsed A list as returned by `.rx_parse_posts()`.
+#' @return A list with the same 18 fields in canonical order, each coerced
+#'   to the expected type and padded to the longest length with NA defaults.
+#'   Returns an empty normalized list (zero-length vectors) when `parsed`
+#'   is NULL, empty, or contains no `post_id` field.
+#'
+#' @keywords internal
+.rx_normalize_posts <- function(parsed) {
+  fields <- .rx_canonical_fields()
+  type_map <- .rx_type_map()
+  na_defs <- .rx_na_defaults()
+
+  # Handle NULL / empty / unexpected input early.
+  if (!is.list(parsed) || length(parsed) == 0L) {
+    return(.rx_empty_normalized(fields, na_defs))
+  }
+
+  # If the parser returned nothing meaningful, short-circuit.
+  if (!"post_id" %in% names(parsed) || length(parsed$post_id) == 0L) {
+    return(.rx_empty_normalized(fields, na_defs))
+  }
+
+  n <- length(parsed$post_id)
+
+  # Build normalized output.
+  result <- vector("list", length(fields))
+  names(result) <- fields
+
+  for (field in fields) {
+    raw <- parsed[[field]]
+
+    # Missing field -> fill with NA default.
+    if (is.null(raw)) {
+      result[[field]] <- .rx_fill(field, n, na_defs[[field]])
+      next
+    }
+
+    # Coerce to expected type.
+    coerced <- .rx_coerce(raw, type_map[[field]], n, na_defs[[field]])
+    result[[field]] <- coerced
+  }
+
+  result
+}
+
+#' Create an empty normalized list with zero-length canonical fields.
+#'
+# @param fields The canonical field names.
+# @param na_defs The NA defaults (unused here, but kept for symmetry).
+#' @return A list with all fields set to zero-length vectors of the
+#'   appropriate type.
+#' @noRd
+.rx_empty_normalized <- function(fields, na_defs) {
+  result <- vector("list", length(fields))
+  names(result) <- fields
+  for (field in fields) {
+    type <- .rx_type_map()[[field]]
+    result[[field]] <- switch(type,
+      character = character(0),
+      integer = integer(0),
+      logical = logical(0)
+    )
+  }
+  result
+}
+
+#' Coerce a raw vector to its expected type, padding to target length.
+#'
+# @param raw The raw vector from the parser.
+# @param expected_type One of "character", "integer", "logical".
+# @param n The target length (from post_id count).
+# @param na_val The NA default for padding.
+#' @return A vector of the expected type, length `n`.
+#' @noRd
+.rx_coerce <- function(raw, expected_type, n, na_val) {
+  # Truncate or pad to match post_id length.
+  if (length(raw) > n) {
+    raw <- raw[seq_len(n)]
+  }
+  if (length(raw) < n) {
+    raw <- c(raw, rep(na_val, n - length(raw)))
+  }
+
+  switch(expected_type,
+    character = {
+      raw <- as.character(raw)
+      raw[is.na(raw)] <- na_val
+      raw
+    },
+    integer = {
+      raw <- as.integer(raw)
+      raw[is.na(raw)] <- na_val
+      raw
+    },
+    logical = {
+      raw <- as.logical(raw)
+      raw[is.na(raw)] <- na_val
+      raw
+    },
+    raw
+  )
+}
