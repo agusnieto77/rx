@@ -96,7 +96,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 5: Add package-level documentation
+### Task 5: Add package-level documentation [DONE]
 
 **Goal:** Avoid missing package documentation later.
 
@@ -110,7 +110,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 6: Create the TypeScript sidecar skeleton
+### Task 6: Create the TypeScript sidecar skeleton [DONE]
 
 **Goal:** Create the minimal Node/TypeScript component without browser logic.
 
@@ -128,7 +128,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 7: Define the R-to-sidecar protocol
+### Task 7: Define the R-to-sidecar protocol [DONE]
 
 **Goal:** Establish one tiny request/response contract.
 
@@ -147,7 +147,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 8: Add a `ping` sidecar method
+### Task 8: Add a `ping` sidecar method [DONE]
 
 **Goal:** Prove bidirectional protocol behavior.
 
@@ -161,7 +161,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 9: Add the minimal R sidecar client
+### Task 9: Add the minimal R sidecar client [DONE]
 
 **Goal:** Allow R to start the sidecar and issue one request.
 
@@ -179,7 +179,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 10: Add sidecar protocol tests
+### Task 10: Add sidecar protocol tests [DONE]
 
 **Goal:** Lock down the R ↔ TypeScript boundary.
 
@@ -195,7 +195,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 11: Create the browser backend interface
+### Task 11: Create the browser backend interface [DONE]
 
 **Goal:** Separate the public R API from Lightpanda-specific implementation.
 
@@ -214,7 +214,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 12: Add Lightpanda configuration discovery
+### Task 12: Add Lightpanda configuration discovery [DONE]
 
 **Goal:** Resolve how the package finds Lightpanda.
 
@@ -231,7 +231,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 13: Implement Lightpanda connection in the sidecar
+### Task 13: Implement Lightpanda connection in the sidecar [DONE]
 
 **Goal:** Connect the sidecar to an already-running Lightpanda CDP endpoint.
 
@@ -245,7 +245,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 14: Implement browser close
+### Task 14: Implement browser close [DONE]
 
 **Goal:** Cleanly release Lightpanda-related resources.
 
@@ -259,7 +259,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 15: Add a local dynamic test page
+### Task 15: Add a local dynamic test page [DONE]
 
 **Goal:** Test browser automation without depending on X.
 
@@ -273,7 +273,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 16: Implement browser navigation
+### Task 16: Implement browser navigation [DONE]
 
 **Goal:** Navigate Lightpanda to the local dynamic test page.
 
@@ -287,7 +287,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 17: Implement JavaScript evaluation
+### Task 17: Implement JavaScript evaluation [DONE]
 
 **Goal:** Execute JavaScript in the loaded page.
 
@@ -302,7 +302,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 18: Create `x_session()`
+### Task 18: Create `x_session()` [DONE]
 
 **Goal:** Expose the first public R API.
 
