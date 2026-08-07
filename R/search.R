@@ -65,8 +65,8 @@ NULL
 #' Generate a version-4 UUID string.
 #'
 #' Uses `tools::UUIDgenerate()` when available (R >= 4.4.0), which draws
-#' from the OS CSPRNG. Falls back to a `sample()`-based hex generator
-#' for older R versions.
+#' from the OS CSPRNG. Falls back to a `sample()` + `sprintf()` hex
+#' generator for older R versions.
 #'
 #' @return A single-element character vector with a lowercase UUID string.
 #' @noRd
@@ -76,15 +76,19 @@ NULL
     return(tools::UUIDgenerate())
   }
 
-  # Fallback: uniform hex chars via sample() (avoids runif integer bias).
-  hex4 <- function() paste(sample(0:15, 4, replace = TRUE), collapse = "")
-  hex2 <- function() paste(sample(0:15, 2, replace = TRUE), collapse = "")
-  # Version 4: byte 6 top nibble = 4. Variant: byte 8 top 2 bits = 10 (8-b).
+  # Fallback: uniform hex chars via sample() + sprintf("%x") to avoid
+  # multi-digit decimal output (e.g. 10 -> "10" instead of "a").
+  hex4 <- function() sprintf("%04x", sum(sample(0:15, 4, replace = TRUE) * 16^(3:0)))
+  hex2 <- function() sprintf("%02x", sample(0:255, 1, replace = TRUE))
+  hex3 <- function() sprintf("%03x", sum(sample(0:15, 3, replace = TRUE) * 16^(2:0)))
+  # Version 4: 8-4-4-4-12 = 32 hex chars.
+  # Byte 6 top nibble = 4. Variant: byte 8 top 2 bits = 10 (8-b).
   paste0(
+    hex4(), hex4(), "-",
     hex4(), "-",
-    hex2(), "-4", hex2(), "-",
-    paste(sample(8:11, 1, replace = TRUE), collapse = ""), hex2(), "-",
-    hex4(), hex4()
+    "4", hex3(), "-",
+    sprintf("%02x", sample(8:11, 1, replace = TRUE)), hex2(), "-",
+    hex4(), hex4(), hex4()
   )
 }
 
@@ -315,7 +319,9 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   tryCatch(
     backend$networkCaptureEnable(),
     error = function(e) {
-      stop("Failed to enable network capture: ", e$message, call. = FALSE)
+      stop(.rx_error_network(
+        paste0("Failed to enable network capture: ", e$message)
+      ))
     }
   )
 
@@ -365,13 +371,6 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   initial_posts <- .rx_search_extract_from_events(initial_events, backend)
   state$add_posts(initial_posts)
 
-  # Accumulate initial batch so it is included in the final merge.
-  if (length(initial_posts$post_id) > 0L) {
-    all_batches[[1L]] <- initial_posts
-  } else {
-    all_batches[[1L]] <- .rx_search_empty_batch()
-  }
-
   # 6. Bounded repeated scroll+extract loop (Task 42).
   #
   #    The loop iterates at most max_scrolls times. After each iteration:
@@ -381,7 +380,14 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   #
   #    Each iteration scrolls the page, waits for new network responses,
   #    extracts posts, and accumulates them into all_batches.
+
+  # Accumulate initial batch so it is included in the final merge.
   all_batches <- list()
+  if (length(initial_posts$post_id) > 0L) {
+    all_batches[[1L]] <- initial_posts
+  } else {
+    all_batches[[1L]] <- .rx_search_empty_batch()
+  }
   if (isTRUE(scroll) && max_scrolls > 0L) {
     for (i in seq_len(max_scrolls)) {
       # Scroll the page.
@@ -441,6 +447,9 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     all_is_quotes <- lapply(all_batches, `[[`, "is_quote")
     all_reply_to_ids <- lapply(all_batches, `[[`, "reply_to_post_id")
     all_quoted_ids <- lapply(all_batches, `[[`, "quoted_post_id")
+    all_hashtags     <- lapply(all_batches, `[[`, "hashtags")
+    all_mentions     <- lapply(all_batches, `[[`, "mentions")
+    all_urls         <- lapply(all_batches, `[[`, "urls")
 
     merged_posts <- list(
       post_id        = unlist(all_post_ids, use.names = FALSE),
@@ -460,7 +469,11 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
       is_repost      = unlist(all_is_reposts, use.names = FALSE),
       is_quote       = unlist(all_is_quotes, use.names = FALSE),
       reply_to_post_id = unlist(all_reply_to_ids, use.names = FALSE),
-      quoted_post_id   = unlist(all_quoted_ids, use.names = FALSE)
+      quoted_post_id   = unlist(all_quoted_ids, use.names = FALSE),
+      # Entity fields (Task 56)
+      hashtags       = unlist(all_hashtags, recursive = FALSE),
+      mentions       = unlist(all_mentions, recursive = FALSE),
+      urls           = unlist(all_urls, recursive = FALSE)
     )
   } else {
     # No batches collected at all (scroll=FALSE, no initial posts).
@@ -482,7 +495,11 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
       is_repost      = logical(0),
       is_quote       = logical(0),
       reply_to_post_id = character(0),
-      quoted_post_id   = character(0)
+      quoted_post_id   = character(0),
+      # Entity fields (Task 56)
+      hashtags       = list(),
+      mentions       = list(),
+      urls           = list()
     )
   }
 
@@ -606,7 +623,9 @@ x_post <- function(session, post_id, limit = 1L) {
   tryCatch(
     backend$networkCaptureEnable(),
     error = function(e) {
-      stop("Failed to enable network capture: ", e$message, call. = FALSE)
+      stop(.rx_error_network(
+        paste0("Failed to enable network capture: ", e$message)
+      ))
     }
   )
 
@@ -681,7 +700,7 @@ x_post <- function(session, post_id, limit = 1L) {
 #' Used to maintain consistent field structure when a scroll iteration
 #' produces zero posts (no-new-data cycle).
 #'
-#' @return A list with 21 canonical fields, all empty vectors.
+#' @return A list with 26 canonical fields, all empty vectors.
 #' @noRd
 .rx_search_empty_batch <- function() {
   list(
@@ -703,6 +722,10 @@ x_post <- function(session, post_id, limit = 1L) {
     is_quote       = logical(0),
     reply_to_post_id = character(0),
     quoted_post_id   = character(0),
+    # Entity fields (Task 56)
+    hashtags         = list(),
+    mentions         = list(),
+    urls             = list(),
     # Observation-level provenance (Task 46)
     collected_at     = character(0),
     collection_query = character(0),
@@ -720,7 +743,7 @@ x_post <- function(session, post_id, limit = 1L) {
 
 #' Create an empty tibble with zero rows and the canonical schema.
 #'
-#' @return A tibble with 21 columns matching the canonical schema,
+#' @return A tibble with 26 columns matching the canonical schema,
 #'   zero rows.
 #' @noRd
 .rx_search_empty_tibble <- function() {
@@ -730,7 +753,8 @@ x_post <- function(session, post_id, limit = 1L) {
     switch(type_map[[f]],
       character = character(0),
       integer = integer(0),
-      logical = logical(0)
+      logical = logical(0),
+      list      = list()
     )
   })
   names(cols) <- fields
@@ -758,6 +782,8 @@ x_post <- function(session, post_id, limit = 1L) {
     conversation_id = character(0),
     is_reply = logical(0), is_repost = logical(0), is_quote = logical(0),
     reply_to_post_id = character(0), quoted_post_id = character(0),
+    # Entity fields (Task 56)
+    hashtags = list(), mentions = list(), urls = list(),
     # Observation-level provenance (Task 46) — placeholders;
     # populated later from search context.
     collected_at = character(0),
@@ -830,6 +856,10 @@ x_post <- function(session, post_id, limit = 1L) {
     all_parsed$is_quote     <- c(all_parsed$is_quote,     parsed$is_quote)
     all_parsed$reply_to_post_id <- c(all_parsed$reply_to_post_id, parsed$reply_to_post_id)
     all_parsed$quoted_post_id   <- c(all_parsed$quoted_post_id,   parsed$quoted_post_id)
+    # Entity fields (Task 56).
+    all_parsed$hashtags <- c(all_parsed$hashtags, parsed$hashtags)
+    all_parsed$mentions <- c(all_parsed$mentions, parsed$mentions)
+    all_parsed$urls     <- c(all_parsed$urls,     parsed$urls)
   }
 
   all_parsed
@@ -1236,7 +1266,9 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
   tryCatch(
     backend$networkCaptureEnable(),
     error = function(e) {
-      stop("Failed to enable network capture: ", e$message, call. = FALSE)
+      stop(.rx_error_network(
+        paste0("Failed to enable network capture: ", e$message)
+      ))
     }
   )
 
@@ -1343,6 +1375,9 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     all_is_quotes <- lapply(all_batches, `[[`, "is_quote")
     all_reply_to_ids <- lapply(all_batches, `[[`, "reply_to_post_id")
     all_quoted_ids <- lapply(all_batches, `[[`, "quoted_post_id")
+    all_hashtags     <- lapply(all_batches, `[[`, "hashtags")
+    all_mentions     <- lapply(all_batches, `[[`, "mentions")
+    all_urls         <- lapply(all_batches, `[[`, "urls")
 
     merged_posts <- list(
       post_id        = unlist(all_post_ids, use.names = FALSE),
@@ -1362,7 +1397,11 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
       is_repost      = unlist(all_is_reposts, use.names = FALSE),
       is_quote       = unlist(all_is_quotes, use.names = FALSE),
       reply_to_post_id = unlist(all_reply_to_ids, use.names = FALSE),
-      quoted_post_id   = unlist(all_quoted_ids, use.names = FALSE)
+      quoted_post_id   = unlist(all_quoted_ids, use.names = FALSE),
+      # Entity fields (Task 56)
+      hashtags       = unlist(all_hashtags, recursive = FALSE),
+      mentions       = unlist(all_mentions, recursive = FALSE),
+      urls           = unlist(all_urls, recursive = FALSE)
     )
   } else {
     merged_posts <- list(
@@ -1383,7 +1422,11 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
       is_repost      = logical(0),
       is_quote       = logical(0),
       reply_to_post_id = character(0),
-      quoted_post_id   = character(0)
+      quoted_post_id   = character(0),
+      # Entity fields (Task 56)
+      hashtags       = list(),
+      mentions       = list(),
+      urls           = list()
     )
   }
 

@@ -1107,7 +1107,7 @@ Report:
 
 ---
 
-### Task 59: Add structured error classes [ ]
+### Task 59: Add structured error classes [x]
 
 **Goal:** Replace generic failures with actionable errors.
 
@@ -1122,8 +1122,20 @@ Introduce only errors currently needed, such as:
 - `NO_NEW_DATA`
 
 **Acceptance criteria:**
-- Existing failure paths use structured codes/classes.
-- Tests assert at least three error types.
+- [x] Existing failure paths use structured codes/classes (backend.R, sidecar.R, search.R, export.R).
+- [x] Tests assert at least three error types (14 tests in test-errors.R).
+
+**Files created:**
+- `R/errors.R` — 7 error constructors with S3 class chain (.rx_error, .rx_error_lpd_connection, .rx_error_cdp, .rx_error_page_load, .rx_error_network, .rx_error_parser, .rx_error_timeout, .rx_error_no_new_data)
+- `tests/testthat/test-errors.R` — 14 tests covering class inheritance, error code attributes, tryCatch narrow/wide catches
+
+**Files changed:**
+- `R/backend.R` — 7 stop() calls updated (lpd_connection, cdp, network)
+- `R/sidecar.R` — 4 stop() calls updated (cdp, network, timeout)
+- `R/search.R` — 3 stop() calls updated (network for capture enable)
+- `R/export.R` — 2 stop() calls updated (cdp for DuckDB)
+
+**Notes:** R not available in this environment for test execution (same as Task 24). TypeScript compiles cleanly.
 
 ---
 

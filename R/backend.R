@@ -120,10 +120,9 @@ NULL
       state$connected <- FALSE
       state$endpoint <- NULL
       backend$connected <- FALSE
-      stop(
-        paste0("CDP connection failed: ", resp$error$message),
-        call. = FALSE
-      )
+      stop(.rx_error_lpd_connection(
+        paste0("CDP connection failed: ", resp$error$message)
+      ))
     }
 
     # Guard against malformed response lacking a $result field.
@@ -133,7 +132,7 @@ NULL
       state$connected <- FALSE
       state$endpoint <- NULL
       backend$connected <- FALSE
-      stop("Malformed connect response from sidecar (missing result field)", call. = FALSE)
+      stop(.rx_error_cdp("Malformed connect response from sidecar (missing result field)"))
     }
 
     state$connected <- TRUE
@@ -151,7 +150,7 @@ NULL
   #' by the fact that navigate() is not intended for untrusted input.
   backend$navigate <- function(url) {
     if (!state$connected) {
-      stop("Backend not connected. Call connect() first.", call. = FALSE)
+      stop(.rx_error_cdp("Backend not connected. Call connect() first."))
     }
     resp <- tryCatch(
       .rx_send_request(state$.proc, "navigate", list(url = url), reqId = state$.reqId),
@@ -167,7 +166,7 @@ NULL
   #' Evaluate JavaScript in the current page. Returns list(result, error).
   backend$evaluate <- function(expr) {
     if (!state$connected) {
-      stop("Backend not connected. Call connect() first.", call. = FALSE)
+      stop(.rx_error_cdp("Backend not connected. Call connect() first."))
     }
     resp <- tryCatch(
       .rx_send_request(state$.proc, "evaluate", list(expr = expr), reqId = state$.reqId),
@@ -201,7 +200,7 @@ NULL
   #' @noRd
   backend$domInspect <- function(selector = NULL) {
     if (!state$connected) {
-      stop("Backend not connected. Call connect() first.", call. = FALSE)
+      stop(.rx_error_cdp("Backend not connected. Call connect() first."))
     }
     params <- if (is.null(selector)) list() else list(selector = selector)
     resp <- tryCatch(
@@ -225,17 +224,16 @@ NULL
   #' @noRd
   backend$networkCaptureEnable <- function() {
     if (!state$connected) {
-      stop("Backend not connected. Call connect() first.", call. = FALSE)
+      stop(.rx_error_cdp("Backend not connected. Call connect() first."))
     }
     resp <- tryCatch(
       .rx_send_request(state$.proc, "networkCaptureEnable", list(), reqId = state$.reqId),
       error = function(e) list(error = list(code = "SEND_REQUEST_ERROR", message = e$message))
     )
     if (!is.null(resp$error)) {
-      stop(
-        paste0("Network capture enable failed: ", resp$error$message),
-        call. = FALSE
-      )
+      stop(.rx_error_network(
+        paste0("Network capture enable failed: ", resp$error$message)
+      ))
     }
     invisible(TRUE)
   }
@@ -251,17 +249,16 @@ NULL
   #' @noRd
   backend$networkCaptureGet <- function() {
     if (!state$connected) {
-      stop("Backend not connected. Call connect() first.", call. = FALSE)
+      stop(.rx_error_cdp("Backend not connected. Call connect() first."))
     }
     resp <- tryCatch(
       .rx_send_request(state$.proc, "networkCaptureGet", list(), reqId = state$.reqId),
       error = function(e) list(error = list(code = "SEND_REQUEST_ERROR", message = e$message))
     )
     if (!is.null(resp$error)) {
-      stop(
-        paste0("Network capture get failed: ", resp$error$message),
-        call. = FALSE
-      )
+      stop(.rx_error_network(
+        paste0("Network capture get failed: ", resp$error$message)
+      ))
     }
     if (is.null(resp$result$events)) {
       return(list())
@@ -282,10 +279,9 @@ NULL
       error = function(e) list(error = list(code = "SEND_REQUEST_ERROR", message = e$message))
     )
     if (!is.null(resp$error)) {
-      stop(
-        paste0("Network capture clear failed: ", resp$error$message),
-        call. = FALSE
-      )
+      stop(.rx_error_network(
+        paste0("Network capture clear failed: ", resp$error$message)
+      ))
     }
     invisible(TRUE)
   }
@@ -308,17 +304,16 @@ NULL
   #' @noRd
   backend$networkCaptureGetBody <- function(requestId) {
     if (!state$connected) {
-      stop("Backend not connected. Call connect() first.", call. = FALSE)
+      stop(.rx_error_cdp("Backend not connected. Call connect() first."))
     }
     resp <- tryCatch(
       .rx_send_request(state$.proc, "networkCaptureGetBody", list(requestId = requestId), reqId = state$.reqId),
       error = function(e) list(error = list(code = "SEND_REQUEST_ERROR", message = e$message))
     )
     if (!is.null(resp$error)) {
-      stop(
-        paste0("Network body capture failed: ", resp$error$message),
-        call. = FALSE
-      )
+      stop(.rx_error_network(
+        paste0("Network body capture failed: ", resp$error$message)
+      ))
     }
     list(
       requestId     = resp$result$requestId,

@@ -136,7 +136,7 @@ NULL
   id <- if (!is.null(reqId)) reqId() else 1L
 
   if (!proc$is_alive()) {
-    stop("Sidecar process is not running.", call. = FALSE)
+    stop(.rx_error_cdp("Sidecar process is not running."), call. = FALSE)
   }
 
   req <- list(id = id, method = method)
@@ -147,7 +147,7 @@ NULL
   json_req <- jsonlite::toJSON(req, auto_unbox = TRUE, pretty = FALSE)
   n_written <- proc$write_input(paste0(json_req, "\n"))
   if (is.null(n_written) || (is.numeric(n_written) && n_written <= 0)) {
-    stop("Sidecar process is not accepting input (stdin pipe closed).", call. = FALSE)
+    stop(.rx_error_network("Sidecar process is not accepting input (stdin pipe closed)."), call. = FALSE)
   }
 
   # Read the response line from stdout, matching by request `id`.
@@ -156,7 +156,7 @@ NULL
   start <- Sys.time()
   while (Sys.time() - start < timeout) {
     if (!proc$is_alive()) {
-      stop("Sidecar process died while waiting for response.", call. = FALSE)
+      stop(.rx_error_cdp("Sidecar process died while waiting for response."), call. = FALSE)
     }
     # read_output_lines returns all available lines from stdout.
     lines <- tryCatch(proc$read_output_lines(), error = function(e) character(0))
@@ -176,7 +176,7 @@ NULL
     Sys.sleep(0.05)
   }
 
-  stop("Sidecar did not respond within timeout.", call. = FALSE)
+  stop(.rx_error_timeout("Sidecar did not respond within timeout."), call. = FALSE)
 }
 
 #' Stop the sidecar process cleanly.

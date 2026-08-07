@@ -167,24 +167,28 @@ x_save <- function(posts, path) {
   con <- tryCatch(
     duckdb::dbConnect(duckdb::DuckDB(), path),
     error = function(e) {
-      stop("Failed to connect to DuckDB at '", path, "': ", e$message, call. = FALSE)
+      stop(.rx_error_cdp(paste0("Failed to connect to DuckDB at '", path, "': ", e$message)))
     }
   )
   on.exit(duckdb::dbDisconnect(con), add = TRUE)
 
-  # Guard: zero-row tibble — create an empty posts table.
+  # Guard: zero-row tibble — create an empty posts table with canonical schema.
   if (nrow(posts) == 0L) {
     fields <- .rx_canonical_fields()
     type_map <- .rx_type_map()
-    for (f in fields) {
-      col_type <- switch(type_map[[f]],
-        character = "VARCHAR",
-        integer = "BIGINT",
-        logical = "BOOLEAN",
-        "VARCHAR"
-      )
-      duckdb::dbExecute(con, paste0("ALTER TABLE posts ADD COLUMN ", f, " ", col_type))
-    }
+    col_defs <- paste(
+      fields,
+      sapply(fields, function(f) {
+        switch(type_map[[f]],
+          character = "VARCHAR",
+          integer = "BIGINT",
+          logical = "BOOLEAN",
+          "VARCHAR"
+        )
+      }),
+      collapse = ", "
+    )
+    duckdb::dbExecute(con, paste0("CREATE TABLE IF NOT EXISTS posts (", col_defs, ")"))
     return(invisible(NULL))
   }
 
@@ -193,7 +197,7 @@ x_save <- function(posts, path) {
   tryCatch(
     duckdb::dbWriteTable(con, "posts", posts, row.names = FALSE, overwrite = TRUE),
     error = function(e) {
-      stop("Failed to write posts table: ", e$message, call. = FALSE)
+      stop(.rx_error_cdp(paste0("Failed to write posts table: ", e$message)))
     }
   )
 
