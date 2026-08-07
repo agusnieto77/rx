@@ -335,7 +335,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 20: Create `x_doctor()` basic diagnostics [ ]
+### Task 20: Create `x_doctor()` basic diagnostics [x]
 
 **Goal:** Provide immediate environment diagnostics.
 
