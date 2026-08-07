@@ -147,7 +147,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 8: Add a `ping` sidecar method
+### Task 8: Add a `ping` sidecar method [DONE]
 
 **Goal:** Prove bidirectional protocol behavior.
 
