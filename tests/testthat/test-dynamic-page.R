@@ -233,13 +233,14 @@ test_that("dynamically inserted DOM content is observable after load", {
   )
 
   # The expression should return 3 (three posts were injected).
-  post_count <- eval_result$result
+  # CDP Runtime.evaluate with returnByValue: true wraps the value in {value, type}.
+  post_count_val <- eval_result$result$value
   testthat::expect_true(
-    is.numeric(post_count) || is.integer(post_count),
+    is.numeric(post_count_val) || is.integer(post_count_val),
     info = "post count is numeric"
   )
   testthat::expect_true(
-    post_count >= 1,
+    post_count_val >= 1,
     info = "at least one dynamically inserted post is observed"
   )
 })

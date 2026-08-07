@@ -37,13 +37,37 @@ NULL
 # request/response protocol defined in inst/node/src/index.ts.
 #
 # Protocol shape:
-#   Request:  { "id": <any>, "method": string, "params": <any>? }
+#   Request:  { "id": <number>, "method": string, "params": <any>? }
 #   Response: { "id": <same>, "result": <any> }
 #   Error:    { "id": <same>, "error": { "code": string, "message": string } }
+#
+# Request IDs are monotonic integers to prevent collisions between
+# consecutive calls with the same method name.
+#
+# Response buffer — stores unmatched responses from the sidecar's stdout
+# so that rapid fire-and-forget sequences (e.g. connect immediately followed
+# by close) don't lose the non-matching response in a shared poll batch.
+# Each entry is a list(id = ..., parsed = ...).
+# Bounded to MAX_ENTRIES entries; oldest are evicted first to prevent unbounded
+# growth from orphaned responses (e.g. stale sidecar messages).
+.rx_response_buffer <- new.env(parent = emptyenv())
+.rx_response_buffer$max_entries <- 50L
+.rx_response_buffer$items <- list()
+
+.rx_response_buffer$trim <- function() {
+  while (length(.rx_response_buffer$items) > .rx_response_buffer$max_entries) {
+    .rx_response_buffer$items <- .rx_response_buffer$items[-1]
+  }
+}
 
 #' Start the TypeScript sidecar process.
 #'
 #' @return A `processx::process` object representing the running sidecar.
+#' @noRd
+.rx_request_id <- new.env(parent = emptyenv())
+# Use numeric (double) instead of integer to avoid overflow at 2^31-1.
+.rx_request_id$value <- 0
+
 #' @noRd
 .rx_start_sidecar <- function(sidecar_path = NULL) {
   sidecar_dir <- .rx_resolve_sidecar_path(sidecar_path)
@@ -68,6 +92,8 @@ NULL
   # Wait for the startup message on stderr.
   # The sidecar writes a JSONL startup line before it accepts requests.
   startup_ok <- FALSE
+  startup_error <- NULL
+
   tryCatch(
     {
       timeout <- 10 # seconds
@@ -86,26 +112,33 @@ NULL
                 jsonlite::fromJSON(line, simplifyVector = FALSE),
                 error = function(e) NULL
               )
-              if (!is.null(parsed) && parsed$type == "startup") {
+              if (!is.null(parsed) && isTRUE(parsed$type == "startup")) {
                 startup_ok <- TRUE
-                return(p)
               }
             }
           }
         }
+        if (startup_ok) break
         Sys.sleep(0.05)
       }
     },
     error = function(e) {
-      # If reading the startup line fails, the process may still be alive.
-      # Store the error so we can surface it if startup also fails.
+      startup_error <<- e$message
     }
   )
 
-  # Fallback: if we couldn't read the startup line, just check if the
-  # process is still alive.
   if (!p$is_alive()) {
     stop("xtweetsR sidecar failed to start.", call. = FALSE)
+  }
+
+  if (!startup_ok) {
+    # Kill the orphan process before propagating the error.
+    tryCatch(p$kill(), error = function(e) NULL)
+    msg <- "xtweetsR sidecar did not emit startup message within timeout"
+    if (!is.null(startup_error)) {
+      msg <- paste0(msg, " (startup read error: ", startup_error, ")")
+    }
+    stop(msg, call. = FALSE)
   }
 
   p
@@ -116,10 +149,12 @@ NULL
 #' @param proc A `processx::process` object (the running sidecar).
 #' @param method Character string, the method name (e.g. `"ping"`).
 #' @param params Optional list, the request parameters.
-#' @param id Optional identifier echoed in the response. Defaults to `method`.
 #' @return A list with either `$result` (success) or `$error` (failure).
 #' @noRd
-.rx_send_request <- function(proc, method, params = NULL, id = method) {
+.rx_send_request <- function(proc, method, params = NULL) {
+  .rx_request_id$value <- .rx_request_id$value + 1
+  id <- .rx_request_id$value
+
   if (!proc$is_alive()) {
     stop("Sidecar process is not running.", call. = FALSE)
   }
@@ -131,7 +166,7 @@ NULL
 
   json_req <- jsonlite::toJSON(req, auto_unbox = TRUE, pretty = FALSE)
   n_written <- proc$write_input(paste0(json_req, "\n"))
-  if (is.numeric(n_written) && n_written <= 0) {
+  if (is.null(n_written) || (is.numeric(n_written) && n_written <= 0)) {
     stop("Sidecar process is not accepting input (stdin pipe closed).", call. = FALSE)
   }
 
@@ -139,6 +174,16 @@ NULL
   # This is important because async handlers (connect, navigate, evaluate)
   # may send responses out of order relative to the request dispatch.
   # Timeout after 30 seconds.
+  # Check the buffered responses before reading new output.
+  for (i in seq_along(.rx_response_buffer$items)) {
+    buf_entry <- .rx_response_buffer$items[[i]]
+    if (isTRUE(buf_entry$id == id)) {
+      # Remove from buffer and return.
+      .rx_response_buffer$items <- .rx_response_buffer$items[-i]
+      return(buf_entry$parsed)
+    }
+  }
+
   timeout <- 30
   start <- Sys.time()
   while (Sys.time() - start < timeout) {
@@ -154,8 +199,20 @@ NULL
             jsonlite::fromJSON(line, simplifyVector = FALSE),
             error = function(e) NULL
           )
-          if (!is.null(parsed) && identical(parsed$id, id)) {
+          if (!is.null(parsed) && isTRUE(parsed$id == id)) {
             return(parsed)
+          }
+          # Store unmatched responses in the buffer for future requests.
+          # This prevents rapid fire-and-forget sequences from losing responses.
+          # Skip entries with NULL id (e.g., PARSE_ERROR from sidecar's
+          # respondError(null, ...)) — they can never match a real request
+          # and would cause unbounded buffer growth if buffered.
+          if (!is.null(parsed) && !is.null(parsed$id)) {
+            .rx_response_buffer$items <- append(
+              .rx_response_buffer$items,
+              list(list(id = parsed$id, parsed = parsed))
+            )
+            .rx_response_buffer$trim()
           }
         }
       }
@@ -176,6 +233,11 @@ NULL
   if (!proc$is_alive()) return(invisible(NULL))
   tryCatch(proc$kill(), error = function(e) NULL)
   tryCatch(proc$wait(timeout = 5000), error = function(e) NULL)
+  if (proc$is_alive()) {
+    # Process still alive — escalate to SIGKILL (forceful termination).
+    tryCatch(proc$kill(signal = 9), error = function(e) NULL)
+  }
+  tryCatch(proc$wait(timeout = 2000), error = function(e) NULL)
   invisible(NULL)
 }
 
