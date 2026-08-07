@@ -5,17 +5,18 @@
 #   1. Enable network capture on the session backend
 #   2. Construct the X search URL and navigate
 #   3. Wait for network responses to settle
-#   4. Retrieve captured network events and extract posts (first batch)
-#   5. Optionally scroll the page to load more content (one-scroll, Task 40)
-#   6. Wait for new network responses, extract posts (second batch)
-#   7. Merge both batches, normalize, convert to tibble, deduplicate
-#   8. Apply limit and return
+#   4. Retrieve captured network events and extract posts (initial batch)
+#   5. Repeat: scroll, wait for new network responses, extract posts
+#      — stop on limit, max_scrolls, or no-new-data cycles (Task 42)
+#   6. Merge all batches, normalize, convert to tibble, deduplicate
+#   7. Apply limit and return
 #
-# Scroll state (Task 41):
+# Scroll state (Task 41, Task 42):
 #   A scroll state object tracks collection progress across batches.
 #   It records seen post IDs, counts, cursors, scroll position, and timing
-#   so that repeated-scrolling loops (Task 42+) can detect termination
-#   conditions without relying on implicit loop variables.
+#   so that repeated-scrolling loops can detect termination conditions
+#   (limit hit, max_scrolls exceeded, no-new-data stall) without relying
+#   on implicit loop variables.
 #
 # @name search
 # @aliases search
@@ -37,16 +38,24 @@ NULL
 #' backend, network capture, post parser, normalizer, and deduplicator
 #' into a single call.
 #'
+#' The collection uses bounded repeated scrolling (Task 42): after the
+#' initial extraction, the page is scrolled and new content extracted in a
+#' loop. The loop stops when any of the following conditions is met:
+#' - the \code{limit} is reached,
+#' - \code{max_scrolls} scroll iterations have been completed,
+#' - no new data appears for two consecutive batches (stall detection).
+#'
 #' @param session An \code{xtweetsR_session} object returned by
 #'   \code{\link[=x_session]{x_session()}}.
 #' @param query A single non-empty character string with the search query.
 #' @param limit Optional integer limiting the maximum number of posts
 #'   returned. When \code{NULL} (default), no limit is applied.
-#' @param scroll Logical, default `TRUE`. When `TRUE`, performs one
-#'   incremental scroll after the initial extraction to load additional
-#'   content. When `FALSE`, only the initially visible content is
-#'   captured (faster, useful for testing or when the first page is
-#'   sufficient).
+#' @param scroll Logical, default `TRUE`. When `FALSE`, no scrolling is
+#'   performed and only the initially visible content is captured.
+#' @param max_scrolls Integer, default `5L`. When \code{scroll = TRUE},
+#'   the maximum number of scroll+extract iterations to perform.
+#'   The loop also stops earlier if the \code{limit} is reached or if
+#'   no new data appears for two consecutive batches.
 #'
 #' @return A tibble with the canonical post schema (18 columns) containing
 #'   posts found during the search. Returns a zero-row tibble when no
@@ -61,7 +70,7 @@ NULL
 #' }
 #'
 #' @export
-x_search <- function(session, query, limit = NULL, scroll = TRUE) {
+x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 5L) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -78,6 +87,10 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE) {
     }
     limit <- as.integer(limit)
   }
+  if (!is.numeric(max_scrolls) || length(max_scrolls) != 1L || anyNA(max_scrolls) || max_scrolls < 0L) {
+    stop("max_scrolls must be a non-negative integer, or NULL.", call. = FALSE)
+  }
+  max_scrolls <- as.integer(max_scrolls)
 
   backend <- session$backend
 
@@ -120,65 +133,122 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE) {
 
   initial_posts <- .rx_search_extract_from_events(initial_events, backend)
   state$add_posts(initial_posts)
-  state$advance_scroll()  # Record the implicit initial position.
 
-  # 6. Optional one-scroll: scroll the page to trigger loading of more
-  #    content, then capture any new network responses and extract posts
-  #    (second batch). The network capture buffer is automatically empty
-  #    after the previous `$networkCaptureGet()` call, so this batch
-  #    contains only events captured after the scroll.
-  scroll_posts <- list()
-  if (isTRUE(scroll)) {
-    tryCatch(
-      {
-        .rx_scroll_page(backend)
-        state$advance_scroll(4000)
-        # Wait for new network responses triggered by the scroll.
-        Sys.sleep(3)
+  # 6. Bounded repeated scroll+extract loop (Task 42).
+  #
+  #    The loop iterates at most max_scrolls times. After each iteration:
+  #    - If the limit is reached, we stop.
+  #    - If no new data appears for two consecutive batches, we stop.
+  #    - After max_scrolls iterations, we stop.
+  #
+  #    Each iteration scrolls the page, waits for new network responses,
+  #    extracts posts, and accumulates them into all_batches.
+  all_batches <- list()
+  if (isTRUE(scroll) && max_scrolls > 0L) {
+    for (i in seq_len(max_scrolls)) {
+      # Scroll the page.
+      .rx_scroll_page(backend)
+      state$advance_scroll()
 
-        scroll_events <- tryCatch(
-          backend$networkCaptureGet(),
-          error = function(e) {
-            # Scroll failure is non-fatal; proceed with initial batch only.
-            return(list())
-          }
-        )
+      # Wait for new network responses triggered by the scroll.
+      Sys.sleep(3)
 
-        scroll_posts <- .rx_search_extract_from_events(scroll_events, backend)
-        state$add_posts(scroll_posts)
-      },
-      error = function(e) {
-        # Any unexpected error in the scroll path is non-fatal.
-        invisible(NULL)
+      # Capture events and extract posts (new batch).
+      batch_events <- tryCatch(
+        backend$networkCaptureGet(),
+        error = function(e) list()
+      )
+
+      extracted <- .rx_search_extract_from_events(batch_events, backend)
+
+      # Record in scroll state (dedup, stall detection).
+      state$add_posts(extracted)
+
+      # Accumulate batch for later merging.
+      if (length(extracted$post_id) > 0L) {
+        all_batches[[length(all_batches) + 1L]] <- extracted
+      } else {
+        # Track zero-length batch to maintain consistent field structure.
+        zero_batch <- .rx_search_empty_batch()
+        all_batches[[length(all_batches) + 1L]] <- zero_batch
       }
+
+      # Check termination conditions.
+      if (!is.null(limit) && state$current_count >= limit) {
+        break
+      }
+      if (state$check_stalled(threshold = 2L)) {
+        break
+      }
+    }
+  }
+
+  # 7. Merge all batches (initial + scroll batches).
+  if (length(all_batches) > 0L) {
+    all_post_ids <- lapply(all_batches, `[[`, "post_id")
+    all_texts <- lapply(all_batches, `[[`, "text")
+    all_author_ids <- lapply(all_batches, `[[`, "author_id")
+    all_usernames <- lapply(all_batches, `[[`, "username")
+    all_display_names <- lapply(all_batches, `[[`, "display_name")
+    all_created_at <- lapply(all_batches, `[[`, "created_at")
+    all_reply_counts <- lapply(all_batches, `[[`, "reply_count")
+    all_repost_counts <- lapply(all_batches, `[[`, "repost_count")
+    all_like_counts <- lapply(all_batches, `[[`, "like_count")
+    all_quote_counts <- lapply(all_batches, `[[`, "quote_count")
+    all_bookmark_counts <- lapply(all_batches, `[[`, "bookmark_count")
+    all_view_counts <- lapply(all_batches, `[[`, "view_count")
+    all_conversation_ids <- lapply(all_batches, `[[`, "conversation_id")
+    all_is_replies <- lapply(all_batches, `[[`, "is_reply")
+    all_is_reposts <- lapply(all_batches, `[[`, "is_repost")
+    all_is_quotes <- lapply(all_batches, `[[`, "is_quote")
+    all_reply_to_ids <- lapply(all_batches, `[[`, "reply_to_post_id")
+    all_quoted_ids <- lapply(all_batches, `[[`, "quoted_post_id")
+
+    merged_posts <- list(
+      post_id        = unlist(all_post_ids, use.names = FALSE),
+      text           = unlist(all_texts, use.names = FALSE),
+      author_id      = unlist(all_author_ids, use.names = FALSE),
+      username       = unlist(all_usernames, use.names = FALSE),
+      display_name   = unlist(all_display_names, use.names = FALSE),
+      created_at     = unlist(all_created_at, use.names = FALSE),
+      reply_count    = unlist(all_reply_counts, use.names = FALSE),
+      repost_count   = unlist(all_repost_counts, use.names = FALSE),
+      like_count     = unlist(all_like_counts, use.names = FALSE),
+      quote_count    = unlist(all_quote_counts, use.names = FALSE),
+      bookmark_count = unlist(all_bookmark_counts, use.names = FALSE),
+      view_count     = unlist(all_view_counts, use.names = FALSE),
+      conversation_id = unlist(all_conversation_ids, use.names = FALSE),
+      is_reply       = unlist(all_is_replies, use.names = FALSE),
+      is_repost      = unlist(all_is_reposts, use.names = FALSE),
+      is_quote       = unlist(all_is_quotes, use.names = FALSE),
+      reply_to_post_id = unlist(all_reply_to_ids, use.names = FALSE),
+      quoted_post_id   = unlist(all_quoted_ids, use.names = FALSE)
+    )
+  } else {
+    # No batches collected at all (scroll=FALSE, no initial posts).
+    merged_posts <- list(
+      post_id        = character(0),
+      text           = character(0),
+      author_id      = character(0),
+      username       = character(0),
+      display_name   = character(0),
+      created_at     = character(0),
+      reply_count    = integer(0),
+      repost_count   = integer(0),
+      like_count     = integer(0),
+      quote_count    = integer(0),
+      bookmark_count = integer(0),
+      view_count     = integer(0),
+      conversation_id = character(0),
+      is_reply       = logical(0),
+      is_repost      = logical(0),
+      is_quote       = logical(0),
+      reply_to_post_id = character(0),
+      quoted_post_id   = character(0)
     )
   }
 
-  # 7. Merge both batches (scroll posts appended to initial posts).
-  #    Use the state object's post tracking for dedup when merging.
-  merged_posts <- list(
-    post_id      = c(initial_posts$post_id,      scroll_posts$post_id),
-    text         = c(initial_posts$text,         scroll_posts$text),
-    author_id    = c(initial_posts$author_id,    scroll_posts$author_id),
-    username     = c(initial_posts$username,     scroll_posts$username),
-    display_name = c(initial_posts$display_name, scroll_posts$display_name),
-    created_at   = c(initial_posts$created_at,   scroll_posts$created_at),
-    reply_count  = c(initial_posts$reply_count,  scroll_posts$reply_count),
-    repost_count = c(initial_posts$repost_count, scroll_posts$repost_count),
-    like_count   = c(initial_posts$like_count,   scroll_posts$like_count),
-    quote_count  = c(initial_posts$quote_count,  scroll_posts$quote_count),
-    bookmark_count = c(initial_posts$bookmark_count, scroll_posts$bookmark_count),
-    view_count   = c(initial_posts$view_count,   scroll_posts$view_count),
-    conversation_id = c(initial_posts$conversation_id, scroll_posts$conversation_id),
-    is_reply     = c(initial_posts$is_reply,     scroll_posts$is_reply),
-    is_repost    = c(initial_posts$is_repost,    scroll_posts$is_repost),
-    is_quote     = c(initial_posts$is_quote,     scroll_posts$is_quote),
-    reply_to_post_id = c(initial_posts$reply_to_post_id, scroll_posts$reply_to_post_id),
-    quoted_post_id   = c(initial_posts$quoted_post_id,   scroll_posts$quoted_post_id)
-  )
-
-  # 8. Normalize, convert to tibble, deduplicate (dedup handles cross-batch
-  #    duplicates where the same post appeared in both batches).
+  # 8. Normalize, convert to tibble, deduplicate.
   normalized <- .rx_normalize_posts(merged_posts)
   tibble_posts <- .rx_normalized_to_tibble(normalized)
   deduped <- .rx_deduplicate_posts(tibble_posts)
@@ -192,6 +262,36 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE) {
   .rx_search_cleanup(backend)
 
   deduped
+}
+
+#' Return an empty batch with the canonical field structure.
+#'
+#' Used to maintain consistent field structure when a scroll iteration
+#' produces zero posts (no-new-data cycle).
+#'
+#' @return A list with 18 canonical fields, all empty vectors.
+#' @noRd
+.rx_search_empty_batch <- function() {
+  list(
+    post_id        = character(0),
+    text           = character(0),
+    author_id      = character(0),
+    username       = character(0),
+    display_name   = character(0),
+    created_at     = character(0),
+    reply_count    = integer(0),
+    repost_count   = integer(0),
+    like_count     = integer(0),
+    quote_count    = integer(0),
+    bookmark_count = integer(0),
+    view_count     = integer(0),
+    conversation_id = character(0),
+    is_reply       = logical(0),
+    is_repost      = logical(0),
+    is_quote       = logical(0),
+    reply_to_post_id = character(0),
+    quoted_post_id   = character(0)
+  )
 }
 
 #' Clean up network capture resources after a search.

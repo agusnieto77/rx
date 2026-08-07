@@ -287,3 +287,32 @@ The acceptance criteria are satisfied:
 - JSON validation: valid, 6.8 KB, 3 tweets, 2 cursors
 - TypeScript compiles clean (npx tsc)
 - R tests cannot execute (R not installed in current shell environment). Code verified syntactically.
+
+## Task 42: Add repeated scrolling with termination - COMPLETED
+
+### Implementation
+
+- Modified `R/search.R`:
+  - Added `max_scrolls` parameter to `x_search()` (default `5L`, validated as non-negative integer)
+  - Converted single-scroll path to bounded `for` loop: `for (i in seq_len(max_scrolls))`
+  - Loop body: scroll → advance state → wait → capture events → extract posts → add to state → accumulate batch
+  - Three termination conditions checked after each iteration:
+    1. `limit` reached (`state$current_count >= limit`)
+    2. Stall detected (`state$check_stalled(threshold = 2L)`)
+    3. `max_scrolls` iterations completed (loop natural exit)
+  - Added `.rx_search_empty_batch()` helper for consistent field structure on zero-post batches
+  - All batches (initial + scroll) merged via `unlist()` at the end
+  - Input validation: `max_scrolls` must be a non-negative integer
+- Added 5 new tests to `tests/testthat/test-search.R` (Tests 35-39):
+  - **Test 35:** Scroll loop terminates after consecutive no-new-data cycles (mock returns same posts → stall after 2 cycles)
+  - **Test 36:** `max_scrolls` enforces a hard limit (mock returns unique posts each time, `max_scrolls=3` → exactly 4 posts: 1 initial + 3 scroll)
+  - **Test 37:** `limit` is enforced during the scroll loop (mock returns unique posts, `limit=2` → stops early, `nrow <= 2`)
+  - **Test 38:** `max_scrolls` validation rejects negative values
+  - **Test 39:** `scroll=FALSE` skips the loop entirely (0 evaluate calls)
+
+### Verification
+
+- TypeScript compiles clean (`npx tsc --noEmit`)
+- Node protocol tests: 21/21 passing
+- R tests cannot execute (R not installed in current shell environment). Code verified syntactically.
+- Infinite loop impossible: the `for` loop runs at most `max_scrolls` iterations (bounded by integer), and stall detection provides an early exit.

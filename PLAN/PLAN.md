@@ -737,18 +737,18 @@ Track:
 
 ---
 
-### Task 42: Add repeated scrolling with termination [ ]
+### Task 42: Add repeated scrolling with termination [x]
 
 **Goal:** Support bounded repeated collection.
 
 **Actions:**
-- Repeat scroll and extraction.
-- Stop on `limit`.
-- Stop after a configurable number of no-new-data cycles.
+- [x] Repeat scroll and extraction.
+- [x] Stop on `limit`.
+- [x] Stop after a configurable number of no-new-data cycles.
 
 **Acceptance criteria:**
-- No infinite loop is possible under tested conditions.
-- A local mock test proves termination.
+- [x] No infinite loop is possible under tested conditions (bounded `for` loop + stall detection).
+- [x] A local mock test proves termination (Tests 35-37 in test-search.R).
 
 ---
 

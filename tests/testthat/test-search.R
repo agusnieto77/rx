@@ -663,3 +663,418 @@ test_that("elapsed_time increases after add_posts", {
   expect_true(state$elapsed_time > 0, info = paste("elapsed_time:", state$elapsed_time))
   expect_true(state$elapsed_time < 5, info = "elapsed_time should be reasonable")
 })
+
+# ===================================================================
+# Repeated scroll loop tests (Task 42)
+# ===================================================================
+
+# --- Test 35: Scroll loop terminates when no new data appears ---
+test_that("scroll loop terminates after consecutive no-new-data cycles", {
+  # Mock backend that returns initial posts, then only duplicates.
+  # After 2 no-new-data cycles, check_stalled(threshold=2) returns TRUE.
+  batch_idx <- 0L
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+
+  mock_session$backend$networkCaptureGet <- function() {
+    batch_idx <<- batch_idx + 1L
+    list(
+      list(requestId = paste0("req-", batch_idx),
+           url = "https://x.com/graphql/test",
+           contentType = "application/json")
+    )
+  }
+
+  # First call: returns 3 posts.
+  # Subsequent calls: return the SAME 3 posts (duplicates).
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    list(
+      requestId = requestId,
+      body = list(
+        TimelineResult = list(
+          result = list(
+            __typename = "TimelineTimelineItem",
+            timeline_instructions = list(
+              list(
+                type = "TimelineAddEntries",
+                entries = list(
+                  list(
+                    entryId = "tweet-100",
+                    content = list(
+                      __typename = "TimelineTimelineItem",
+                      itemContent = list(
+                        tweet_results = list(
+                          result = list(
+                            __typename = "TweetWithVisibilityResults",
+                            tweet = list(
+                              rest_id = "100",
+                              legacy = list(
+                                full_text = "Post one",
+                                created_at = "Mon Jul 01 00:00:00 +0000 2026",
+                                user_id_str = "u1",
+                                screen_name = "user1",
+                                name = "User One",
+                                reply_count = 1L,
+                                retweet_count = 2L,
+                                favorite_count = 3L,
+                                quote_count = 0L,
+                                bookmark_count = 0L,
+                                conversation_id_str = "100",
+                                in_reply_to_status_id_str = NA_character_,
+                                is_quote_status = FALSE
+                              ),
+                              core = list(
+                                user_results = list(
+                                  result = list(
+                                    legacy = list(
+                                      id_str = "u1",
+                                      screen_name = "user1",
+                                      name = "User One"
+                                    )
+                                  )
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  ),
+                  list(
+                    entryId = "tweet-101",
+                    content = list(
+                      __typename = "TimelineTimelineItem",
+                      itemContent = list(
+                        tweet_results = list(
+                          result = list(
+                            __typename = "TweetWithVisibilityResults",
+                            tweet = list(
+                              rest_id = "101",
+                              legacy = list(
+                                full_text = "Post two",
+                                created_at = "Sun Jun 30 00:00:00 +0000 2026",
+                                user_id_str = "u2",
+                                screen_name = "user2",
+                                name = "User Two",
+                                reply_count = 0L,
+                                retweet_count = 1L,
+                                favorite_count = 5L,
+                                quote_count = 0L,
+                                bookmark_count = 0L,
+                                conversation_id_str = "101",
+                                in_reply_to_status_id_str = NA_character_,
+                                is_quote_status = FALSE
+                              ),
+                              core = list(
+                                user_results = list(
+                                  result = list(
+                                    legacy = list(
+                                      id_str = "u2",
+                                      screen_name = "user2",
+                                      name = "User Two"
+                                    )
+                                  )
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  ),
+                  list(
+                    entryId = "tweet-102",
+                    content = list(
+                      __typename = "TimelineTimelineItem",
+                      itemContent = list(
+                        tweet_results = list(
+                          result = list(
+                            __typename = "TweetWithVisibilityResults",
+                            tweet = list(
+                              rest_id = "102",
+                              legacy = list(
+                                full_text = "Post three",
+                                created_at = "Sat Jun 29 00:00:00 +0000 2026",
+                                user_id_str = "u3",
+                                screen_name = "user3",
+                                name = "User Three",
+                                reply_count = 2L,
+                                retweet_count = 0L,
+                                favorite_count = 1L,
+                                quote_count = 1L,
+                                bookmark_count = 0L,
+                                conversation_id_str = "102",
+                                in_reply_to_status_id_str = NA_character_,
+                                is_quote_status = FALSE
+                              ),
+                              core = list(
+                                user_results = list(
+                                  result = list(
+                                    legacy = list(
+                                      id_str = "u3",
+                                      screen_name = "user3",
+                                      name = "User Three"
+                                    )
+                                  )
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      contentType = "application/json",
+      error = NULL
+    )
+  }
+
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+  mock_session$backend$evaluate <- function(expr) invisible(NULL)
+
+  result <- x_search(mock_session, "test", max_scrolls = 5L)
+
+  # The loop should terminate after 2 consecutive no-new-data cycles
+  # (batch 1 = initial with 3 posts, batches 2-3 = scroll with duplicates
+  #  -> no_new_data_cycles reaches 2 -> break).
+  expect_true(inherits(result, "tbl_df"))
+  expect_equal(nrow(result), 3L, info = "initial 3 posts, all subsequent are duplicates")
+  expect_true(all(result$post_id %in% c("100", "101", "102")))
+})
+
+# --- Test 36: max_scrolls enforces a hard limit on iterations ---
+test_that("scroll loop respects max_scrolls parameter", {
+  batch_idx <- 0L
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+
+  mock_session$backend$networkCaptureGet <- function() {
+    batch_idx <<- batch_idx + 1L
+    list(
+      list(requestId = paste0("req-", batch_idx),
+           url = "https://x.com/graphql/test",
+           contentType = "application/json")
+    )
+  }
+
+  # Each call returns a UNIQUE post (so stall detection never triggers).
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    batch_num <- as.integer(sub("req-", "", requestId))
+    list(
+      requestId = requestId,
+      body = list(
+        TimelineResult = list(
+          result = list(
+            __typename = "TimelineTimelineItem",
+            timeline_instructions = list(
+              list(
+                type = "TimelineAddEntries",
+                entries = list(
+                  list(
+                    entryId = paste0("tweet-", batch_num),
+                    content = list(
+                      __typename = "TimelineTimelineItem",
+                      itemContent = list(
+                        tweet_results = list(
+                          result = list(
+                            __typename = "TweetWithVisibilityResults",
+                            tweet = list(
+                              rest_id = as.character(batch_num),
+                              legacy = list(
+                                full_text = paste("Post", batch_num),
+                                created_at = "Mon Jul 01 00:00:00 +0000 2026",
+                                user_id_str = paste0("u", batch_num),
+                                screen_name = paste0("user", batch_num),
+                                name = paste("User", batch_num),
+                                reply_count = 0L,
+                                retweet_count = 0L,
+                                favorite_count = 0L,
+                                quote_count = 0L,
+                                bookmark_count = 0L,
+                                conversation_id_str = as.character(batch_num),
+                                in_reply_to_status_id_str = NA_character_,
+                                is_quote_status = FALSE
+                              ),
+                              core = list(
+                                user_results = list(
+                                  result = list(
+                                    legacy = list(
+                                      id_str = paste0("u", batch_num),
+                                      screen_name = paste0("user", batch_num),
+                                      name = paste("User", batch_num)
+                                    )
+                                  )
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      contentType = "application/json",
+      error = NULL
+    )
+  }
+
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+  mock_session$backend$evaluate <- function(expr) invisible(NULL)
+
+  result <- x_search(mock_session, "test", max_scrolls = 3L)
+
+  # Initial batch (1 post) + 3 scroll iterations (3 posts) = 4 total.
+  expect_true(inherits(result, "tbl_df"))
+  expect_equal(nrow(result), 4L, info = "1 initial + 3 scroll = 4 unique posts")
+})
+
+# --- Test 37: limit is enforced during the scroll loop ---
+test_that("scroll loop stops when limit is reached", {
+  batch_idx <- 0L
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+
+  mock_session$backend$networkCaptureGet <- function() {
+    batch_idx <<- batch_idx + 1L
+    list(
+      list(requestId = paste0("req-", batch_idx),
+           url = "https://x.com/graphql/test",
+           contentType = "application/json")
+    )
+  }
+
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    batch_num <- as.integer(sub("req-", "", requestId))
+    list(
+      requestId = requestId,
+      body = list(
+        TimelineResult = list(
+          result = list(
+            __typename = "TimelineTimelineItem",
+            timeline_instructions = list(
+              list(
+                type = "TimelineAddEntries",
+                entries = list(
+                  list(
+                    entryId = paste0("tweet-", batch_num),
+                    content = list(
+                      __typename = "TimelineTimelineItem",
+                      itemContent = list(
+                        tweet_results = list(
+                          result = list(
+                            __typename = "TweetWithVisibilityResults",
+                            tweet = list(
+                              rest_id = as.character(batch_num),
+                              legacy = list(
+                                full_text = paste("Post", batch_num),
+                                created_at = "Mon Jul 01 00:00:00 +0000 2026",
+                                user_id_str = paste0("u", batch_num),
+                                screen_name = paste0("user", batch_num),
+                                name = paste("User", batch_num),
+                                reply_count = 0L,
+                                retweet_count = 0L,
+                                favorite_count = 0L,
+                                quote_count = 0L,
+                                bookmark_count = 0L,
+                                conversation_id_str = as.character(batch_num),
+                                in_reply_to_status_id_str = NA_character_,
+                                is_quote_status = FALSE
+                              ),
+                              core = list(
+                                user_results = list(
+                                  result = list(
+                                    legacy = list(
+                                      id_str = paste0("u", batch_num),
+                                      screen_name = paste0("user", batch_num),
+                                      name = paste("User", batch_num)
+                                    )
+                                  )
+                                )
+                              )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      contentType = "application/json",
+      error = NULL
+    )
+  }
+
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+  mock_session$backend$evaluate <- function(expr) invisible(NULL)
+
+  result <- x_search(mock_session, "test", limit = 2L, max_scrolls = 10L)
+
+  # Should stop after reaching limit of 2 posts, even though more are available.
+  expect_true(inherits(result, "tbl_df"))
+  expect_lte(nrow(result), 2L, info = "should not exceed the specified limit")
+})
+
+# --- Test 38: max_scrolls validation ---
+test_that("x_search rejects negative max_scrolls", {
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  expect_error(x_search(mock_session, "test", max_scrolls = -1L), "non-negative")
+})
+
+# --- Test 39: scroll=FALSE skips the loop entirely ---
+test_that("x_search with scroll=FALSE performs no scroll iterations", {
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  evaluate_count <- 0L
+  mock_session$backend$evaluate <- function(expr) {
+    evaluate_count <<- evaluate_count + 1L
+    invisible(NULL)
+  }
+
+  x_search(mock_session, "test", scroll = FALSE, max_scrolls = 10L)
+  expect_equal(evaluate_count, 0L, info = "evaluate should never be called when scroll=FALSE")
+})
