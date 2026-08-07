@@ -11,6 +11,7 @@
 
 import { createInterface } from "readline";
 import { DefaultCdpConnection } from "./browser/connection.js";
+import { ChromiumBackend } from "./browser/chromium.js";
 
 const VERSION = "0.1.0";
 
@@ -56,15 +57,41 @@ function log(level: string, ...args: unknown[]): void {
   );
 }
 
-// ── CDP connection state ─────────────────────────────────────────────
+// ── Backend abstraction ──────────────────────────────────────────────
+//
+// The sidecar now supports two backend types:
+//   - "cdp" (default): connects to a CDP endpoint via WebSocket
+//     (Lightpanda, Chrome DevTools Protocol).
+//   - "chromium": launches a local Chromium instance via Puppeteer.
+//
+// Both implement the same methods (navigate, evaluate, close) so that
+// the public R API is unchanged regardless of the backend.
+//
+// State is unified — `currentBackend` holds whichever backend was
+// connected.  This avoids duplicating handlers for two separate backends.
 
-let cdpConnection: DefaultCdpConnection | null = null;
+type BackendType = "cdp" | "chromium";
+
+let currentBackend: DefaultCdpConnection | ChromiumBackend | null = null;
+let backendType: BackendType | null = null;
 let cdpEndpointUrl: string | null = null;
 // Generation counter to abort stale async operations when handleClose
 // nullifies the connection while a prior connect() is still pending.
 let connectGen = 0;
 // Guard to prevent concurrent connect attempts that would leak connections.
 let connecting = false;
+
+function getCDP(): DefaultCdpConnection | null {
+  return currentBackend instanceof DefaultCdpConnection ? currentBackend : null;
+}
+
+function getChromium(): ChromiumBackend | null {
+  return currentBackend instanceof ChromiumBackend ? currentBackend : null;
+}
+
+function isChromium(): boolean {
+  return backendType === "chromium";
+}
 
 // ── network capture state ────────────────────────────────────────────
 
@@ -95,11 +122,20 @@ let _captureOnRequest: ((params: Record<string, unknown>) => void) | null = null
 let _captureOnResponse: ((params: Record<string, unknown>) => void) | null = null;
 
 async function handleNetworkCaptureEnable(id: unknown): Promise<void> {
-  if (cdpConnection === null || !cdpConnection.isConnected) {
+  if (isChromium()) {
+    respondError(id, "CDP_ERROR", "Network capture requires CDP backend, not Chromium");
+    return;
+  }
+  const conn = getCDP();
+  if (conn === null || !conn.isConnected) {
     respondError(id, "CDP_ERROR", "Cannot enable network capture — CDP connection not active");
     return;
   }
-  const conn = cdpConnection;
+  // Guard against stale backend reference.
+  if (currentBackend !== conn) {
+    respondError(id, "CDP_ERROR", "CDP connection not active");
+    return;
+  }
   networkEvents = [];
   networkEventsById.clear();
 
@@ -188,6 +224,10 @@ async function handleNetworkCaptureEnable(id: unknown): Promise<void> {
 }
 
 function handleNetworkCaptureGet(id: unknown): void {
+  if (isChromium()) {
+    respond(id, { events: [] });
+    return;
+  }
   // Return a snapshot and clear the array, but keep the secondary map
   // so handleNetworkCaptureGetBody can still look up events by requestId.
   const events = networkEvents.slice();
@@ -196,11 +236,16 @@ function handleNetworkCaptureGet(id: unknown): void {
 }
 
 async function handleNetworkCaptureClear(id: unknown): Promise<void> {
+  if (isChromium()) {
+    respond(id, { cleared: true });
+    return;
+  }
   // Disable the CDP Network domain so the browser stops sending network
   // events. Await to serialize with any concurrent enable call.
-  if (cdpConnection !== null && cdpConnection.isConnected) {
+  const conn = getCDP();
+  if (conn !== null && conn.isConnected) {
     try {
-      await cdpConnection.sendCommand("Network.disable");
+      await conn.sendCommand("Network.disable");
     } catch {
       // Best-effort — logging is enough.
     }
@@ -208,11 +253,12 @@ async function handleNetworkCaptureClear(id: unknown): Promise<void> {
   networkEvents = [];
   networkEventsById.clear();
   // Remove event listeners from the connection.
-  if (cdpConnection !== null && _captureOnRequest !== null) {
-    cdpConnection.removeListener("Network.requestWillBeSent", _captureOnRequest);
+  const c = getCDP();
+  if (c !== null && _captureOnRequest !== null) {
+    c.removeListener("Network.requestWillBeSent", _captureOnRequest);
   }
-  if (cdpConnection !== null && _captureOnResponse !== null) {
-    cdpConnection.removeListener("Network.responseReceived", _captureOnResponse);
+  if (c !== null && _captureOnResponse !== null) {
+    c.removeListener("Network.responseReceived", _captureOnResponse);
   }
   _captureOnRequest = null;
   _captureOnResponse = null;
@@ -223,6 +269,10 @@ async function handleNetworkCaptureClear(id: unknown): Promise<void> {
 
 /** Fetch the response body for a captured requestId via CDP. */
 async function handleNetworkCaptureGetBody(id: unknown, params?: unknown): Promise<void> {
+  if (isChromium()) {
+    respondError(id, "CDP_ERROR", "Network body capture requires CDP backend, not Chromium");
+    return;
+  }
   let requestId: string;
   if (typeof params === "object" && params !== null) {
     const p = params as Record<string, unknown>;
@@ -237,12 +287,11 @@ async function handleNetworkCaptureGetBody(id: unknown, params?: unknown): Promi
     return;
   }
 
-  if (cdpConnection === null || !cdpConnection.isConnected) {
+  const conn = getCDP();
+  if (conn === null || !conn.isConnected) {
     respondError(id, "CDP_ERROR", "Cannot get body — CDP connection not active");
     return;
   }
-
-  const conn = cdpConnection;
 
   // Validate that the requestId exists in our captured events.
   // Use the secondary map (networkEventsById) so GetBody works even after
@@ -292,7 +341,7 @@ async function handleNetworkCaptureGetBody(id: unknown, params?: unknown): Promi
 
 // ── close handler ────────────────────────────────────────────────────
 
-function handleClose(id: unknown): void {
+async function handleClose(id: unknown): Promise<void> {
   // Always bump generation and clear the connecting flag first, so that any
   // pending async connect() will see gen !== connectGen and clean itself up.
   // If we returned early here without bumping connectGen / clearing connecting,
@@ -301,16 +350,22 @@ function handleClose(id: unknown): void {
   connectGen++;
   connecting = false;
 
-  if (cdpConnection === null || !cdpConnection.isConnected) {
-    cdpConnection = null;
+  if (currentBackend === null || !currentBackend.isConnected) {
+    currentBackend = null;
+    backendType = null;
     cdpEndpointUrl = null;
     respond(id, { closed: false, reason: "not_connected" });
     log("debug", "browser close — already not connected");
     return;
   }
 
-  cdpConnection.close();
-  cdpConnection = null;
+  if (isChromium()) {
+    await getChromium()!.close();
+  } else {
+    getCDP()!.close();
+  }
+  currentBackend = null;
+  backendType = null;
   cdpEndpointUrl = null;
   respond(id, { closed: true });
   log("info", "browser closed");
@@ -353,10 +408,10 @@ function isValidWsUrl(url: string): boolean {
   }
 }
 
-function handleConnect(id: unknown, params?: unknown): void {
-  if (cdpConnection !== null && cdpConnection.isConnected) {
-    respond(id, { connected: true, endpoint: cdpEndpointUrl ?? "unknown" });
-    log("info", "already connected to CDP");
+async function handleConnect(id: unknown, params?: unknown): Promise<void> {
+  if (currentBackend !== null && currentBackend.isConnected) {
+    respond(id, { connected: true, endpoint: cdpEndpointUrl ?? "unknown", backend: backendType ?? "cdp" });
+    log("info", "already connected to", backendType ?? "CDP");
     return;
   }
 
@@ -376,9 +431,23 @@ function handleConnect(id: unknown, params?: unknown): void {
     return;
   }
 
-  let endpointUrl: string | undefined;
+  let endpointUrl: string | null = null;
+  let backendTypeParam: string | undefined;
+  let chromiumOptions: Record<string, unknown> | undefined;
+
   if (typeof params === "object" && params !== null) {
     const p = params as Record<string, unknown>;
+
+    // backend — which backend to use: "cdp" (default) or "chromium"
+    if (p.backend !== undefined && p.backend !== null) {
+      if (typeof p.backend === "string") {
+        backendTypeParam = p.backend;
+      } else {
+        respondError(id, "INVALID_REQUEST", "backend must be a string");
+        return;
+      }
+    }
+
     const ep = p.endpoint;
 
     // endpoint must be a non-empty string, or absent/nullish.
@@ -390,74 +459,115 @@ function handleConnect(id: unknown, params?: unknown): void {
       }
       endpointUrl = ep;
     } else if (ep !== undefined && ep !== null) {
-      // Non-string, non-nullish endpoint value — caller typo.
       respondError(id, "INVALID_REQUEST", "endpoint must be a string");
       return;
     }
-  }
 
-  if (!endpointUrl) {
-    // Fall back to default Lightpanda endpoint.
-    endpointUrl = process.env.LPD_ENDPOINT ?? "ws://127.0.0.1:21111";
-    // Validate fallback URL to prevent SSRF via LPD_ENDPOINT env injection.
-    if (!isValidWsUrl(endpointUrl)) {
-      respondError(id, "INVALID_REQUEST", "endpoint must be a ws: or wss: URL");
-      return;
+    // chromiumOptions — passed through to Puppeteer when backend="chromium"
+    if (p.chromiumOptions !== undefined && p.chromiumOptions !== null) {
+      if (typeof p.chromiumOptions === "object" && !Array.isArray(p.chromiumOptions)) {
+        chromiumOptions = p.chromiumOptions as Record<string, unknown>;
+      }
     }
   }
 
-  connecting = true;
-  const gen = ++connectGen;
-  const conn = new DefaultCdpConnection();
-  cdpConnection = conn;
+  const resolvedBackend = backendTypeParam ?? "cdp";
 
-  conn
-    .connect(endpointUrl)
-    .then(() => {
-      // Abort if handleClose was called while we were connecting.
-      if (gen !== connectGen) {
-        // Stale connection — close it regardless of whether it's still active
-        // to prevent leaks when a new connect() already replaced it.
-        if (cdpConnection === conn) {
-          conn.close();
-          cdpConnection = null;
-          cdpEndpointUrl = null;
-        } else {
-          conn.close();
+  if (resolvedBackend === "chromium") {
+    // Launch a local Chromium instance via Puppeteer.
+    connecting = true;
+    const gen = ++connectGen;
+    const chromium = new ChromiumBackend();
+    currentBackend = chromium;
+    backendType = "chromium";
+
+    const launchOpts: Record<string, unknown> = {};
+    if (endpointUrl) {
+      // When endpoint is provided with chromium backend, treat it as a CDP
+      // attachment target (e.g. for testing with Lightpanda).
+      launchOpts.type = "cdp";
+      launchOpts.endpoint = endpointUrl;
+    }
+    if (chromiumOptions) {
+      Object.assign(launchOpts, chromiumOptions);
+    }
+    if (!launchOpts.type) {
+      launchOpts.type = "chromium";
+    }
+
+    chromium
+      .connect(launchOpts as Parameters<ChromiumBackend["connect"]>[0])
+      .then((result) => {
+        if (gen !== connectGen) {
+          chromium.close();
+          respondError(id, "ABORTED", "Connect aborted by close");
+          connecting = false;
+          return;
         }
-        respondError(id, "ABORTED", "Connect aborted by close");
-        log("debug", "connect aborted — stale gen", gen, "vs", connectGen);
+        connecting = false;
+        cdpEndpointUrl = result.endpoint;
+        respond(id, { connected: true, endpoint: result.endpoint, backend: "chromium" });
+        log("info", "Chromium backend connected");
+      })
+      .catch((err: Error) => {
+        if (gen === connectGen) {
+          connecting = false;
+          currentBackend = null;
+          backendType = null;
+        }
+        respondError(id, "LPD_CONNECTION_ERROR", "Failed to connect Chromium: " + err.message);
+        log("error", "Chromium connection failed", err.message);
+      });
+  } else {
+    // Default CDP backend — existing behavior unchanged.
+    if (!endpointUrl) {
+      endpointUrl = process.env.LPD_ENDPOINT ?? "ws://127.0.0.1:21111";
+      if (!isValidWsUrl(endpointUrl)) {
+        respondError(id, "INVALID_REQUEST", "endpoint must be a ws: or wss: URL");
         return;
       }
-      connecting = false;
-      cdpEndpointUrl = endpointUrl;
-      respond(id, { connected: true, endpoint: endpointUrl });
-      log("info", "CDP connected", endpointUrl);
-    })
-    .catch((err: Error) => {
-      // Connection failed — clean up and always send a response so the
-      // original R caller does not hang on a 30s timeout.
-      // Only touch `connecting` if this promise is still the active one.
-      if (gen === connectGen) {
+    }
+
+    connecting = true;
+    const gen = ++connectGen;
+    const conn = new DefaultCdpConnection();
+    currentBackend = conn;
+    backendType = "cdp";
+
+    conn
+      .connect(endpointUrl)
+      .then(() => {
+        if (gen !== connectGen) {
+          if (currentBackend === conn) {
+            conn.close();
+            currentBackend = null;
+            backendType = null;
+            cdpEndpointUrl = null;
+          } else {
+            conn.close();
+          }
+          respondError(id, "ABORTED", "Connect aborted by close");
+          connecting = false;
+          return;
+        }
         connecting = false;
-        // Only null the globals if this connection is still the active one.
-        if (cdpConnection === conn) {
-          cdpConnection = null;
-          cdpEndpointUrl = null;
+        cdpEndpointUrl = endpointUrl;
+        respond(id, { connected: true, endpoint: endpointUrl, backend: "cdp" });
+        log("info", "CDP connected", endpointUrl);
+      })
+      .catch((err: Error) => {
+        if (gen === connectGen) {
+          connecting = false;
+          if (currentBackend === conn) {
+            currentBackend = null;
+            backendType = null;
+            cdpEndpointUrl = null;
+          }
         }
-        respondError(id, "LPD_CONNECTION_ERROR", "Failed to connect to CDP endpoint");
+        respondError(id, "LPD_CONNECTION_ERROR", "Failed to connect to CDP endpoint: " + err.message);
         log("error", "CDP connection failed", endpointUrl, err.message);
-      } else {
-        // Stale connection — handleClose was called while we were connecting.
-        // Clean up and send ABORTED so the R caller gets the correct reason.
-        if (cdpConnection === conn) {
-          cdpConnection = null;
-          cdpEndpointUrl = null;
-        }
-        respondError(id, "ABORTED", "Connect aborted by close");
-        log("debug", "connect aborted (catch) — stale gen", gen, "vs", connectGen);
-      }
-    });
+      });
+  }
 }
 
 // ── navigate handler ─────────────────────────────────────────────────
@@ -528,6 +638,96 @@ function isPrivateHost(host: string): boolean {
   return false;
 }
 
+async function handleNavigateCdp(id: unknown, url: string, conn: DefaultCdpConnection): Promise<void> {
+  // Wrap navigation in a promise that resolves on Page.loadEventFired or times out.
+  const navPromise = new Promise<Record<string, unknown>>((resolve, reject) => {
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout>;
+
+    const onLoad = (): void => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        conn.removeListener("Page.loadEventFired", onLoad);
+        conn.removeListener("Page.frameStoppedLoading", onFrameStopped);
+        conn.removeListener("close", onConnClosed);
+        resolve({ loadEventFired: true });
+      }
+    };
+
+    const onFrameStopped = (): void => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        conn.removeListener("Page.loadEventFired", onLoad);
+        conn.removeListener("Page.frameStoppedLoading", onFrameStopped);
+        conn.removeListener("close", onConnClosed);
+        resolve({ frameStoppedLoading: true });
+      }
+    };
+
+    const onConnClosed = (): void => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        conn.removeListener("Page.loadEventFired", onLoad);
+        conn.removeListener("Page.frameStoppedLoading", onFrameStopped);
+        conn.removeListener("close", onConnClosed);
+        reject(new Error("Connection closed during navigation"));
+      }
+    };
+
+    timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        conn.removeListener("Page.loadEventFired", onLoad);
+        conn.removeListener("Page.frameStoppedLoading", onFrameStopped);
+        conn.removeListener("close", onConnClosed);
+        reject(new Error(`Navigation timeout after ${NAVIGATE_TIMEOUT_MS}ms to ${url}`));
+      }
+    }, NAVIGATE_TIMEOUT_MS);
+
+    conn.on("Page.loadEventFired", onLoad);
+    conn.on("Page.frameStoppedLoading", onFrameStopped);
+    conn.on("close", onConnClosed);
+
+    conn
+      .sendCommand("Page.enable")
+      .then(() => conn.sendCommand("Page.navigate", { url }))
+      .then((result) => {
+        log("debug", "Page.navigate sent for", url, "loaderId=", (result as Record<string, unknown>).loaderId);
+      })
+      .catch((err: Error) => {
+        conn.removeListener("Page.loadEventFired", onLoad);
+        conn.removeListener("Page.frameStoppedLoading", onFrameStopped);
+        conn.removeListener("close", onConnClosed);
+        clearTimeout(timeout);
+        settled = true;
+        reject(err);
+      });
+  });
+
+  try {
+    const result = await navPromise;
+    respond(id, { url, navigated: true, result });
+    log("info", "navigated to", url);
+  } catch (err) {
+    respondError(id, "PAGE_LOAD_ERROR", `Navigation failed: ${(err as Error).message}`);
+    log("error", "navigation failed for", url, (err as Error).message);
+  }
+}
+
+async function handleNavigateChromium(id: unknown, url: string, chromium: ChromiumBackend): Promise<void> {
+  try {
+    const result = await chromium.navigate(url);
+    respond(id, { url, navigated: result.navigated, result: { status: result.status } });
+    log("info", "chromium navigated to", url);
+  } catch (err) {
+    respondError(id, "PAGE_LOAD_ERROR", `Navigation failed: ${(err as Error).message}`);
+    log("error", "chromium navigation failed for", url, (err as Error).message);
+  }
+}
+
 async function handleNavigate(id: unknown, params?: unknown): Promise<void> {
   // Validate params first (before connection check).
   let url: string;
@@ -548,133 +748,33 @@ async function handleNavigate(id: unknown, params?: unknown): Promise<void> {
     return;
   }
 
-  if (cdpConnection === null || !cdpConnection.isConnected) {
-    respondError(id, "PAGE_LOAD_ERROR", "Cannot navigate — CDP connection not active");
+  if (currentBackend === null || !currentBackend.isConnected) {
+    respondError(id, "PAGE_LOAD_ERROR", "Cannot navigate — backend connection not active");
     log("warn", "navigate failed — not connected");
     return;
   }
 
-  // Capture local reference to prevent race with handleClose nullifying cdpConnection.
-  const conn = cdpConnection;
-
-  // Wrap navigation in a promise that resolves on Page.loadEventFired or times out.
-  const navPromise = new Promise<Record<string, unknown>>((resolve, reject) => {
-    let settled = false;
-    let timeout: ReturnType<typeof setTimeout>;
-
-    // Declare listeners before timeout so the variables are in scope.
-    // `let` TDZ does not apply here because CDP events are always async
-    // — `onLoad`/`onFrameStopped`/`onConnClosed` are never invoked before
-    // `timeout` is assigned by setTimeout's timer callback.
-    const onLoad = (): void => {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timeout);
-        conn!.removeListener("Page.loadEventFired", onLoad);
-        conn!.removeListener("Page.frameStoppedLoading", onFrameStopped);
-        conn!.removeListener("close", onConnClosed);
-        resolve({ loadEventFired: true });
-      }
-    };
-
-    // Also listen for frameStoppedLoading as a fallback settle signal.
-    const onFrameStopped = (): void => {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timeout);
-        conn!.removeListener("Page.loadEventFired", onLoad);
-        conn!.removeListener("Page.frameStoppedLoading", onFrameStopped);
-        conn!.removeListener("close", onConnClosed);
-        resolve({ frameStoppedLoading: true });
-      }
-    };
-
-    // If the connection closes during navigation (e.g. handleClose called after
-    // Page.navigate was sent but before load events fire), reject immediately
-    // instead of waiting for the full 30s timeout.
-    const onConnClosed = (): void => {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timeout);
-        conn!.removeListener("Page.loadEventFired", onLoad);
-        conn!.removeListener("Page.frameStoppedLoading", onFrameStopped);
-        conn!.removeListener("close", onConnClosed);
-        reject(new Error("Connection closed during navigation"));
-      }
-    };
-
-    timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        conn!.removeListener("Page.loadEventFired", onLoad);
-        conn!.removeListener("Page.frameStoppedLoading", onFrameStopped);
-        conn!.removeListener("close", onConnClosed);
-        reject(new Error(`Navigation timeout after ${NAVIGATE_TIMEOUT_MS}ms to ${url}`));
-      }
-    }, NAVIGATE_TIMEOUT_MS);
-
-    conn!.on("Page.loadEventFired", onLoad);
-    conn!.on("Page.frameStoppedLoading", onFrameStopped);
-    conn!.on("close", onConnClosed);
-
-    // Enable the Page domain first.
-    conn!
-      .sendCommand("Page.enable")
-      .then(() => conn!.sendCommand("Page.navigate", { url }))
-      .then((result) => {
-        // Navigation sent; waiting for loadEventFired.
-        log("debug", "Page.navigate sent for", url, "loaderId=", (result as Record<string, unknown>).loaderId);
-      })
-      .catch((err: Error) => {
-        // Page.enable or Page.navigate failed.
-        conn!.removeListener("Page.loadEventFired", onLoad);
-        conn!.removeListener("Page.frameStoppedLoading", onFrameStopped);
-        conn!.removeListener("close", onConnClosed);
-        clearTimeout(timeout);
-        settled = true;
-        reject(err);
-      });
-  });
-
-  try {
-    const result = await navPromise;
-    respond(id, { url, navigated: true, result });
-    log("info", "navigated to", url);
-  } catch (err) {
-    respondError(id, "PAGE_LOAD_ERROR", `Navigation failed: ${(err as Error).message}`);
-    log("error", "navigation failed for", url, (err as Error).message);
+  if (isChromium()) {
+    const chromium = getChromium();
+    if (chromium === null) {
+      respondError(id, "PAGE_LOAD_ERROR", "Chromium backend not available");
+      return;
+    }
+    await handleNavigateChromium(id, url, chromium);
+  } else {
+    const conn = getCDP();
+    if (conn === null) {
+      respondError(id, "PAGE_LOAD_ERROR", "CDP connection not active");
+      return;
+    }
+    await handleNavigateCdp(id, url, conn);
   }
 }
 
 // ── evaluate handler ─────────────────────────────────────────────────
 
-async function handleEvaluate(id: unknown, params?: unknown): Promise<void> {
-  // Validate params first (before connection check).
-  let expr: string;
-  if (typeof params === "object" && params !== null) {
-    const p = params as Record<string, unknown>;
-    if (typeof p.expr === "string" && p.expr.length > 0) {
-      expr = p.expr;
-    } else {
-      respondError(id, "INVALID_REQUEST", "evaluate requires a non-empty 'expr' parameter");
-      return;
-    }
-  } else {
-    respondError(id, "INVALID_REQUEST", "evaluate requires an 'expr' parameter");
-    return;
-  }
-
-  if (cdpConnection === null || !cdpConnection.isConnected) {
-    respondError(id, "CDP_ERROR", "Cannot evaluate — CDP connection not active");
-    log("warn", "evaluate failed — not connected");
-    return;
-  }
-
-  // Capture local reference to prevent race with handleClose nullifying cdpConnection.
-  const conn = cdpConnection;
-
+async function handleEvaluateCdp(id: unknown, expr: string, conn: DefaultCdpConnection): Promise<void> {
   try {
-    // Use Runtime.evaluate via CDP.
     await conn.sendCommand("Runtime.enable");
     const result = await conn.sendCommand("Runtime.evaluate", { expression: expr, returnByValue: true });
     // CDP includes exceptionDetails when JS throws — treat as evaluation error.
@@ -692,6 +792,56 @@ async function handleEvaluate(id: unknown, params?: unknown): Promise<void> {
   } catch (err) {
     respondError(id, "CDP_ERROR", `JavaScript evaluation failed: ${(err as Error).message}`);
     log("error", "evaluate failed, expression length", expr.length, (err as Error).message);
+  }
+}
+
+async function handleEvaluateChromium(id: unknown, expr: string, chromium: ChromiumBackend): Promise<void> {
+  try {
+    const result = await chromium.evaluate(expr);
+    respond(id, result);
+    log("debug", "chromium evaluate succeeded for expression length", expr.length);
+  } catch (err) {
+    respondError(id, "CDP_ERROR", `JavaScript evaluation failed: ${(err as Error).message}`);
+    log("error", "chromium evaluate failed, expression length", expr.length, (err as Error).message);
+  }
+}
+
+async function handleEvaluate(id: unknown, params?: unknown): Promise<void> {
+  // Validate params first (before connection check).
+  let expr: string;
+  if (typeof params === "object" && params !== null) {
+    const p = params as Record<string, unknown>;
+    if (typeof p.expr === "string" && p.expr.length > 0) {
+      expr = p.expr;
+    } else {
+      respondError(id, "INVALID_REQUEST", "evaluate requires a non-empty 'expr' parameter");
+      return;
+    }
+  } else {
+    respondError(id, "INVALID_REQUEST", "evaluate requires an 'expr' parameter");
+    return;
+  }
+
+  if (currentBackend === null || !currentBackend.isConnected) {
+    respondError(id, "CDP_ERROR", "Cannot evaluate — backend connection not active");
+    log("warn", "evaluate failed — not connected");
+    return;
+  }
+
+  if (isChromium()) {
+    const chromium = getChromium();
+    if (chromium === null) {
+      respondError(id, "CDP_ERROR", "Chromium backend not available");
+      return;
+    }
+    await handleEvaluateChromium(id, expr, chromium);
+  } else {
+    const conn = getCDP();
+    if (conn === null) {
+      respondError(id, "CDP_ERROR", "CDP connection not active");
+      return;
+    }
+    await handleEvaluateCdp(id, expr, conn);
   }
 }
 
@@ -713,14 +863,19 @@ async function handleDomInspect(id: unknown, params?: unknown): Promise<void> {
     // selector === undefined or null → full HTML mode (null default)
   }
 
-  if (cdpConnection === null || !cdpConnection.isConnected) {
-    respondError(id, "CDP_ERROR", "Cannot inspect DOM — CDP connection not active");
+  if (currentBackend === null || !currentBackend.isConnected) {
+    respondError(id, "CDP_ERROR", "Cannot inspect DOM — backend connection not active");
     log("warn", "domInspect failed — not connected");
     return;
   }
 
-  // Capture local reference to prevent race with handleClose.
-  const conn = cdpConnection;
+  // DOM inspect is only implemented for CDP backend in this spike.
+  if (isChromium()) {
+    respondError(id, "CDP_ERROR", "DOM inspect requires CDP backend, not Chromium");
+    return;
+  }
+
+  const conn = getCDP()!;
 
   try {
     await conn.sendCommand("Runtime.enable");
@@ -838,10 +993,10 @@ async function main(): Promise<void> {
         handlePing(id);
         break;
       case "connect":
-        handleConnect(id, req.params);
+        await handleConnect(id, req.params);
         break;
       case "close":
-        handleClose(id);
+        await handleClose(id);
         break;
       case "navigate":
         await handleNavigate(id, req.params);

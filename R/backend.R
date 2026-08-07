@@ -38,17 +38,21 @@ NULL
 #' Returns a backend object implementing the minimal contract:
 #' \code{connect()}, \code{navigate()}, \code{evaluate()}, \code{close()}.
 #'
-#' The default backend is the TypeScript sidecar.
+#' The default backend is the TypeScript sidecar with CDP (Lightpanda).
+#' The Chromium backend uses Puppeteer to control a local Chromium instance.
 #'
 #' @param sidecar_path Optional character string pointing to the sidecar
 #'   directory (the one containing `dist/index.js`). If `NULL`, the
 #'   installed package's sidecar is used.
+#' @param backend_type Which backend to use: `"lightpanda"` (CDP, default) or
+#'   `"chromium"` (Puppeteer-controlled local Chromium). Both implement the
+#'   same contract so the public API is unchanged.
 #'
 #' @return An environment with `$connected` (logical) and the four contract methods.
 #'
 #' @seealso The sidecar client in \code{R/sidecar.R}
 #' @keywords internal
-.rx_new_backend <- function(sidecar_path = NULL) {
+.rx_new_backend <- function(sidecar_path = NULL, backend_type = "lightpanda") {
   # Resolve sidecar path using the shared resolver.
   sc_dir <- .rx_resolve_sidecar_path(sidecar_path)
 
@@ -60,6 +64,7 @@ NULL
   state$.sidecar <- sc_dir
   state$connected <- FALSE
   state$endpoint <- NULL
+  state$.backend_type <- backend_type
 
   # Per-backend request ID counter — avoids shared global state between
   # backends and makes tests deterministic.
@@ -108,10 +113,16 @@ NULL
     proc <- .rx_start_sidecar(sidecar_path = state$.sidecar)
     state$.proc <- proc
 
+    # Build the connect params — include backend type for multi-backend support.
+    connect_params <- list(endpoint = ep)
+    if (state$.backend_type == "chromium") {
+      connect_params$backend <- "chromium"
+    }
+
     # Wrap in tryCatch so that a thrown error (timeout, process death)
     # still triggers cleanup instead of leaking the sidecar process.
     resp <- tryCatch(
-      .rx_send_request(proc, "connect", list(endpoint = ep), reqId = state$.reqId),
+      .rx_send_request(proc, "connect", connect_params, reqId = state$.reqId),
       error = function(e) list(error = list(code = "SEND_REQUEST_ERROR", message = e$message))
     )
     if (!is.null(resp$error)) {

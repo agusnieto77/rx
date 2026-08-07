@@ -225,7 +225,7 @@ describe("sidecar protocol", () => {
     const resp = await sendRequest(p, "navigate", { url: "http://example.com" });
     assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "PAGE_LOAD_ERROR");
-    assert.ok((resp.error as { message: string }).message.includes("CDP connection not active"));
+    assert.ok((resp.error as { message: string }).message.includes("backend connection not active"));
   });
 
   it("navigate with missing url returns INVALID_REQUEST", async () => {
@@ -240,7 +240,7 @@ describe("sidecar protocol", () => {
     const resp = await sendRequest(p, "evaluate", { expr: "1+1" });
     assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "CDP_ERROR");
-    assert.ok((resp.error as { message: string }).message.includes("CDP connection not active"));
+    assert.ok((resp.error as { message: string }).message.includes("backend connection not active"));
   });
 
   it("evaluate with missing expr returns INVALID_REQUEST", async () => {
@@ -286,6 +286,6 @@ describe("sidecar protocol", () => {
     const resp = await sendRequest(p, "domInspect", {});
     assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "CDP_ERROR");
-    assert.ok((resp.error as { message: string }).message.includes("CDP connection not active"));
+    assert.ok((resp.error as { message: string }).message.includes("backend connection not active"));
   });
 });

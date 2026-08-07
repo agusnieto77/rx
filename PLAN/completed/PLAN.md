@@ -1430,7 +1430,7 @@ Measure at least:
 
 ---
 
-### Task 74: Add optional Chromium backend spike [ ]
+### Task 74: Add optional Chromium backend spike [x]
 
 **Goal:** Verify that the backend abstraction is real.
 
@@ -1439,8 +1439,18 @@ Measure at least:
 - Do not duplicate X logic.
 
 **Acceptance criteria:**
-- Same high-level internal navigation call works with Lightpanda and Chromium.
-- Existing `x_search()` architecture does not require parser changes.
+- [x] Same high-level internal navigation call works with Lightpanda and Chromium (unified `currentBackend` abstraction).
+- [x] Existing `x_search()` architecture does not require parser changes (no parser code touched).
+
+**Files changed:**
+- `inst/node/package.json` — added `puppeteer@^24.0.0` dependency
+- `inst/node/src/browser/chromium.ts` — new `ChromiumBackend` class (Puppeteer-driven Chromium)
+- `inst/node/src/index.ts` — unified CDP/Chromium backend abstraction, both backends share the same JSONL protocol
+- `R/backend.R` — added `backend_type` parameter to `.rx_new_backend()` ("lightpanda" default, "chromium" option)
+- `inst/node/src/protocol.test.ts` — updated 3 error message assertions for new "backend connection not active" messages
+- `inst/node/src/chromium.test.ts` — 13 new Chromium backend integration tests (connect, navigate, evaluate, close, network/DOM restrictions, backend switching)
+
+**Test results:** 34/34 tests pass (21 protocol + 13 Chromium).
 
 ---
 
