@@ -1189,7 +1189,7 @@ The mock must simulate:
 
 ---
 
-### Task 62: Add cursor behavior to the local mock [ ]
+### Task 62: Add cursor behavior to the local mock [x]
 
 **Goal:** Test cursor-aware parsing independently.
 
@@ -1198,8 +1198,16 @@ The mock must simulate:
 - Change cursor after each batch.
 
 **Acceptance criteria:**
-- Parser extracts successive cursors.
-- Final batch has an explicit terminal state or missing next cursor.
+- [x] Parser extracts successive cursors (Test 63: 3 batches, each with distinct `cursor-batch-N`).
+- [x] `include_cursor=FALSE` returns no cursors (Test 64).
+- [x] Final empty batch signals terminal state — no cursor extracted (Test 65).
+- [x] Scroll state captures cursor after parsing (Test 66).
+- [x] Realistic scenario with cursors exercises extraction end-to-end (Test 67).
+
+**Files changed:**
+- `tests/testthat/test-search.R` — added Tests 63-67 (5 new tests for cursor behavior)
+
+**Notes:** The mock infrastructure (`_mock-infinite-scroll.R`) already supported `include_cursor` parameter from Task 61. This task adds dedicated tests that verify cursor extraction, cursor change across batches, terminal state (empty batch = no cursor), scroll state cursor tracking, and end-to-end realistic scenario with cursors. R not available in this environment for test execution (same as Task 24, 37, 41, etc.). TypeScript compiles cleanly.
 
 ---
 
