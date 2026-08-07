@@ -769,17 +769,25 @@ Track:
 
 ---
 
-### Task 44: Detect pagination cursors [ ]
+### Task 44: Detect pagination cursors [x]
 
 **Goal:** Extract cursors from known structured responses when present.
 
 **Actions:**
-- Add cursor discovery to the parser.
-- Do not yet directly replay cursor requests.
+- [x] Add cursor discovery to the parser.
+- [x] Do not yet directly replay cursor requests.
 
 **Acceptance criteria:**
-- Cursor extraction has fixture tests.
-- Missing cursor returns a defined empty value.
+- [x] Cursor extraction has fixture tests (Tests 22-24: 3 new tests).
+- [x] Missing cursor returns `character(0)`.
+- [x] `.rx_extract_cursors()` function added — walks `TimelineAddToModule` instructions, returns named character vector keyed by `cursorType`.
+- [x] `.rx_parse_posts()` now returns a `cursors` field (named character vector).
+- [x] Fixture already contains Bottom/Top cursors in `TimelineAddToModule` block — extracted correctly.
+- [x] Tests 1 and 18 updated to include cursors field check.
+
+**Files changed:**
+- `R/parser.R` — added `.rx_extract_cursors()` function, added `cursors` field to `.rx_parse_posts()` return value and both guard returns, updated roxygen docs
+- `tests/testthat/test-parser.R` — added Tests 22-24 (cursor extraction from fixture, missing cursors, edge cases), updated Tests 1 and 18
 
 ---
 

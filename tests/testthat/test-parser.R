@@ -109,6 +109,7 @@ test_that("parser extracts all fields from x-search-response.json", {
     length(result$post_id), length(result$quoted_post_id),
     info = "post_id and quoted_post_id have same length"
   )
+  testthat::expect_true("cursors" %in% names(result), info = "result has cursors")
 })
 
 # --- Test 2: post_id values are character strings ---
@@ -635,6 +636,7 @@ test_that("empty response returns all eighteen empty vectors", {
   testthat::expect_equal(length(result_null$is_quote), 0L, info = "NULL returns empty is_quote")
   testthat::expect_equal(length(result_null$reply_to_post_id), 0L, info = "NULL returns empty reply_to_post_id")
   testthat::expect_equal(length(result_null$quoted_post_id), 0L, info = "NULL returns empty quoted_post_id")
+  testthat::expect_equal(length(result_null$cursors), 0L, info = "NULL returns empty cursors")
 })
 
 # --- Test 19: Relationship fields extracted correctly from fixture ---
@@ -747,4 +749,73 @@ test_that(".rx_extract_bool returns FALSE for invalid input", {
   testthat::expect_false(xtweetsR:::.rx_extract_bool(list(in_reply_to_status_id_str = NA), "in_reply_to_status_id_str"), info = "NA field returns FALSE")
   testthat::expect_false(xtweetsR:::.rx_extract_bool(list(in_reply_to_status_id_str = NULL), "in_reply_to_status_id_str"), info = "NULL field returns FALSE")
   testthat::expect_true(xtweetsR:::.rx_extract_bool(list(in_reply_to_status_id_str = "123"), "in_reply_to_status_id_str"), info = "present field returns TRUE")
+})
+
+# --- Test 22: Cursor extraction from fixture ---
+test_that("cursors are extracted from x-search-response.json", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  result <- xtweetsR:::.rx_parse_posts(parsed)
+
+  testthat::expect_true("cursors" %in% names(result), info = "cursors present in result")
+
+  # The fixture has Bottom and Top cursors in TimelineAddToModule.
+  testthat::expect_true(is.character(result$cursors), info = "cursors is character")
+  testthat::expect_true("Bottom" %in% names(result$cursors), info = "Bottom cursor found")
+  testthat::expect_true("Top" %in% names(result$cursors), info = "Top cursor found")
+  testthat::expect_true(nzchar(result$cursors["Bottom"]), info = "Bottom cursor value is non-empty")
+  testthat::expect_true(nzchar(result$cursors["Top"]), info = "Top cursor value is non-empty")
+})
+
+# --- Test 23: Missing cursors returns empty ---
+test_that("response without TimelineAddToModule returns empty cursors", {
+  # Response with only Tweet entries, no cursor instruction.
+  response_no_cursors <- list(
+    data = list(
+      timeline = list(
+        instructions = list(
+          list(
+            type = "TimelineAddEntries",
+            entries = list(
+              list(
+                entryId = "tweet-123",
+                content = list(
+                  itemContent = list(
+                    tweet_results = list(
+                      result = list(
+                        rest_id = "123",
+                        legacy = list(full_text = "Hello world")
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+
+  result <- xtweetsR:::.rx_parse_posts(response_no_cursors)
+
+  testthat::expect_true(is.character(result$cursors), info = "cursors is character")
+  testthat::expect_equal(length(result$cursors), 0L, info = "cursors is empty when absent")
+})
+
+# --- Test 24: .rx_extract_cursors handles edge cases ---
+test_that(".rx_extract_cursors returns character(0) for invalid input", {
+  testthat::expect_equal(xtweetsR:::.rx_extract_cursors(NULL), character(0), info = "NULL input returns empty")
+  testthat::expect_equal(xtweetsR:::.rx_extract_cursors(list()), character(0), info = "empty list returns empty")
+  testthat::expect_equal(
+    xtweetsR:::.rx_extract_cursors(list(data = list())),
+    character(0),
+    info = "missing timeline returns empty"
+  )
 })

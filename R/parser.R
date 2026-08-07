@@ -28,7 +28,13 @@ NULL
 # `jsonlite::fromJSON(..., simplifyVector = FALSE)` on the timeline JSON)
 # and walks the instruction/entry tree to find tweet entries.
 #'
-#' Returns a list with eighteen vectors:
+#' Returns a list with:
+#'   - 18 vectors as described below (post_id through quoted_post_id).
+#'   - `cursors` — a list of cursor objects discovered in the response.
+#'     Each cursor has `cursorType` (character: "Top"/"Bottom"/etc.)
+#'     and `value` (character: the cursor token).
+#'     Returns `list(top = character(0), bottom = character(0))` when
+#'     no cursors are present.
 #'   - `post_id` — the tweet `rest_id`
 #'   - `text` — the tweet `full_text`
 #'   - `author_id` — the user `id` from core.user_results.result.id
@@ -77,6 +83,8 @@ NULL
 #'     \item `is_quote` — logical vector, TRUE when the post is a quote
 #'     \item `reply_to_post_id` — character vector of the post being replied to (NA when not a reply)
 #'     \item `quoted_post_id` — character vector of the quoted post ID (NA when not a quote)
+#'     \item `cursors` — named character vector of cursor tokens keyed by cursorType
+#'       (e.g. "Bottom" → cursor value, "Top" → cursor value); empty when absent
 #'   }
 #'
 #' @noRd
@@ -92,7 +100,8 @@ NULL
       bookmark_count = integer(0), view_count = integer(0),
       conversation_id = character(0),
       is_reply = logical(0), is_repost = logical(0), is_quote = logical(0),
-      reply_to_post_id = character(0), quoted_post_id = character(0)
+      reply_to_post_id = character(0), quoted_post_id = character(0),
+      cursors = character(0)
     ))
   }
 
@@ -108,7 +117,8 @@ NULL
       bookmark_count = integer(0), view_count = integer(0),
       conversation_id = character(0),
       is_reply = logical(0), is_repost = logical(0), is_quote = logical(0),
-      reply_to_post_id = character(0), quoted_post_id = character(0)
+      reply_to_post_id = character(0), quoted_post_id = character(0),
+      cursors = character(0)
     ))
   }
 
@@ -153,7 +163,7 @@ NULL
 
       # Extract rest_id (post_id).
       rest_id <- result$rest_id
-      if (is.null(rest_id) || anyNA(rest_id) || !is.character(rest_id) || !nzchar(rest_id)) {
+      if (is.null(rest_id) || length(rest_id) != 1L || anyNA(rest_id) || !is.character(rest_id) || !nzchar(trimws(rest_id))) {
         next
       }
 
@@ -170,12 +180,13 @@ NULL
       display_name <- .rx_extract_display_name(result)
 
       # Coerce to character — X may return numeric ids; preserve as string.
-      author_id_str <- if (is.null(author_id) || anyNA(author_id)) NA_character_ else as.character(author_id)
+      # Reject empty/whitespace-only values (consistent with rest_id guard).
+      author_id_str <- if (is.null(author_id) || length(author_id) != 1L || anyNA(author_id) || !nzchar(trimws(as.character(author_id)))) NA_character_ else as.character(author_id)
 
       # Extract created_at from legacy.
       created_at_str <- if (is.list(legacy) && !is.null(legacy$created_at)) {
         cat_val <- legacy$created_at
-        if (is.null(cat_val) || anyNA(cat_val)) NA_character_ else as.character(cat_val)
+        if (is.null(cat_val) || length(cat_val) != 1L || anyNA(cat_val) || !nzchar(trimws(as.character(cat_val)))) NA_character_ else as.character(cat_val)
       } else {
         NA_character_
       }
@@ -192,7 +203,7 @@ NULL
       conversation_ids <- c(conversation_ids,
         if (is.list(legacy) && !is.null(legacy$conversation_id_str)) {
           val <- legacy$conversation_id_str
-          if (is.null(val) || anyNA(val)) NA_character_ else as.character(val)
+          if (length(val) != 1L || anyNA(val) || !nzchar(trimws(as.character(val)))) NA_character_ else as.character(val)
         } else {
           NA_character_
         }
@@ -203,7 +214,7 @@ NULL
       reply_to_post_ids <- c(reply_to_post_ids,
         if (is.list(legacy) && !is.null(legacy$in_reply_to_status_id_str)) {
           val <- legacy$in_reply_to_status_id_str
-          if (is.null(val) || anyNA(val)) NA_character_ else as.character(val)
+          if (length(val) != 1L || anyNA(val) || !nzchar(trimws(as.character(val)))) NA_character_ else as.character(val)
         } else {
           NA_character_
         }
@@ -211,7 +222,7 @@ NULL
       quoted_post_ids <- c(quoted_post_ids,
         if (is.list(legacy) && !is.null(legacy$quoted_status_id_str)) {
           val <- legacy$quoted_status_id_str
-          if (is.null(val) || anyNA(val)) NA_character_ else as.character(val)
+          if (length(val) != 1L || anyNA(val) || !nzchar(trimws(as.character(val)))) NA_character_ else as.character(val)
         } else {
           NA_character_
         }
@@ -220,11 +231,14 @@ NULL
       post_ids <- c(post_ids, rest_id)
       texts <- c(texts, as.character(full_text))
       author_ids <- c(author_ids, author_id_str)
-      user_names <- c(user_names, if (is.character(username)) username else NA_character_)
-      disp_names <- c(disp_names, if (is.character(display_name)) display_name else NA_character_)
+      user_names <- c(user_names, if (is.character(username) && length(username) == 1L && !anyNA(username) && nzchar(trimws(username))) username else NA_character_)
+      disp_names <- c(disp_names, if (is.character(display_name) && length(display_name) == 1L && !anyNA(display_name) && nzchar(trimws(display_name))) display_name else NA_character_)
       created_at <- c(created_at, created_at_str)
     }
   }
+
+  # Extract pagination cursors from TimelineAddToModule instructions.
+  cursors <- .rx_extract_cursors(response)
 
   list(
     post_id = post_ids,
@@ -244,7 +258,8 @@ NULL
     is_repost = is_repost,
     is_quote = is_quote,
     reply_to_post_id = reply_to_post_ids,
-    quoted_post_id = quoted_post_ids
+    quoted_post_id = quoted_post_ids,
+    cursors = cursors
   )
 }
 
@@ -283,17 +298,19 @@ NULL
 
 #' Extract a boolean flag from legacy data.
 #'
-#' Returns TRUE when the named field exists, is not NULL, and is not NA.
-#' Returns FALSE otherwise (missing field, NULL, or NA).
+#' Returns TRUE when the named field exists, is not NULL, is not NA,
+#' and is not an empty or whitespace-only string.
+#' Returns FALSE otherwise (missing field, NULL, NA, or empty).
 #'
 #' @param legacy The tweet$legacy list.
 #' @param field The field name to check (e.g. "in_reply_to_status_id_str").
-#' @return A single logical (FALSE when the field is missing or NA).
+#' @return A single logical (FALSE when the field is missing, NA, or empty).
 #' @noRd
 .rx_extract_bool <- function(legacy, field) {
   if (!is.list(legacy)) return(FALSE)
   val <- legacy[[field]]
-  isTRUE(val)
+  if (length(val) != 1L) return(FALSE)
+  !is.null(val) && !anyNA(val) && nzchar(trimws(as.character(val)))
 }
 
 #' Find the tweet result object inside an entry.
@@ -376,4 +393,60 @@ NULL
   if (is.null(user_result)) return(NULL)
   legacy <- user_result$legacy
   if (is.list(legacy)) legacy$name else NULL
+}
+
+#' Extract pagination cursors from the response.
+#'
+#' Walks the response's instructions looking for `TimelineAddToModule`
+#' blocks and collects cursor tokens keyed by their `cursorType`.
+#' Only cursor entries that carry both a `cursorType` and a `value`
+#' are returned.
+#'
+#' Returns a named character vector: names are cursor types
+#' (e.g. "Bottom", "Top"), values are the cursor tokens.
+#' Returns `character(0)` when no cursors are found.
+#'
+#' @param response A list, the parsed JSON response from X's GraphQL
+#'   timeline endpoint.
+#' @return A named `character` vector of cursor tokens.
+#' @examples
+#'   # Internal use only — not exported.
+#'   # parsed <- jsonlite::fromJSON(file, simplifyVector = FALSE)
+#'   # .rx_extract_cursors(parsed)
+#' @noRd
+.rx_extract_cursors <- function(response) {
+  # Guard against non-list input.
+  if (!is.list(response)) return(character(0))
+
+  instructions <- response$data$timeline$instructions
+  if (is.null(instructions) || !is.list(instructions)) return(character(0))
+
+  result <- character(0)
+
+  for (inst in instructions) {
+    # Only process TimelineAddToModule instructions.
+    if (is.null(inst$type) || inst$type != "TimelineAddToModule") {
+      next
+    }
+
+    module_items <- inst$moduleItems
+    if (is.null(module_items) || !is.list(module_items)) {
+      next
+    }
+
+    for (item in module_items) {
+      cursor <- item$item$cursor
+      if (is.null(cursor) || !is.list(cursor)) next
+
+      cursor_type <- cursor$cursorType
+      cursor_value <- cursor$value
+      if (is.null(cursor_type) || is.null(cursor_value)) next
+      if (length(cursor_type) != 1L || length(cursor_value) != 1L) next
+      if (anyNA(cursor_type) || anyNA(cursor_value)) next
+
+      result[as.character(cursor_type)] <- as.character(cursor_value)
+    }
+  }
+
+  result
 }
