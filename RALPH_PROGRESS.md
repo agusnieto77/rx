@@ -56,6 +56,13 @@ Started: 2026-08-07
 - R package dependencies (testthat, roxygen2, tibble) need to be installed.
 - Minimal repo — clean slate for building the package.
 
+## Task 5: Add package-level documentation - COMPLETED
+
+- Added roxygen2 package documentation with title and description in `R/xtweetsR-package.R`.
+- `roxygen2::roxygenise()` generated `man/xtweetsR-package.Rd` and updated `NAMESPACE`.
+- `testthat::test_local()` passes.
+- `R CMD build` produces `xtweetsR_0.1.0.tar.gz` without errors.
+
 ## Task 4: Add the first package smoke test - COMPLETED
 
 - Created `tests/testthat/test-smoke.R` with a trivial smoke test (`requireNamespace("xtweetsR")`).
