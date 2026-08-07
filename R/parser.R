@@ -9,6 +9,7 @@
 #
 # Task 31 scope: extract only post_id (rest_id) and text (full_text).
 # Task 32 scope: add author identity fields (author_id, username, display_name).
+# Task 33 scope: add timestamp (created_at).
 #
 # @name parser
 # @aliases parser
@@ -25,12 +26,13 @@ NULL
 # `jsonlite::fromJSON(..., simplifyVector = FALSE)` on the timeline JSON)
 # and walks the instruction/entry tree to find tweet entries.
 #'
-#' Returns a list with five character vectors:
+#' Returns a list with six character vectors:
 #'   - `post_id` — the tweet `rest_id`
 #'   - `text` — the tweet `full_text`
 #'   - `author_id` — the user `id` from core.user_results.result.id
 #'   - `username` — the user `screen_name` from core.user_results.result.legacy
 #'   - `display_name` — the user `name` from core.user_results.result.legacy
+#'   - `created_at` — the tweet `created_at` string from legacy (NA when unavailable)
 #'
 #' Only entries that contain a valid `rest_id` are included.
 #' Entries that lack the expected nesting (e.g. cursor entries,
@@ -48,6 +50,7 @@ NULL
 #'     \item `author_id` — character vector of author IDs (NA when unavailable)
 #'     \item `username` — character vector of usernames (NA when unavailable)
 #'     \item `display_name` — character vector of display names (NA when unavailable)
+#'     \item `created_at` — character vector of raw timestamp strings (NA when unavailable)
 #'   }
 #'
 #' @noRd
@@ -57,7 +60,7 @@ NULL
     return(list(
       post_id = character(0), text = character(0),
       author_id = character(0), username = character(0),
-      display_name = character(0)
+      display_name = character(0), created_at = character(0)
     ))
   }
 
@@ -67,7 +70,7 @@ NULL
     return(list(
       post_id = character(0), text = character(0),
       author_id = character(0), username = character(0),
-      display_name = character(0)
+      display_name = character(0), created_at = character(0)
     ))
   }
 
@@ -78,6 +81,7 @@ NULL
   author_ids <- character(0)
   user_names <- character(0)
   disp_names <- character(0)
+  created_at <- character(0)
 
   for (inst in instructions) {
     # Only process TimelineAddEntries instructions.
@@ -118,11 +122,20 @@ NULL
       # Coerce to character — X may return numeric ids; preserve as string.
       author_id_str <- if (is.null(author_id) || anyNA(author_id)) NA_character_ else as.character(author_id)
 
+      # Extract created_at from legacy.
+      created_at_str <- if (is.list(legacy) && !is.null(legacy$created_at)) {
+        cat_val <- legacy$created_at
+        if (is.null(cat_val) || anyNA(cat_val)) NA_character_ else as.character(cat_val)
+      } else {
+        NA_character_
+      }
+
       post_ids <- c(post_ids, rest_id)
       texts <- c(texts, as.character(full_text))
       author_ids <- c(author_ids, author_id_str)
       user_names <- c(user_names, if (is.character(username)) username else NA_character_)
       disp_names <- c(disp_names, if (is.character(display_name)) display_name else NA_character_)
+      created_at <- c(created_at, created_at_str)
     }
   }
 
@@ -131,7 +144,8 @@ NULL
     text = texts,
     author_id = author_ids,
     username = user_names,
-    display_name = disp_names
+    display_name = disp_names,
+    created_at = created_at
   )
 }
 

@@ -540,7 +540,7 @@ Extract when available:
 
 ---
 
-### Task 33: Extend parser with timestamps [ ]
+### Task 33: Extend parser with timestamps [x]
 
 **Goal:** Add time information.
 
@@ -549,8 +549,8 @@ Extract:
 - created_at
 
 **Acceptance criteria:**
-- Timestamp parsing has tests.
-- Invalid/missing timestamps fail gracefully.
+- [x] Timestamp parsing has tests (3 new tests: fixture match, missing timestamp, empty legacy).
+- [x] Invalid/missing timestamps fail gracefully (returns NA_character_).
 
 ---
 
