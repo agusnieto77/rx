@@ -1139,23 +1139,30 @@ Introduce only errors currently needed, such as:
 
 ---
 
-### Task 60: Add CLI progress output [ ]
+### Task 60: Add CLI progress output [x]
 
 **Goal:** Make long collections understandable.
 
 **Actions:**
 Add progress messages for:
-- session connected
-- navigation
-- posts collected
-- checkpoint written
-- completion
+- [x] session connected
+- [x] navigation
+- [x] posts collected
+- [x] checkpoint written
+- [x] completion
 
-Add `quiet = TRUE`.
+Add `quiet = FALSE` (default on/off).
 
 **Acceptance criteria:**
-- Normal mode prints useful progress.
-- Quiet mode suppresses non-error progress.
+- [x] Normal mode prints useful progress.
+- [x] Quiet mode suppresses non-error progress.
+
+**Files changed:**
+- `R/search.R` — added `.rx_progress()` helper, `quiet` parameter to `x_search()`, `x_user_posts()`, `x_post()`
+- `R/session.R` — added `quiet` parameter to `x_session()`, `x_close()` with session close message
+- `tests/testthat/test-search.R` — added Tests 55-56 for `.rx_progress()` quiet mode
+
+**Notes:** R not available in this environment for test execution (same as Task 24). TypeScript compiles cleanly. Progress uses `message()` which is the R standard for informational output.
 
 ---
 

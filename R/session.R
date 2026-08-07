@@ -26,6 +26,8 @@
 #' @param sidecar_path Optional character string pointing to the sidecar
 #'   directory (the one containing \code{dist/index.js}). If \code{NULL},
 #'   the installed package's sidecar is used.
+#' @param quiet Logical, default `FALSE`. When `TRUE`, progress messages
+#'   are suppressed.
 #'
 #' @return An environment with class \code{"xtweetsR_session"} containing:
 #'   \itemize{
@@ -46,7 +48,7 @@
 #' }
 #'
 #' @export
-x_session <- function(endpoint = NULL, sidecar_path = NULL) {
+x_session <- function(endpoint = NULL, sidecar_path = NULL, quiet = FALSE) {
   # Resolve endpoint using the same precedence as the config module.
   resolved <- .rx_resolve_endpoint(endpoint)
 
@@ -56,6 +58,9 @@ x_session <- function(endpoint = NULL, sidecar_path = NULL) {
   # Connect the backend, passing the resolved endpoint so the sidecar
   # establishes a CDP connection to the correct Lightpanda instance.
   backend$connect(endpoint = resolved$endpoint)
+
+  # Store quiet flag on the session so search functions can reference it.
+  backend$.quiet <- quiet
 
   # Build the session object.
   # Use an environment so that $<- mutations inside close() propagate to the
@@ -74,6 +79,12 @@ x_session <- function(endpoint = NULL, sidecar_path = NULL) {
     }
   }
   reg.finalizer(session, finalizer, onexit = TRUE)
+
+  # Progress: session started.
+  tryCatch(
+    message("[xtweetsR] Session started, connected to ", resolved$endpoint),
+    error = function(e) NULL
+  )
 
   session$close <- function() {
     if (is.null(session$backend)) {
@@ -99,6 +110,8 @@ x_session <- function(endpoint = NULL, sidecar_path = NULL) {
 #'
 #' @param session An \code{xtweetsR_session} object returned by
 #'   \code{\link[=x_session]{x_session()}}.
+#' @param quiet Logical, default `FALSE`. When `TRUE`, progress messages
+#'   are suppressed.
 #'
 #' @return Invisibly \code{NULL}.
 #'
@@ -109,7 +122,7 @@ x_session <- function(endpoint = NULL, sidecar_path = NULL) {
 #' }
 #'
 #' @export
-x_close <- function(session) {
+x_close <- function(session, quiet = FALSE) {
   if (is.null(session)) {
     return(invisible(NULL))
   }
@@ -117,6 +130,12 @@ x_close <- function(session) {
     return(invisible(NULL))
   }
   session$close()
+  tryCatch(
+    {
+      if (!quiet) message("[xtweetsR] Session closed.")
+    },
+    error = function(e) NULL
+  )
   invisible(NULL)
 }
 

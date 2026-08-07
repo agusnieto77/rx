@@ -42,6 +42,27 @@
 NULL
 
 # ---------------------------------------------------------------------------
+# Progress output helper (Task 60)
+# ---------------------------------------------------------------------------
+
+#' Emit a progress message to the user.
+#'
+#' Prints a timestamped message via `message()` when not in quiet mode.
+#'
+#' @param msg Character string, the progress message.
+#' @param quiet Logical, when `TRUE` the message is suppressed.
+#' @return Invisible `NULL`.
+#' @noRd
+.rx_progress <- function(msg, quiet = FALSE) {
+  if (isTRUE(quiet)) return(invisible(NULL))
+  tryCatch(
+    message("[xtweetsR] ", msg),
+    error = function(e) NULL
+  )
+  invisible(NULL)
+}
+
+# ---------------------------------------------------------------------------
 # Internal constants (Task 64, referenced by Task 45)
 # ---------------------------------------------------------------------------
 
@@ -229,6 +250,9 @@ print.rx_collection_provenance <- function(x, ...) {
 #'   collection file. When \code{resume = TRUE}, new posts are appended
 #'   to this file instead of overwriting it. Defaults to
 #'   `paste0(query, ".jsonl")` when resuming.
+#' @param quiet Logical, default `FALSE`. When `TRUE`, progress messages
+#'   are suppressed. When `FALSE` (default), the function prints
+#'   informational messages at each major step.
 #'
 #' @return A tibble with the canonical post schema (18 columns) containing
 #'   posts found during the search. Returns a zero-row tibble when no
@@ -244,7 +268,8 @@ print.rx_collection_provenance <- function(x, ...) {
 #'
 #' @export
 x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 5L,
-                     resume = FALSE, checkpoint_path = NULL, jsonl_path = NULL) {
+                     resume = FALSE, checkpoint_path = NULL, jsonl_path = NULL,
+                     quiet = FALSE) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -334,6 +359,9 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     error_info <- if (!is.null(nav_result$error)) nav_result$error$code else "unknown"
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No posts returned.")
+  } else {
+    .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
+  }
     empty <- .rx_search_empty_tibble()
     provenance <- .rx_collection_metadata(
       collection_id = collection_id,
@@ -371,6 +399,11 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   initial_posts <- .rx_search_extract_from_events(initial_events, backend)
   state$add_posts(initial_posts)
 
+  .rx_progress(
+    "Extracted ", length(initial_posts$post_id), " post(s) from initial batch",
+    quiet = quiet
+  )
+
   # 6. Bounded repeated scroll+extract loop (Task 42).
   #
   #    The loop iterates at most max_scrolls times. After each iteration:
@@ -407,6 +440,12 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 
       # Record in scroll state (dedup, stall detection).
       state$add_posts(extracted)
+
+      .rx_progress(
+        "Scroll iteration ", i, ": extracted ", length(extracted$post_id),
+        " post(s)",
+        quiet = quiet
+      )
 
       # Accumulate batch for later merging.
       if (length(extracted$post_id) > 0L) {
@@ -531,7 +570,10 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   if (isTRUE(resume) && !is.null(jsonl_path)) {
     checkpoint <- .rx_checkpoint_from_state(state, collection_id, query)
     tryCatch(
-      .rx_checkpoint_write(jsonl_path, checkpoint),
+      {
+        .rx_checkpoint_write(jsonl_path, checkpoint)
+        .rx_progress("Checkpoint saved to ", jsonl_path, quiet = quiet)
+      },
       error = function(e) {
         warning("Failed to write checkpoint to '", jsonl_path, "': ", e$message)
       }
@@ -547,6 +589,13 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     record_count = as.integer(nrow(deduped))
   )
   attr(deduped, "rx_collection_provenance") <- provenance
+
+  .rx_progress(
+    "Collection complete: ", nrow(deduped), " post(s) in ",
+    round(as.numeric(difftime(Sys.time(), collection_started_at, units = "secs")), 1),
+    "s",
+    quiet = quiet
+  )
 
   deduped
 }
@@ -574,6 +623,8 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 #' @param limit Optional integer limiting the maximum number of posts
 #'   returned. Default `1L` — a single post page should yield at most
 #'   one post.
+#' @param quiet Logical, default `FALSE`. When `TRUE`, progress messages
+#'   are suppressed.
 #'
 #' @return A tibble with the canonical post schema (21 columns)
 #'   containing zero or one row. Returns a zero-row tibble when no
@@ -588,7 +639,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 #' }
 #'
 #' @export
-x_post <- function(session, post_id, limit = 1L) {
+x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -636,6 +687,9 @@ x_post <- function(session, post_id, limit = 1L) {
     error_info <- if (!is.null(nav_result$error)) nav_result$error$code else "unknown"
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No post returned.")
+  } else {
+    .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
+  }
     empty <- .rx_search_empty_tibble()
     provenance <- .rx_collection_metadata(
       collection_id = collection_id,
@@ -691,6 +745,11 @@ x_post <- function(session, post_id, limit = 1L) {
     record_count = as.integer(nrow(deduped))
   )
   attr(deduped, "rx_collection_provenance") <- provenance
+
+  .rx_progress(
+    "Post lookup complete: ", nrow(deduped), " post(s)",
+    quiet = quiet
+  )
 
   deduped
 }
@@ -1177,6 +1236,9 @@ x_post <- function(session, post_id, limit = 1L) {
 #'   collection file. Defaults to
 #'   `paste0(gsub("[^A-Za-z0-9._-]", "_", username), ".jsonl")`
 #'   when resuming.
+#' @param quiet Logical, default `FALSE`. When `TRUE`, progress messages
+#'   are suppressed. When `FALSE` (default), the function prints
+#'   informational messages at each major step.
 #'
 #' @return A tibble with the canonical post schema (21 columns) containing
 #'   posts found on the user's timeline. Returns a zero-row tibble when
@@ -1193,7 +1255,8 @@ x_post <- function(session, post_id, limit = 1L) {
 #' @export
 x_user_posts <- function(session, username, limit = NULL, path = NULL,
                          scroll = TRUE, max_scrolls = 5L,
-                         resume = FALSE, checkpoint_path = NULL, jsonl_path = NULL) {
+                         resume = FALSE, checkpoint_path = NULL, jsonl_path = NULL,
+                         quiet = FALSE) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -1281,6 +1344,9 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     error_info <- if (!is.null(nav_result$error)) nav_result$error$code else "unknown"
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No posts returned.")
+  } else {
+    .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
+  }
     empty <- .rx_search_empty_tibble()
     provenance <- .rx_collection_metadata(
       collection_id = collection_id,
@@ -1315,6 +1381,11 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
   initial_posts <- .rx_search_extract_from_events(initial_events, backend)
   state$add_posts(initial_posts)
 
+  .rx_progress(
+    "Extracted ", length(initial_posts$post_id), " post(s) from initial batch",
+    quiet = quiet
+  )
+
   # Accumulate initial batch.
   all_batches <- list()
   if (length(initial_posts$post_id) > 0L) {
@@ -1338,6 +1409,12 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
 
       extracted <- .rx_search_extract_from_events(batch_events, backend)
       state$add_posts(extracted)
+
+      .rx_progress(
+        "Scroll iteration ", i, ": extracted ", length(extracted$post_id),
+        " post(s)",
+        quiet = quiet
+      )
 
       if (length(extracted$post_id) > 0L) {
         all_batches[[length(all_batches) + 1L]] <- extracted
@@ -1453,7 +1530,10 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
   if (isTRUE(resume) && !is.null(jsonl_path)) {
     checkpoint <- .rx_checkpoint_from_state(state, collection_id, paste0("@", trimws(username)))
     tryCatch(
-      .rx_checkpoint_write(jsonl_path, checkpoint),
+      {
+        .rx_checkpoint_write(jsonl_path, checkpoint)
+        .rx_progress("Checkpoint saved to ", jsonl_path, quiet = quiet)
+      },
       error = function(e) {
         warning("Failed to write checkpoint to '", jsonl_path, "': ", e$message)
       }
@@ -1469,6 +1549,13 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     record_count = as.integer(nrow(deduped))
   )
   attr(deduped, "rx_collection_provenance") <- provenance
+
+  .rx_progress(
+    "Collection complete: ", nrow(deduped), " post(s) in ",
+    round(as.numeric(difftime(Sys.time(), collection_started_at, units = "secs")), 1),
+    "s",
+    quiet = quiet
+  )
 
   deduped
 }

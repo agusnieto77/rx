@@ -1578,3 +1578,20 @@ test_that("x_search with resume=FALSE does not write checkpoint file", {
   expect_true(inherits(result, "tbl_df"))
   expect_true(nrow(result) >= 1)
 })
+
+# ===================================================================
+# Progress output tests (Task 60)
+# ===================================================================
+
+# --- Test 55: .rx_progress suppresses output when quiet=TRUE ---
+test_that(".rx_progress does not emit messages when quiet=TRUE", {
+  msgs <- capture_messages(.rx_progress("should not appear", quiet = TRUE))
+  expect_equal(length(msgs), 0L)
+})
+
+# --- Test 56: .rx_progress emits messages when quiet=FALSE ---
+test_that(".rx_progress emits messages when quiet=FALSE", {
+  msgs <- capture_messages(.rx_progress("test message", quiet = FALSE))
+  expect_equal(length(msgs), 1L)
+  expect_true(grepl("test message", msgs[[1L]]))
+})
