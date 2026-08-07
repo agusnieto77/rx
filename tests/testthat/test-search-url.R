@@ -83,6 +83,34 @@ test_that("whitespace-only query throws", {
   expect_error(.rx_construct_search_url("  "), "non-empty")
 })
 
+test_that("NA query throws", {
+  expect_error(.rx_construct_search_url(NA_character_), "non-empty|single")
+})
+
+test_that("NA from_user throws", {
+  expect_error(.rx_construct_search_url("test", from_user = NA_character_), "from_user must be")
+})
+
+test_that("NA filter throws", {
+  expect_error(.rx_construct_search_url("test", filter = NA_character_), "filter must be")
+})
+
+test_that("multi-element from_user throws", {
+  expect_error(.rx_construct_search_url("test", from_user = c("a", "b")), "from_user must be")
+})
+
+test_that("whitespace-only from_user throws", {
+  expect_error(.rx_construct_search_url("test", from_user = "   "), "from_user must be")
+})
+
+test_that("whitespace-only filter throws", {
+  expect_error(.rx_construct_search_url("test", filter = "  "), "filter must be")
+})
+
+test_that("multi-element filter throws", {
+  expect_error(.rx_construct_search_url("test", filter = c("a", "b")), "filter must be")
+})
+
 # -- round-trip sanity --------------------------------------------------------
 
 test_that("URL contains exactly one q= parameter", {
@@ -106,4 +134,96 @@ test_that("filter NULL does not append filter", {
   url <- .rx_construct_search_url("test", filter = NULL)
   # Should not have any extra filter-like parameters after the q= value
   expect_true(grepl("^https://x.com/search\\?q=test$", url))
+})
+
+# ===================================================================
+# User timeline URL construction (Task 52)
+# ===================================================================
+
+test_that("basic user timeline URL is constructed correctly", {
+  url <- .rx_construct_user_timeline_url("hadleywickham")
+  expect_equal(url, "https://x.com/hadleywickham")
+})
+
+test_that("username with leading @ is stripped", {
+  url <- .rx_construct_user_timeline_url("@hadleywickham")
+  expect_equal(url, "https://x.com/hadleywickham")
+})
+
+test_that("username with special characters is handled", {
+  url <- .rx_construct_user_timeline_url("user_name-123")
+  expect_equal(url, "https://x.com/user_name-123")
+})
+
+test_that("path segment is appended", {
+  url <- .rx_construct_user_timeline_url("hadleywickham", path = "media")
+  expect_equal(url, "https://x.com/hadleywickham/media")
+})
+
+test_that("path 'tweets_with_replies' is appended", {
+  url <- .rx_construct_user_timeline_url("hadleywickham", path = "tweets_with_replies")
+  expect_equal(url, "https://x.com/hadleywickham/tweets_with_replies")
+})
+
+test_that("filter is appended as query parameter", {
+  url <- .rx_construct_user_timeline_url("hadleywickham", filter = "tagged_media=true")
+  expect_equal(url, "https://x.com/hadleywickham?tagged_media%3Dtrue")
+})
+
+test_that("path and filter together", {
+  url <- .rx_construct_user_timeline_url("hadleywickham", path = "media", filter = "tagged_media=true")
+  expect_equal(url, "https://x.com/hadleywickham/media?tagged_media%3Dtrue")
+})
+
+test_that("path NULL gives base timeline", {
+  url <- .rx_construct_user_timeline_url("rstudio", path = NULL)
+  expect_equal(url, "https://x.com/rstudio")
+})
+
+test_that("filter NULL does not add query string", {
+  url <- .rx_construct_user_timeline_url("rstudio", filter = NULL)
+  expect_equal(url, "https://x.com/rstudio")
+})
+
+test_that("both path and filter NULL gives base timeline", {
+  url <- .rx_construct_user_timeline_url("rstudio", path = NULL, filter = NULL)
+  expect_equal(url, "https://x.com/rstudio")
+})
+
+test_that("empty username throws", {
+  expect_error(.rx_construct_user_timeline_url(""), "non-empty")
+})
+
+test_that("NULL username throws", {
+  expect_error(.rx_construct_user_timeline_url(NULL), "non-empty")
+})
+
+test_that("whitespace-only username throws", {
+  expect_error(.rx_construct_user_timeline_url("  "), "non-empty")
+})
+
+test_that("NA username throws", {
+  expect_error(.rx_construct_user_timeline_url(NA_character_), "single|non-empty")
+})
+
+test_that("empty path throws", {
+  expect_error(.rx_construct_user_timeline_url("test", path = ""), "non-empty")
+})
+
+test_that("whitespace-only path throws", {
+  expect_error(.rx_construct_user_timeline_url("test", path = "  "), "non-empty")
+})
+
+test_that("empty filter throws", {
+  expect_error(.rx_construct_user_timeline_url("test", filter = ""), "non-empty")
+})
+
+test_that("whitespace-only filter throws", {
+  expect_error(.rx_construct_user_timeline_url("test", filter = "  "), "non-empty")
+})
+
+test_that("result is always a single character string", {
+  url <- .rx_construct_user_timeline_url("hello_world")
+  expect_length(url, 1L)
+  expect_true(is.character(url))
 })

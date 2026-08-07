@@ -76,19 +76,15 @@ NULL
     return(tools::UUIDgenerate())
   }
 
-  # Fallback: uniform hex bytes via sample() (avoids runif integer bias).
-  hex_chars <- sprintf("%02x", sample(0:255, 16, replace = TRUE))
-  b <- hex_chars
-  # Version 4: set bits 4-7 of byte 6 to 0100.
-  b[7] <- sprintf("%x", as.integer(strtoi(b[7], 16L) %/% 16) %/% 2)
-  # Variant: set top 2 bits of byte 8 to 10.
-  b[9] <- sprintf("%x", as.integer(strtoi(b[9], 16L) %/% 4) + 8L)
+  # Fallback: uniform hex chars via sample() (avoids runif integer bias).
+  hex4 <- function() paste(sample(0:15, 4, replace = TRUE), collapse = "")
+  hex2 <- function() paste(sample(0:15, 2, replace = TRUE), collapse = "")
+  # Version 4: byte 6 top nibble = 4. Variant: byte 8 top 2 bits = 10 (8-b).
   paste0(
-    paste(b[1:4], collapse = ""), "-",
-    paste(b[5:6], collapse = ""), "-",
-    b[7], b[8], "-",
-    b[9], b[10], "-",
-    paste(b[11:16], collapse = "")
+    hex4(), "-",
+    hex2(), "-4", hex2(), "-",
+    paste(sample(8:11, 1, replace = TRUE), collapse = ""), hex2(), "-",
+    hex4(), hex4()
   )
 }
 
@@ -692,10 +688,6 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     all_parsed$is_quote     <- c(all_parsed$is_quote,     parsed$is_quote)
     all_parsed$reply_to_post_id <- c(all_parsed$reply_to_post_id, parsed$reply_to_post_id)
     all_parsed$quoted_post_id   <- c(all_parsed$quoted_post_id,   parsed$quoted_post_id)
-    # Observation-level provenance (Task 46) — placeholder, filled later.
-    all_parsed$collected_at     <- c(all_parsed$collected_at,     character(0))
-    all_parsed$collection_query <- c(all_parsed$collection_query, character(0))
-    all_parsed$collection_id    <- c(all_parsed$collection_id,    character(0))
   }
 
   all_parsed
@@ -973,4 +965,325 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 .rx_scroll_state_advance_scroll <- function(state, pixels = 4000) {
   state$scroll_position <- state$scroll_position + pixels
   invisible(state)
+}
+
+# ---------------------------------------------------------------------------
+# x_user_posts() — User timeline navigation layer (Task 52)
+# ---------------------------------------------------------------------------
+
+#' Fetch posts from a specific user's timeline.
+#'
+#' Navigates to an X user timeline page, captures structured network
+#' responses, parses and normalizes post objects, deduplicates by
+#' \code{post_id}, and returns a tibble of results.
+#'
+#' This is the user-timeline equivalent of \code{\link[=x_search]{x_search()}}.
+#' It reuses the same session/backend, network capture, parser, normalizer,
+#' and deduplicator — only the navigation target differs.
+#'
+#' @param session An \code{xtweetsR_session} object returned by
+#'   \code{\link[=x_session]{x_session()}}.
+#' @param username A single non-empty character string with an X
+#'   username (without the leading @).
+#' @param limit Optional integer limiting the maximum number of posts
+#'   returned. When \code{NULL} (default), no limit is applied.
+#' @param path Optional path segment appended after the username,
+#'   e.g. `"media"`, `"tweets_with_replies"`, `"following"`,
+#'   `"followers"`. When \code{NULL}, the base timeline is used.
+#' @param scroll Logical, default `TRUE`. When `FALSE`, no scrolling
+#'   is performed and only the initially visible content is captured.
+#' @param max_scrolls Integer, default `5L`. When \code{scroll = TRUE},
+#'   the maximum number of scroll+extract iterations to perform.
+#' @param resume Logical, default `FALSE`. When `TRUE` and
+#'   \code{checkpoint_path} points to an existing checkpoint file,
+#'   restore the previous collection state.
+#' @param checkpoint_path Character string with the path to a JSON
+#'   checkpoint file. Defaults to
+#'   `paste0(gsub("[^A-Za-z0-9._-]", "_", username), ".checkpoint.json")`
+#'   when resuming.
+#' @param jsonl_path Character string with the path to the JSONL
+#'   collection file. Defaults to
+#'   `paste0(gsub("[^A-Za-z0-9._-]", "_", username), ".jsonl")`
+#'   when resuming.
+#'
+#' @return A tibble with the canonical post schema (21 columns) containing
+#'   posts found on the user's timeline. Returns a zero-row tibble when
+#'   no posts are captured.
+#'
+#' @examples
+#' \dontrun{
+#'   sess <- x_session()
+#'   posts <- x_user_posts(sess, "hadleywickham", limit = 10)
+#'   print(posts)
+#'   x_close(sess)
+#' }
+#'
+#' @export
+x_user_posts <- function(session, username, limit = NULL, path = NULL,
+                         scroll = TRUE, max_scrolls = 5L,
+                         resume = FALSE, checkpoint_path = NULL, jsonl_path = NULL) {
+  # 1. Validate inputs.
+  if (!inherits(session, "xtweetsR_session")) {
+    stop("session must be an xtweetsR_session object.", call. = FALSE)
+  }
+  if (!session$connected) {
+    stop("Session is not connected. Call x_session() first.", call. = FALSE)
+  }
+  if (!is.character(username) || length(username) != 1L || anyNA(username) || !nzchar(trimws(username))) {
+    stop("username must be a single non-empty character string.", call. = FALSE)
+  }
+  if (!is.null(limit)) {
+    if (!is.numeric(limit) || length(limit) != 1L || anyNA(limit) || limit < 1L) {
+      stop("limit must be a positive integer, or NULL.", call. = FALSE)
+    }
+    limit <- as.integer(limit)
+  }
+  if (!is.numeric(max_scrolls) || length(max_scrolls) != 1L || anyNA(max_scrolls) || max_scrolls < 0L) {
+    stop("max_scrolls must be a non-negative integer, or NULL.", call. = FALSE)
+  }
+  max_scrolls <- as.integer(max_scrolls)
+
+  # Validate resume-related parameters.
+  if (!is.logical(resume) || length(resume) != 1L || anyNA(resume)) {
+    stop("resume must be a single logical value.", call. = FALSE)
+  }
+
+  if (!is.null(checkpoint_path)) {
+    if (!is.character(checkpoint_path) || length(checkpoint_path) != 1L || anyNA(checkpoint_path) || !nzchar(checkpoint_path[[1L]])) {
+      stop("checkpoint_path must be a single non-empty character string, or NULL.", call. = FALSE)
+    }
+  }
+
+  if (!is.null(jsonl_path)) {
+    if (!is.character(jsonl_path) || length(jsonl_path) != 1L || anyNA(jsonl_path) || !nzchar(jsonl_path[[1L]])) {
+      stop("jsonl_path must be a single non-empty character string, or NULL.", call. = FALSE)
+    }
+  }
+
+  backend <- session$backend
+
+  # 1b. Resume handling (same pattern as x_search).
+  resumed_checkpoint <- NULL
+  if (isTRUE(resume)) {
+    if (is.null(checkpoint_path)) {
+      checkpoint_path <- paste0(gsub("[^A-Za-z0-9._-]", "_", username), ".checkpoint.json")
+    }
+    if (is.null(jsonl_path)) {
+      jsonl_path <- paste0(gsub("[^A-Za-z0-9._-]", "_", username), ".jsonl")
+    }
+
+    resumed_checkpoint <- .rx_checkpoint_read(checkpoint_path)
+    if (!is.null(resumed_checkpoint)) {
+      collection_id <- resumed_checkpoint$collection_id
+    }
+  }
+
+  # 1c. Capture collection start time and generate collection_id for provenance.
+  collection_started_at <- Sys.time()
+  if (is.null(resumed_checkpoint) || is.null(resumed_checkpoint$collection_id)) {
+    collection_id <- .rx_generate_uuid()
+  }
+  backend_label <- "unknown"
+  if (inherits(session$backend, "rx_lightpanda_backend")) {
+    backend_label <- "lightpanda"
+  } else if (inherits(session$backend, "rx_chromium_backend")) {
+    backend_label <- "chromium"
+  }
+
+  # 2. Enable network capture before navigation.
+  tryCatch(
+    backend$networkCaptureEnable(),
+    error = function(e) {
+      stop("Failed to enable network capture: ", e$message, call. = FALSE)
+    }
+  )
+
+  # 3. Construct user timeline URL and navigate.
+  url <- .rx_construct_user_timeline_url(username, path = path)
+
+  nav_result <- backend$navigate(url)
+  if (is.null(nav_result$status) || nav_result$status == "error") {
+    # Navigation failed — still try to return what we can.
+    error_info <- if (!is.null(nav_result$error)) nav_result$error$code else "unknown"
+    .rx_search_cleanup(backend)
+    warning("Navigation failed (", error_info, "). No posts returned.")
+    empty <- .rx_search_empty_tibble()
+    provenance <- .rx_collection_metadata(
+      collection_id = collection_id,
+      started_at = collection_started_at,
+      query = paste0("@", trimws(username)),
+      backend = backend_label,
+      record_count = 0L
+    )
+    attr(empty, "rx_collection_provenance") <- provenance
+    return(empty)
+  }
+
+  # 4. Wait for initial network responses to arrive.
+  Sys.sleep(3)
+
+  # 5. Create scroll state and retrieve initial batch.
+  if (!is.null(resumed_checkpoint) && length(resumed_checkpoint$seen_post_ids) > 0L) {
+    state <- .rx_scroll_state_new(seen_post_ids = resumed_checkpoint$seen_post_ids)
+  } else {
+    state <- .rx_scroll_state_new()
+  }
+
+  initial_events <- tryCatch(
+    backend$networkCaptureGet(),
+    error = function(e) {
+      .rx_search_cleanup(backend)
+      warning("Failed to retrieve network events: ", e$message)
+      return(list())
+    }
+  )
+
+  initial_posts <- .rx_search_extract_from_events(initial_events, backend)
+  state$add_posts(initial_posts)
+
+  # Accumulate initial batch.
+  all_batches <- list()
+  if (length(initial_posts$post_id) > 0L) {
+    all_batches[[1L]] <- initial_posts
+  } else {
+    all_batches[[1L]] <- .rx_search_empty_batch()
+  }
+
+  # 6. Bounded repeated scroll+extract loop (same pattern as x_search).
+  if (isTRUE(scroll) && max_scrolls > 0L) {
+    for (i in seq_len(max_scrolls)) {
+      .rx_scroll_page(backend)
+      state$advance_scroll()
+
+      Sys.sleep(3)
+
+      batch_events <- tryCatch(
+        backend$networkCaptureGet(),
+        error = function(e) list()
+      )
+
+      extracted <- .rx_search_extract_from_events(batch_events, backend)
+      state$add_posts(extracted)
+
+      if (length(extracted$post_id) > 0L) {
+        all_batches[[length(all_batches) + 1L]] <- extracted
+      } else {
+        zero_batch <- .rx_search_empty_batch()
+        all_batches[[length(all_batches) + 1L]] <- zero_batch
+      }
+
+      if (!is.null(limit) && state$current_count >= limit) {
+        break
+      }
+      if (state$check_stalled(threshold = 2L)) {
+        break
+      }
+    }
+  }
+
+  # 7. Merge all batches.
+  if (length(all_batches) > 0L) {
+    all_post_ids <- lapply(all_batches, `[[`, "post_id")
+    all_texts <- lapply(all_batches, `[[`, "text")
+    all_author_ids <- lapply(all_batches, `[[`, "author_id")
+    all_usernames <- lapply(all_batches, `[[`, "username")
+    all_display_names <- lapply(all_batches, `[[`, "display_name")
+    all_created_at <- lapply(all_batches, `[[`, "created_at")
+    all_reply_counts <- lapply(all_batches, `[[`, "reply_count")
+    all_repost_counts <- lapply(all_batches, `[[`, "repost_count")
+    all_like_counts <- lapply(all_batches, `[[`, "like_count")
+    all_quote_counts <- lapply(all_batches, `[[`, "quote_count")
+    all_bookmark_counts <- lapply(all_batches, `[[`, "bookmark_count")
+    all_view_counts <- lapply(all_batches, `[[`, "view_count")
+    all_conversation_ids <- lapply(all_batches, `[[`, "conversation_id")
+    all_is_replies <- lapply(all_batches, `[[`, "is_reply")
+    all_is_reposts <- lapply(all_batches, `[[`, "is_repost")
+    all_is_quotes <- lapply(all_batches, `[[`, "is_quote")
+    all_reply_to_ids <- lapply(all_batches, `[[`, "reply_to_post_id")
+    all_quoted_ids <- lapply(all_batches, `[[`, "quoted_post_id")
+
+    merged_posts <- list(
+      post_id        = unlist(all_post_ids, use.names = FALSE),
+      text           = unlist(all_texts, use.names = FALSE),
+      author_id      = unlist(all_author_ids, use.names = FALSE),
+      username       = unlist(all_usernames, use.names = FALSE),
+      display_name   = unlist(all_display_names, use.names = FALSE),
+      created_at     = unlist(all_created_at, use.names = FALSE),
+      reply_count    = unlist(all_reply_counts, use.names = FALSE),
+      repost_count   = unlist(all_repost_counts, use.names = FALSE),
+      like_count     = unlist(all_like_counts, use.names = FALSE),
+      quote_count    = unlist(all_quote_counts, use.names = FALSE),
+      bookmark_count = unlist(all_bookmark_counts, use.names = FALSE),
+      view_count     = unlist(all_view_counts, use.names = FALSE),
+      conversation_id = unlist(all_conversation_ids, use.names = FALSE),
+      is_reply       = unlist(all_is_replies, use.names = FALSE),
+      is_repost      = unlist(all_is_reposts, use.names = FALSE),
+      is_quote       = unlist(all_is_quotes, use.names = FALSE),
+      reply_to_post_id = unlist(all_reply_to_ids, use.names = FALSE),
+      quoted_post_id   = unlist(all_quoted_ids, use.names = FALSE)
+    )
+  } else {
+    merged_posts <- list(
+      post_id        = character(0),
+      text           = character(0),
+      author_id      = character(0),
+      username       = character(0),
+      display_name   = character(0),
+      created_at     = character(0),
+      reply_count    = integer(0),
+      repost_count   = integer(0),
+      like_count     = integer(0),
+      quote_count    = integer(0),
+      bookmark_count = integer(0),
+      view_count     = integer(0),
+      conversation_id = character(0),
+      is_reply       = logical(0),
+      is_repost      = logical(0),
+      is_quote       = logical(0),
+      reply_to_post_id = character(0),
+      quoted_post_id   = character(0)
+    )
+  }
+
+  # 7b. Observation-level provenance.
+  n_merged <- if (length(merged_posts$post_id) > 0L) length(merged_posts$post_id) else 0L
+  merged_posts$collected_at     <- rep(format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), n_merged)
+  merged_posts$collection_query <- rep(paste0("@", trimws(username)), n_merged)
+  merged_posts$collection_id    <- rep(collection_id, n_merged)
+
+  # 8. Normalize, convert to tibble, deduplicate.
+  normalized <- .rx_normalize_posts(merged_posts)
+  tibble_posts <- .rx_normalized_to_tibble(normalized)
+  deduped <- .rx_deduplicate_posts(tibble_posts)
+
+  # 9. Apply limit.
+  if (!is.null(limit) && nrow(deduped) > limit) {
+    deduped <- deduped[seq_len(limit), , drop = FALSE]
+  }
+
+  # 10. Clean up network capture.
+  .rx_search_cleanup(backend)
+
+  # 10b. Write checkpoint for resume support.
+  if (isTRUE(resume) && !is.null(jsonl_path)) {
+    checkpoint <- .rx_checkpoint_from_state(state, collection_id, paste0("@", trimws(username)))
+    tryCatch(
+      .rx_checkpoint_write(jsonl_path, checkpoint),
+      error = function(e) {
+        warning("Failed to write checkpoint to '", jsonl_path, "': ", e$message)
+      }
+    )
+  }
+
+  # 11. Attach collection provenance metadata.
+  provenance <- .rx_collection_metadata(
+    collection_id = collection_id,
+    started_at = collection_started_at,
+    query = paste0("@", trimws(username)),
+    backend = backend_label,
+    record_count = as.integer(nrow(deduped))
+  )
+  attr(deduped, "rx_collection_provenance") <- provenance
+
+  deduped
 }
