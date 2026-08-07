@@ -126,19 +126,22 @@ test_that("malformed JSON produces a parse error on stderr", {
 
   while (Sys.time() - start < timeout) {
     if (!proc$is_alive()) break
-    if (proc$is_stdio_available(1)) {
-      line <- tryCatch(
-        proc$read_output_line(),
-        error = function(e) NULL
-      )
-      if (!is.null(line) && nzchar(line)) {
-        parsed <- jsonlite::fromJSON(line, simplifyVector = FALSE)
-        if (!is.null(parsed$error) && parsed$error$code == "PARSE_ERROR") {
-          found_error <<- TRUE
-          break
+    lines <- tryCatch(proc$read_output_lines(), error = function(e) character(0))
+    if (length(lines) > 0) {
+      for (line in lines) {
+        if (nzchar(line)) {
+          parsed <- tryCatch(
+            jsonlite::fromJSON(line, simplifyVector = FALSE),
+            error = function(e) NULL
+          )
+          if (!is.null(parsed) && !is.null(parsed$error) && parsed$error$code == "PARSE_ERROR") {
+            found_error <- TRUE
+            break
+          }
         }
       }
     }
+    if (found_error) break
     Sys.sleep(0.05)
   }
   xtweetsR:::.rx_stop_sidecar(proc)
@@ -165,5 +168,77 @@ test_that("stop sidecar cleanly terminates the process", {
   testthat::expect_false(
     proc$is_alive(),
     info = "sidecar is dead after stop"
+  )
+})
+
+# --- Test 5: browser close when not connected ---
+test_that("close_browser when not connected returns not_connected", {
+  proc <- .try_start_sidecar()
+  testthat::skip_if(is.null(proc), "sidecar process cannot start")
+  on.exit(xtweetsR:::.rx_stop_sidecar(proc))
+
+  resp <- xtweetsR:::.rx_close_browser(proc)
+
+  testthat::expect_true(
+    is.list(resp),
+    info = "close_browser returns a list"
+  )
+  testthat::expect_equal(
+    resp$closed, FALSE,
+    info = "closed is FALSE when not connected"
+  )
+  testthat::expect_equal(
+    resp$reason, "not_connected",
+    info = "reason is not_connected"
+  )
+})
+
+# --- Test 6: browser close twice is safe ---
+test_that("close_browser twice does not crash the sidecar", {
+  proc <- .try_start_sidecar()
+  testthat::skip_if(is.null(proc), "sidecar process cannot start")
+  on.exit(xtweetsR:::.rx_stop_sidecar(proc))
+
+  # First close.
+  r1 <- xtweetsR:::.rx_close_browser(proc)
+  testthat::expect_false(r1$closed, info = "first close returns closed=FALSE")
+
+  # Second close.
+  r2 <- xtweetsR:::.rx_close_browser(proc)
+  testthat::expect_false(r2$closed, info = "second close returns closed=FALSE")
+
+  # Sidecar is still alive and responsive.
+  ping_resp <- xtweetsR:::.rx_send_request(proc, "ping")
+  testthat::expect_true(
+    ping_resp$result$pong == TRUE,
+    info = "sidecar is still responsive after two closes"
+  )
+})
+
+# --- Test 7: browser close after failed connect ---
+test_that("close_browser after failed connect is safe", {
+  proc <- .try_start_sidecar()
+  testthat::skip_if(is.null(proc), "sidecar process cannot start")
+  on.exit(xtweetsR:::.rx_stop_sidecar(proc))
+
+  # Attempt to connect to an unreachable endpoint.
+  # This returns an error because no server is listening.
+  conn_resp <- xtweetsR:::.rx_send_request(proc, "connect", list(endpoint = "ws://127.0.0.1:1"))
+
+  testthat::expect_true(
+    !is.null(conn_resp$error),
+    info = "connect returns error for unreachable endpoint"
+  )
+  testthat::expect_equal(
+    conn_resp$error$code, "LPD_CONNECTION_ERROR",
+    info = "error code is LPD_CONNECTION_ERROR"
+  )
+
+  # Close after failed connect — should be safe.
+  close_resp <- xtweetsR:::.rx_close_browser(proc)
+
+  testthat::expect_false(
+    close_resp$closed,
+    info = "close returns closed=FALSE after failed connect"
   )
 })

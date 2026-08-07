@@ -61,6 +61,22 @@ function log(level: string, ...args: unknown[]): void {
 let cdpConnection: DefaultCdpConnection | null = null;
 let cdpEndpointUrl: string | null = null;
 
+// ── close handler ────────────────────────────────────────────────────
+
+function handleClose(id: unknown): void {
+  if (cdpConnection === null || !cdpConnection.isConnected) {
+    respond(id, { closed: false, reason: "not_connected" });
+    log("debug", "browser close — already not connected");
+    return;
+  }
+
+  cdpConnection.close();
+  cdpConnection = null;
+  cdpEndpointUrl = null;
+  respond(id, { closed: true });
+  log("info", "browser closed");
+}
+
 // ── connect handler ──────────────────────────────────────────────────
 
 function handleConnect(id: unknown, params?: unknown): void {
@@ -156,6 +172,9 @@ async function main(): Promise<void> {
         break;
       case "connect":
         handleConnect(id, req.params);
+        break;
+      case "close":
+        handleClose(id);
         break;
       default:
         respondError(id, "UNKNOWN_METHOD", `Method "${method}" is not implemented`);

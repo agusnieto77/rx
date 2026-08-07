@@ -245,7 +245,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 14: Implement browser close
+### Task 14: Implement browser close [DONE]
 
 **Goal:** Cleanly release Lightpanda-related resources.
 

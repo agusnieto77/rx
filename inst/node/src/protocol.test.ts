@@ -172,4 +172,36 @@ describe("sidecar protocol", () => {
     assert.strictEqual(resp.id, "connect");
     assert.strictEqual((resp.error as { code: string }).code, "LPD_CONNECTION_ERROR");
   });
+
+  it("close when not connected returns not_connected", async () => {
+    const { proc: p } = await startSidecar();
+    const resp = await sendRequest(p, "close");
+    assert.strictEqual(resp.id, "close");
+    assert.strictEqual((resp.result as { closed: boolean }).closed, false);
+    assert.strictEqual((resp.result as { reason: string }).reason, "not_connected");
+  });
+
+  it("close twice does not crash the sidecar", async () => {
+    const { proc: p } = await startSidecar();
+    // First close — not connected.
+    const r1 = await sendRequest(p, "close");
+    assert.strictEqual((r1.result as { closed: boolean }).closed, false);
+    // Second close — still safe.
+    const r2 = await sendRequest(p, "close");
+    assert.strictEqual((r2.result as { closed: boolean }).closed, false);
+    // Sidecar is still alive and responsive.
+    const pingResp = await sendRequest(p, "ping");
+    assert.strictEqual((pingResp.result as { pong: boolean }).pong, true);
+  });
+
+  it("close after failed connect is safe", async () => {
+    const { proc: p } = await startSidecar();
+    // Attempt connect to unreachable endpoint (will fail).
+    const connectResp = await sendRequest(p, "connect", { endpoint: "ws://127.0.0.1:1" });
+    assert.strictEqual((connectResp.error as { code: string }).code, "LPD_CONNECTION_ERROR");
+    // Close after failed connect — should be safe (not_connected).
+    const closeResp = await sendRequest(p, "close");
+    assert.strictEqual(closeResp.id, "close");
+    assert.strictEqual((closeResp.result as { closed: boolean }).closed, false);
+  });
 });

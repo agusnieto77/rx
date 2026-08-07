@@ -69,8 +69,9 @@ NULL
 
     #' @description Connect to the sidecar and return the backend invisibly.
     connect = function() {
-      if (state$.proc$is_alive()) {
+      if (!is.null(state$.proc) && state$.proc$is_alive()) {
         state$connected <- TRUE
+        backend$connected <- TRUE
         return(invisible(backend))
       }
 
@@ -84,6 +85,7 @@ NULL
       proc <- .rx_start_sidecar(sidecar_path = state$.sidecar)
       state$.proc <- proc
       state$connected <- TRUE
+      backend$connected <- TRUE
       invisible(backend)
     },
 
@@ -114,10 +116,18 @@ NULL
     },
 
     #' @description Close the browser session and stop the sidecar.
+    #'
+    #' First sends a `close` request to the sidecar to cleanly release
+    #' the CDP connection. Then stops the sidecar process.
+    #' Safe to call multiple times.
     close = function() {
+      if (state$connected) {
+        tryCatch(.rx_close_browser(state$.proc), error = function(e) NULL)
+      }
       invisible(.rx_stop_sidecar(state$.proc))
       state$.proc <- NULL
       state$connected <- FALSE
+      backend$connected <- FALSE
       invisible(NULL)
     }
   )

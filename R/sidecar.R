@@ -40,7 +40,7 @@
 
   p <- processx::process$new(
     command = "node",
-    args = shQuote(js_path),
+    args = js_path,
     stdout = "|",
     stderr = "|",
     stdin = "|"
@@ -52,13 +52,23 @@
     {
       timeout <- 10 # seconds
       start <- Sys.time()
+      # Give the process a moment to start and write the startup message.
+      Sys.sleep(0.1)
       while (Sys.time() - start < timeout) {
-        if (p$is_alive() && p$is_stdio_available(2)) {
-          line <- p$read_output_line()
-          if (nzchar(line)) {
-            parsed <- jsonlite::fromJSON(line, simplifyVector = FALSE)
-            if (parsed$type == "startup") {
-              return(p)
+        if (!p$is_alive()) break
+        # Read available stderr lines (startup log goes to stderr).
+        lines <- tryCatch(p$read_error_lines(), error = function(e) character(0))
+        if (length(lines) > 0) {
+          for (line in lines) {
+            line <- trimws(line)
+            if (nzchar(line)) {
+              parsed <- tryCatch(
+                jsonlite::fromJSON(line, simplifyVector = FALSE),
+                error = function(e) NULL
+              )
+              if (!is.null(parsed) && parsed$type == "startup") {
+                return(p)
+              }
             }
           }
         }
@@ -107,13 +117,19 @@
     if (!proc$is_alive()) {
       stop("Sidecar process died while waiting for response.", call. = FALSE)
     }
-    if (proc$is_stdio_available(1)) {
-      line <- tryCatch(
-        proc$read_output_line(),
-        error = function(e) NULL
-      )
-      if (!is.null(line) && nzchar(line)) {
-        return(jsonlite::fromJSON(line, simplifyVector = FALSE))
+    # read_output_lines returns all available lines from stdout.
+    lines <- tryCatch(proc$read_output_lines(), error = function(e) character(0))
+    if (length(lines) > 0) {
+      for (line in lines) {
+        if (nzchar(line)) {
+          parsed <- tryCatch(
+            jsonlite::fromJSON(line, simplifyVector = FALSE),
+            error = function(e) NULL
+          )
+          if (!is.null(parsed)) {
+            return(parsed)
+          }
+        }
       }
     }
     Sys.sleep(0.05)
@@ -133,4 +149,27 @@
   tryCatch(proc$kill(), error = function(e) NULL)
   tryCatch(proc$wait(timeout = 5000), error = function(e) NULL)
   invisible(NULL)
+}
+
+#' Close the browser session on the sidecar.
+#'
+#' Sends a `close` method request to the sidecar to cleanly release
+#' the CDP connection. Safe to call multiple times — repeated calls
+#' return a `not_connected` result without crashing.
+#'
+#' @param proc A `processx::process` object (the running sidecar).
+#' @return A list with `$closed` (logical) and optionally `$reason`.
+#' @noRd
+.rx_close_browser <- function(proc) {
+  if (is.null(proc)) return(list(closed = FALSE, reason = "no_process"))
+  if (!proc$is_alive()) return(list(closed = FALSE, reason = "process_dead"))
+
+  resp <- .rx_send_request(proc, "close")
+
+  # If the sidecar returned an error, treat as not closed.
+  if (!is.null(resp$error)) {
+    return(list(closed = FALSE, reason = resp$error$code))
+  }
+
+  list(closed = isTRUE(resp$result$closed), reason = if (!isTRUE(resp$result$closed)) resp$result$reason else NULL)
 }

@@ -27,6 +27,19 @@ function log(level, ...args) {
 // ── CDP connection state ─────────────────────────────────────────────
 let cdpConnection = null;
 let cdpEndpointUrl = null;
+// ── close handler ────────────────────────────────────────────────────
+function handleClose(id) {
+    if (cdpConnection === null || !cdpConnection.isConnected) {
+        respond(id, { closed: false, reason: "not_connected" });
+        log("debug", "browser close — already not connected");
+        return;
+    }
+    cdpConnection.close();
+    cdpConnection = null;
+    cdpEndpointUrl = null;
+    respond(id, { closed: true });
+    log("info", "browser closed");
+}
 // ── connect handler ──────────────────────────────────────────────────
 function handleConnect(id, params) {
     if (cdpConnection !== null && cdpConnection.isConnected) {
@@ -105,6 +118,9 @@ async function main() {
                 break;
             case "connect":
                 handleConnect(id, req.params);
+                break;
+            case "close":
+                handleClose(id);
                 break;
             default:
                 respondError(id, "UNKNOWN_METHOD", `Method "${method}" is not implemented`);
