@@ -64,23 +64,31 @@ NULL
 
 #' Generate a version-4 UUID string.
 #'
-#' Produces a lowercase hex UUID using `runif()` and `sprintf()`.
-#' Compatible with R >= 4.2.0 (does not depend on `tools::UUIDgenerate()`
-#' which requires R >= 4.4.0).
+#' Uses `tools::UUIDgenerate()` when available (R >= 4.4.0), which draws
+#' from the OS CSPRNG. Falls back to a `sample()`-based hex generator
+#' for older R versions.
 #'
-#' @return A single-element character vector with a UUID string.
+#' @return A single-element character vector with a lowercase UUID string.
 #' @noRd
 .rx_generate_uuid <- function() {
-  # Generate 16 random bytes as hex digits.
-  bytes <- as.integer(runif(16, min = 0, max = 256))
-  hex <- sprintf("%02x", bytes)
-  # Format as 8-4-4-4-12 UUID pattern.
+  # Prefer the base-R CSPRNG-backed generator (R >= 4.4.0).
+  if (utils::packageVersion("tools") >= "4.4.0") {
+    return(tools::UUIDgenerate())
+  }
+
+  # Fallback: uniform hex bytes via sample() (avoids runif integer bias).
+  hex_chars <- sprintf("%02x", sample(0:255, 16, replace = TRUE))
+  b <- hex_chars
+  # Version 4: set bits 4-7 of byte 6 to 0100.
+  b[7] <- sprintf("%x", as.integer(strtoi(b[7], 16L) %/% 16) %/% 2)
+  # Variant: set top 2 bits of byte 8 to 10.
+  b[9] <- sprintf("%x", as.integer(strtoi(b[9], 16L) %/% 4) + 8L)
   paste0(
-    paste(hex[1:4], collapse = ""), "-",
-    paste(hex[5:6], collapse = ""), "-",
-    "4", paste(hex[7:8], collapse = ""), "-",
-    "b", paste(hex[9:10], collapse = ""), "-",
-    paste(hex[11:16], collapse = "")
+    paste(b[1:4], collapse = ""), "-",
+    paste(b[5:6], collapse = ""), "-",
+    b[7], b[8], "-",
+    b[9], b[10], "-",
+    paste(b[11:16], collapse = "")
   )
 }
 
@@ -190,6 +198,14 @@ print.rx_collection_provenance <- function(x, ...) {
 #' - \code{max_scrolls} scroll iterations have been completed,
 #' - no new data appears for two consecutive batches (stall detection).
 #'
+#' # Resume support (Task 49)
+#' When \code{resume = TRUE} and a checkpoint file exists at
+#' \code{checkpoint_path}, the collection restores the previous
+#' \code{collection_id}, \code{seen_post_ids}, and cursor state so that
+#' already-collected posts are not duplicated.  New posts discovered
+#' during the resumed run are appended to the existing JSONL file at
+#' \code{jsonl_path}.
+#'
 #' @param session An \code{xtweetsR_session} object returned by
 #'   \code{\link[=x_session]{x_session()}}.
 #' @param query A single non-empty character string with the search query.
@@ -201,6 +217,18 @@ print.rx_collection_provenance <- function(x, ...) {
 #'   the maximum number of scroll+extract iterations to perform.
 #'   The loop also stops earlier if the \code{limit} is reached or if
 #'   no new data appears for two consecutive batches.
+#' @param resume Logical, default `FALSE`. When `TRUE` and
+#'   \code{checkpoint_path} points to an existing checkpoint file,
+#'   restore the previous collection state (seen IDs, collection ID,
+#'   cursor) and continue from where it left off.
+#' @param checkpoint_path Character string with the path to a JSON
+#'   checkpoint file (written by \code{.rx_checkpoint_write()}).
+#'   When \code{resume = TRUE} and the file exists, its state is loaded.
+#'   Defaults to `paste0(query, ".checkpoint.json")` when resuming.
+#' @param jsonl_path Character string with the path to the JSONL
+#'   collection file. When \code{resume = TRUE}, new posts are appended
+#'   to this file instead of overwriting it. Defaults to
+#'   `paste0(query, ".jsonl")` when resuming.
 #'
 #' @return A tibble with the canonical post schema (18 columns) containing
 #'   posts found during the search. Returns a zero-row tibble when no
@@ -215,7 +243,8 @@ print.rx_collection_provenance <- function(x, ...) {
 #' }
 #'
 #' @export
-x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 5L) {
+x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 5L,
+                     resume = FALSE, checkpoint_path = NULL, jsonl_path = NULL) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -237,11 +266,48 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   }
   max_scrolls <- as.integer(max_scrolls)
 
+  # Validate resume-related parameters.
+  if (!is.logical(resume) || length(resume) != 1L || anyNA(resume)) {
+    stop("resume must be a single logical value.", call. = FALSE)
+  }
+
+  if (!is.null(checkpoint_path)) {
+    if (!is.character(checkpoint_path) || length(checkpoint_path) != 1L || anyNA(checkpoint_path) || !nzchar(checkpoint_path[[1L]])) {
+      stop("checkpoint_path must be a single non-empty character string, or NULL.", call. = FALSE)
+    }
+  }
+
+  if (!is.null(jsonl_path)) {
+    if (!is.character(jsonl_path) || length(jsonl_path) != 1L || anyNA(jsonl_path) || !nzchar(jsonl_path[[1L]])) {
+      stop("jsonl_path must be a single non-empty character string, or NULL.", call. = FALSE)
+    }
+  }
+
   backend <- session$backend
 
-  # 1b. Capture collection start time and generate collection_id for provenance (Tasks 45, 46).
+  # 1b. Resume handling (Task 49).
+  # When resume=TRUE and a checkpoint file exists, restore collection state
+  # from the checkpoint so that already-seen posts are not duplicated.
+  resumed_checkpoint <- NULL
+  if (isTRUE(resume)) {
+    if (is.null(checkpoint_path)) {
+      checkpoint_path <- paste0(gsub("[^A-Za-z0-9._-]", "_", query), ".checkpoint.json")
+    }
+    if (is.null(jsonl_path)) {
+      jsonl_path <- paste0(gsub("[^A-Za-z0-9._-]", "_", query), ".jsonl")
+    }
+
+    resumed_checkpoint <- .rx_checkpoint_read(checkpoint_path)
+    if (!is.null(resumed_checkpoint)) {
+      collection_id <- resumed_checkpoint$collection_id
+    }
+  }
+
+  # 1c. Capture collection start time and generate collection_id for provenance (Tasks 45, 46).
   collection_started_at <- Sys.time()
-  collection_id <- .rx_generate_uuid()
+  if (is.null(resumed_checkpoint) || is.null(resumed_checkpoint$collection_id)) {
+    collection_id <- .rx_generate_uuid()
+  }
   backend_label <- "unknown"
   if (inherits(session$backend, "rx_lightpanda_backend")) {
     backend_label <- "lightpanda"
@@ -284,7 +350,12 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   Sys.sleep(3)
 
   # 5. Create scroll state and retrieve initial batch.
-  state <- .rx_scroll_state_new()
+  # When resuming, pre-populate seen_post_ids from the checkpoint.
+  if (!is.null(resumed_checkpoint) && length(resumed_checkpoint$seen_post_ids) > 0L) {
+    state <- .rx_scroll_state_new(seen_post_ids = resumed_checkpoint$seen_post_ids)
+  } else {
+    state <- .rx_scroll_state_new()
+  }
 
   initial_events <- tryCatch(
     backend$networkCaptureGet(),
@@ -297,6 +368,13 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 
   initial_posts <- .rx_search_extract_from_events(initial_events, backend)
   state$add_posts(initial_posts)
+
+  # Accumulate initial batch so it is included in the final merge.
+  if (length(initial_posts$post_id) > 0L) {
+    all_batches[[1L]] <- initial_posts
+  } else {
+    all_batches[[1L]] <- .rx_search_empty_batch()
+  }
 
   # 6. Bounded repeated scroll+extract loop (Task 42).
   #
@@ -415,7 +493,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   # 7b. Observation-level provenance (Task 46).
   # Populate collected_at, collection_query, collection_id for every row.
   n_merged <- if (length(merged_posts$post_id) > 0L) length(merged_posts$post_id) else 0L
-  merged_posts$collected_at     <- rep(format(Sys.time(), iso8601 = TRUE), n_merged)
+  merged_posts$collected_at     <- rep(format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), n_merged)
   merged_posts$collection_query <- rep(query, n_merged)
   merged_posts$collection_id    <- rep(collection_id, n_merged)
 
@@ -431,6 +509,21 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 
   # 10. Clean up network capture.
   .rx_search_cleanup(backend)
+
+  # 10b. Write checkpoint for resume support (Task 49).
+  # Persist the current state so that a future call with resume=TRUE
+  # can continue from where we left off. The checkpoint is always
+  # written (overwriting any previous checkpoint) since it represents
+  # the latest state.
+  if (isTRUE(resume) && !is.null(jsonl_path)) {
+    checkpoint <- .rx_checkpoint_from_state(state, collection_id, query)
+    tryCatch(
+      .rx_checkpoint_write(jsonl_path, checkpoint),
+      error = function(e) {
+        warning("Failed to write checkpoint to '", jsonl_path, "': ", e$message)
+      }
+    )
+  }
 
   # 11. Attach collection provenance metadata (Tasks 45, 46).
   provenance <- .rx_collection_metadata(
@@ -681,20 +774,20 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 #' pacing. This replaces implicit loop variables with an explicit state
 #' record that can be inspected, serialized, and extended.
 #'
-#' The state object is a plain list with the following fields:
-#' \describe{
-#'   \item{seen_post_ids}{Character vector of all unique post IDs seen so far.}
-#'   \item{current_count}{Integer, total unique posts collected.}
-#'   \item{previous_count}{Integer, unique post count before the last batch.}
-#'   \item{no_new_data_cycles}{Integer, consecutive batches with zero new posts.}
-#'   \item{scroll_position}{Numeric, cumulative scroll offset in pixels.}
-#'   \item{last_post_id}{Character, post_id of the first post in the latest batch (empty string if none).}
-#'   \item{last_cursor}{Character, cursor from the latest network response (empty string if none).}
-#'   \item{started_at}{POSIXct, collection start time.}
-#'   \item{elapsed_time}{Numeric, seconds since collection started.}
-#' }
+#' The state object is an environment (reference semantics) so method calls
+#' mutate in place without needing reassignment. Fields are stored directly
+#' on the environment; methods are closures that close over it.
 #'
-#' @return A list of class `rx_scroll_state`.
+#' @param seen_post_ids Optional character vector of post IDs already seen.
+#'   When provided (e.g. from a checkpoint during resume), the state is
+#'   initialized with these IDs and `current_count` reflects them.
+#' @param last_cursor Optional character string with the cursor from the
+#'   last network response. Used to continue cursor-based pagination.
+#' @param records_collected Optional integer count of records already
+#'   collected. When resuming from a checkpoint, this reflects the
+#'   persisted count.
+#' @return An environment of class `rx_scroll_state` with method functions
+#'   attached (`add_posts`, `advance_scroll`, `check_stalled`, `check_limit`).
 #'
 #' @examples
 #' \dontrun{
@@ -704,20 +797,51 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 #' }
 #'
 #' @noRd
-.rx_scroll_state_new <- function() {
-  list(
-    seen_post_ids     = character(0),
-    current_count     = 0L,
-    previous_count    = 0L,
-    no_new_data_cycles = 0L,
-    scroll_position   = 0,
-    last_post_id      = "",
-    last_cursor       = "",
-    started_at        = Sys.time(),
-    elapsed_time      = 0
-  ) -> state
-  class(state) <- "rx_scroll_state"
-  state
+.rx_scroll_state_new <- function(seen_post_ids = character(0), last_cursor = "", records_collected = NULL) {
+  count <- if (is.null(records_collected) || !is.numeric(records_collected)) {
+    length(seen_post_ids)
+  } else {
+    as.integer(records_collected)
+  }
+
+  # Environment gives reference semantics: method closures mutate the
+  # same object instead of working on a copy-by-value list.
+  env <- new.env(parent = emptyenv())
+
+  # State fields.
+  env$seen_post_ids     <- as.character(seen_post_ids)
+  env$current_count     <- as.integer(count)
+  env$previous_count    <- 0L
+  env$no_new_data_cycles <- 0L
+  env$scroll_position   <- 0
+  env$last_post_id      <- ""
+  env$last_cursor       <- as.character(last_cursor)
+  env$started_at        <- Sys.time()
+  env$elapsed_time      <- 0
+
+  # Methods — closures that close over `env`, so every mutation is visible
+  # to callers without needing reassignment.
+
+  env$add_posts <- function(posts, new_cursor = "") {
+    .rx_scroll_state_add_posts(env, posts, new_cursor)
+    invisible(env)
+  }
+
+  env$advance_scroll <- function(pixels = 4000) {
+    .rx_scroll_state_advance_scroll(env, pixels)
+    invisible(env)
+  }
+
+  env$check_stalled <- function(threshold = 2L) {
+    .rx_scroll_state_check_stalled(env, threshold)
+  }
+
+  env$check_limit <- function(limit) {
+    .rx_scroll_state_check_limit(env, limit)
+  }
+
+  class(env) <- "rx_scroll_state"
+  env
 }
 
 #' Add a batch of posts to the scroll state.

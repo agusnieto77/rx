@@ -1342,3 +1342,238 @@ test_that("empty result has observation provenance columns", {
   expect_true("collection_id" %in% names(result))
   expect_equal(nrow(result), 0L)
 })
+
+# ===================================================================
+# Resume support tests (Task 49)
+# ===================================================================
+
+# --- Test 50: resume=TRUE with no checkpoint behaves like normal search ---
+test_that("x_search with resume=TRUE and no checkpoint behaves normally", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed_fixture <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  checkpoint_file <- tempfile(fileext = ".checkpoint.json")
+  jsonl_file <- tempfile(fileext = ".jsonl")
+
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list(
+    list(requestId = "req-1", url = "https://x.com/graphql/test", contentType = "application/json")
+  )
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    list(requestId = requestId, body = parsed_fixture, contentType = "application/json", error = NULL)
+  }
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  result <- x_search(mock_session, "test query", resume = TRUE,
+                     checkpoint_path = checkpoint_file, jsonl_path = jsonl_file)
+
+  expect_true(inherits(result, "tbl_df"))
+  expect_true(nrow(result) >= 1, info = "should get posts from fixture")
+
+  # Checkpoint should be created.
+  expect_true(file.exists(checkpoint_file), info = "checkpoint should be written when resume=TRUE")
+  cp <- .rx_checkpoint_read(checkpoint_file)
+  expect_true(is.list(cp))
+  expect_equal(cp$query, "test query")
+  expect_true(nzchar(cp$collection_id))
+
+  file.remove(checkpoint_file, jsonl_file)
+})
+
+# --- Test 51: Resume restores seen_post_ids from checkpoint ---
+test_that("x_search with resume restores seen_post_ids from checkpoint", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed_fixture <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  checkpoint_file <- tempfile(fileext = ".checkpoint.json")
+  jsonl_file <- tempfile(fileext = ".jsonl")
+
+  existing_ids <- c("already-seen-1", "already-seen-2", "already-seen-3")
+  checkpoint <- structure(
+    list(
+      collection_id     = "resume-test-uuid-001",
+      query             = "test query",
+      seen_post_ids     = existing_ids,
+      last_cursor       = "cursor-abc-123",
+      last_post_id      = "already-seen-3",
+      records_collected = 3L
+    ),
+    class = "rx_checkpoint"
+  )
+  .rx_checkpoint_write(checkpoint_file, checkpoint)
+
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list(
+    list(requestId = "req-1", url = "https://x.com/graphql/test", contentType = "application/json")
+  )
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    list(requestId = requestId, body = parsed_fixture, contentType = "application/json", error = NULL)
+  }
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  result <- x_search(mock_session, "test query", resume = TRUE,
+                     checkpoint_path = checkpoint_file, jsonl_path = jsonl_file)
+
+  expect_true(inherits(result, "tbl_df"))
+  provenance <- attr(result, "rx_collection_provenance")
+  expect_equal(provenance$collection_id, "resume-test-uuid-001")
+  expect_true(all(result$post_id %in% c("1", "2", "3", "4")))
+  expect_true(nrow(result) >= 1)
+
+  file.remove(checkpoint_file, jsonl_file)
+})
+
+# --- Test 52: Resume with existing checkpoint preserves collection_id ---
+test_that("resumed search preserves the checkpoint collection_id", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed_fixture <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  checkpoint_file <- tempfile(fileext = ".checkpoint.json")
+  jsonl_file <- tempfile(fileext = ".jsonl")
+
+  checkpoint <- structure(
+    list(
+      collection_id     = "my-resume-collection-001",
+      query             = "test query",
+      seen_post_ids     = character(0),
+      last_cursor       = "",
+      last_post_id      = "",
+      records_collected = 0L
+    ),
+    class = "rx_checkpoint"
+  )
+  .rx_checkpoint_write(checkpoint_file, checkpoint)
+
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list(
+    list(requestId = "req-1", url = "https://x.com/graphql/test", contentType = "application/json")
+  )
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    list(requestId = requestId, body = parsed_fixture, contentType = "application/json", error = NULL)
+  }
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  result <- x_search(mock_session, "test query", resume = TRUE,
+                     checkpoint_path = checkpoint_file, jsonl_path = jsonl_file)
+
+  provenance <- attr(result, "rx_collection_provenance")
+  expect_equal(provenance$collection_id, "my-resume-collection-001")
+
+  file.remove(checkpoint_file, jsonl_file)
+})
+
+# --- Test 53: Checkpoint is written at end of resumed search with updated state ---
+test_that("checkpoint written at end of resumed search contains updated state", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed_fixture <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  checkpoint_file <- tempfile(fileext = ".checkpoint.json")
+  jsonl_file <- tempfile(fileext = ".jsonl")
+
+  checkpoint <- structure(
+    list(
+      collection_id     = "checkpoint-test-001",
+      query             = "test query",
+      seen_post_ids     = c("pre-existing-1", "pre-existing-2"),
+      last_cursor       = "cursor-old",
+      last_post_id      = "pre-existing-2",
+      records_collected = 2L
+    ),
+    class = "rx_checkpoint"
+  )
+  .rx_checkpoint_write(checkpoint_file, checkpoint)
+
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list(
+    list(requestId = "req-1", url = "https://x.com/graphql/test", contentType = "application/json")
+  )
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    list(requestId = requestId, body = parsed_fixture, contentType = "application/json", error = NULL)
+  }
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  result <- x_search(mock_session, "test query", resume = TRUE,
+                     checkpoint_path = checkpoint_file, jsonl_path = jsonl_file)
+
+  updated_checkpoint <- .rx_checkpoint_read(checkpoint_file)
+  expect_true(is.list(updated_checkpoint))
+  # 4 fixture posts + 2 pre-existing = 6 total unique seen.
+  expect_equal(updated_checkpoint$records_collected, 6L)
+  expect_equal(updated_checkpoint$collection_id, "checkpoint-test-001")
+  expect_true(all(c("pre-existing-1", "pre-existing-2") %in% updated_checkpoint$seen_post_ids))
+  expect_true(all(c("1", "2", "3", "4") %in% updated_checkpoint$seen_post_ids))
+
+  file.remove(checkpoint_file, jsonl_file)
+})
+
+# --- Test 54: resume=FALSE does not write checkpoint ---
+test_that("x_search with resume=FALSE does not write checkpoint file", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed_fixture <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  checkpoint_file <- tempfile(fileext = ".checkpoint.json")
+  jsonl_file <- tempfile(fileext = ".jsonl")
+
+  expect_false(file.exists(checkpoint_file))
+
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list(
+    list(requestId = "req-1", url = "https://x.com/graphql/test", contentType = "application/json")
+  )
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    list(requestId = requestId, body = parsed_fixture, contentType = "application/json", error = NULL)
+  }
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  result <- x_search(mock_session, "test query", resume = FALSE,
+                     checkpoint_path = checkpoint_file, jsonl_path = jsonl_file)
+
+  expect_false(file.exists(checkpoint_file), info = "checkpoint should NOT be written when resume=FALSE")
+  expect_true(inherits(result, "tbl_df"))
+  expect_true(nrow(result) >= 1)
+})

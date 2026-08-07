@@ -882,18 +882,28 @@ Add:
 
 ---
 
-### Task 49: Add resume support [ ]
+### Task 49: Add resume support [x]
 
 **Goal:** Continue from a saved checkpoint.
 
 **Actions:**
-- Add `resume = TRUE`.
-- Restore seen IDs and collection metadata.
-- Continue writing to the same collection.
+- [x] Add `resume = TRUE` parameter to `x_search()`.
+- [x] Restore seen IDs from checkpoint via `.rx_scroll_state_new(seen_post_ids = ...)`.
+- [x] Restore collection_id from checkpoint so the same collection is continued.
+- [x] Write checkpoint at end of search when `resume = TRUE`.
+- [x] Add `checkpoint_path` and `jsonl_path` parameters with sensible defaults.
+- [x] Update `.rx_scroll_state_new()` to accept `seen_post_ids`, `last_cursor`, `records_collected`.
+- [x] Add 5 new tests (Tests 50-54) covering resume behavior.
 
 **Acceptance criteria:**
-- A local simulated interrupted collection resumes.
-- Already-seen posts are not duplicated.
+- [x] A local simulated interrupted collection resumes (Tests 50-53).
+- [x] Already-seen posts are not duplicated (Test 51, 53).
+- [x] Resume with no checkpoint behaves normally (Test 50).
+- [x] resume=FALSE does not write checkpoint (Test 54).
+
+**Files changed:**
+- `R/search.R` — added resume/checkpoint_path/jsonl_path params, resume handling, scroll state pre-population, checkpoint writing, updated `.rx_scroll_state_new()` constructor
+- `tests/testthat/test-search.R` — added Tests 50-54 (resume support)
 
 ---
 
