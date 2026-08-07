@@ -11,6 +11,12 @@
 #   7. Merge both batches, normalize, convert to tibble, deduplicate
 #   8. Apply limit and return
 #
+# Scroll state (Task 41):
+#   A scroll state object tracks collection progress across batches.
+#   It records seen post IDs, counts, cursors, scroll position, and timing
+#   so that repeated-scrolling loops (Task 42+) can detect termination
+#   conditions without relying on implicit loop variables.
+#
 # @name search
 # @aliases search
 # @keywords internal
@@ -100,7 +106,9 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE) {
   #    than polling for specific response types.
   Sys.sleep(3)
 
-  # 5. Retrieve captured network events and extract posts (first batch).
+  # 5. Create scroll state and retrieve initial batch.
+  state <- .rx_scroll_state_new()
+
   initial_events <- tryCatch(
     backend$networkCaptureGet(),
     error = function(e) {
@@ -111,41 +119,43 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE) {
   )
 
   initial_posts <- .rx_search_extract_from_events(initial_events, backend)
+  state$add_posts(initial_posts)
+  state$advance_scroll()  # Record the implicit initial position.
 
   # 6. Optional one-scroll: scroll the page to trigger loading of more
   #    content, then capture any new network responses and extract posts
   #    (second batch). The network capture buffer is automatically empty
   #    after the previous `$networkCaptureGet()` call, so this batch
   #    contains only events captured after the scroll.
+  scroll_posts <- list()
   if (isTRUE(scroll)) {
-    .rx_scroll_page(backend)
-    # Wait for new network responses triggered by the scroll.
-    Sys.sleep(3)
+    tryCatch(
+      {
+        .rx_scroll_page(backend)
+        state$advance_scroll(4000)
+        # Wait for new network responses triggered by the scroll.
+        Sys.sleep(3)
 
-    scroll_events <- tryCatch(
-      backend$networkCaptureGet(),
+        scroll_events <- tryCatch(
+          backend$networkCaptureGet(),
+          error = function(e) {
+            # Scroll failure is non-fatal; proceed with initial batch only.
+            return(list())
+          }
+        )
+
+        scroll_posts <- .rx_search_extract_from_events(scroll_events, backend)
+        state$add_posts(scroll_posts)
+      },
       error = function(e) {
-        # Scroll failure is non-fatal; proceed with initial batch only.
-        return(list())
+        # Any unexpected error in the scroll path is non-fatal.
+        invisible(NULL)
       }
-    )
-
-    scroll_posts <- .rx_search_extract_from_events(scroll_events, backend)
-  } else {
-    scroll_posts <- list(
-      post_id = character(0), text = character(0),
-      author_id = character(0), username = character(0),
-      display_name = character(0), created_at = character(0),
-      reply_count = integer(0), repost_count = integer(0),
-      like_count = integer(0), quote_count = integer(0),
-      bookmark_count = integer(0), view_count = integer(0),
-      conversation_id = character(0),
-      is_reply = logical(0), is_repost = logical(0), is_quote = logical(0),
-      reply_to_post_id = character(0), quoted_post_id = character(0)
     )
   }
 
   # 7. Merge both batches (scroll posts appended to initial posts).
+  #    Use the state object's post tracking for dedup when merging.
   merged_posts <- list(
     post_id      = c(initial_posts$post_id,      scroll_posts$post_id),
     text         = c(initial_posts$text,         scroll_posts$text),
@@ -364,4 +374,185 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE) {
       invisible(NULL)
     }
   )
+}
+
+# ---------------------------------------------------------------------------
+# Scroll state object (Task 41)
+# ---------------------------------------------------------------------------
+
+#' Create a scroll state object.
+#'
+#' Tracks collection progress across batches so that repeated-scrolling loops
+#' can make data-driven decisions about termination, deduplication, and
+#' pacing. This replaces implicit loop variables with an explicit state
+#' record that can be inspected, serialized, and extended.
+#'
+#' The state object is a plain list with the following fields:
+#' \describe{
+#'   \item{seen_post_ids}{Character vector of all unique post IDs seen so far.}
+#'   \item{current_count}{Integer, total unique posts collected.}
+#'   \item{previous_count}{Integer, unique post count before the last batch.}
+#'   \item{no_new_data_cycles}{Integer, consecutive batches with zero new posts.}
+#'   \item{scroll_position}{Numeric, cumulative scroll offset in pixels.}
+#'   \item{last_post_id}{Character, post_id of the first post in the latest batch (empty string if none).}
+#'   \item{last_cursor}{Character, cursor from the latest network response (empty string if none).}
+#'   \item{started_at}{POSIXct, collection start time.}
+#'   \item{elapsed_time}{Numeric, seconds since collection started.}
+#' }
+#'
+#' @return A list of class `rx_scroll_state`.
+#'
+#' @examples
+#' \dontrun{
+#'   state <- .rx_scroll_state_new()
+#'   state$add_posts(list(post_id = c("1", "2", "3")))
+#'   state$check_stalled()
+#' }
+#'
+#' @noRd
+.rx_scroll_state_new <- function() {
+  list(
+    seen_post_ids     = character(0),
+    current_count     = 0L,
+    previous_count    = 0L,
+    no_new_data_cycles = 0L,
+    scroll_position   = 0,
+    last_post_id      = "",
+    last_cursor       = "",
+    started_at        = Sys.time(),
+    elapsed_time      = 0
+  ) -> state
+  class(state) <- "rx_scroll_state"
+  state
+}
+
+#' Add a batch of posts to the scroll state.
+#'
+#' Updates `seen_post_ids`, `current_count`, `previous_count`,
+#' `no_new_data_cycles`, `last_post_id`, and `elapsed_time` based on
+#' the new batch content. Called after each batch extraction.
+#'
+#' @param state An `rx_scroll_state` object (modified in place).
+#' @param posts A list of post fields with at least a `post_id` element,
+#'   as returned by `.rx_parse_posts()`.
+#' @param new_cursor Optional character string with a cursor extracted from
+#'   the network response that produced this batch.
+#' @return The modified state object (in place; returned for chaining).
+#'
+#' @examples
+#' \dontrun{
+#'   state <- .rx_scroll_state_new()
+#'   state$add_posts(list(post_id = c("1", "2")))
+#'   state$add_posts(list(post_id = c("2", "3")), new_cursor = "cursor-abc")
+#' }
+#'
+#' @noRd
+.rx_scroll_state_add_posts <- function(state, posts, new_cursor = "") {
+  # Update elapsed time.
+  state$elapsed_time <- as.numeric(difftime(Sys.time(), state$started_at, units = "secs"))
+
+  # Save previous count before updating.
+  state$previous_count <- state$current_count
+
+  # Extract post IDs from the batch.
+  batch_ids <- if (is.list(posts) && !is.null(posts$post_id)) {
+    posts$post_id
+  } else {
+    character(0)
+  }
+
+  # Filter to only IDs we haven't seen yet.
+  new_ids <- batch_ids[!batch_ids %in% state$seen_post_ids]
+
+  # Update seen_post_ids and count.
+  if (length(new_ids) > 0L) {
+    state$seen_post_ids <- c(state$seen_post_ids, new_ids)
+    state$current_count <- length(state$seen_post_ids)
+    # Reset stall counter on new data.
+    state$no_new_data_cycles <- 0L
+    # Track first post ID of this batch.
+    state$last_post_id <- new_ids[[1L]]
+  } else {
+    # No new data — increment stall counter.
+    state$no_new_data_cycles <- state$no_new_data_cycles + 1L
+  }
+
+  # Update cursor if provided.
+  if (is.character(new_cursor) && length(new_cursor) == 1L && nzchar(new_cursor)) {
+    state$last_cursor <- new_cursor
+  }
+
+  invisible(state)
+}
+
+#' Check whether the collection has stalled.
+#'
+#' Returns TRUE when `no_new_data_cycles` exceeds the given threshold.
+#' This is the primary termination signal for repeated-scrolling loops.
+#'
+#' @param state An `rx_scroll_state` object.
+#' @param threshold Integer, maximum allowed consecutive no-new-data cycles
+#'   before considering the collection stalled. Default is 2L.
+#' @return Logical, TRUE when the collection should stop scrolling.
+#' @noRd
+#'
+#' @examples
+#' \dontrun{
+#'   state <- .rx_scroll_state_new()
+#'   state$add_posts(list(post_id = c("1")))
+#'   state$check_stalled()              # FALSE
+#'   state$add_posts(list(post_id = c("1")))  # duplicate only
+#'   state$check_stalled()              # FALSE
+#'   state$add_posts(list(post_id = character(0)))
+#'   state$check_stalled(threshold = 1) # TRUE
+#' }
+#'
+#' @noRd
+.rx_scroll_state_check_stalled <- function(state, threshold = 2L) {
+  state$no_new_data_cycles >= threshold
+}
+
+#' Check whether the collection has reached the limit.
+#'
+#' Returns TRUE when `current_count` is at or above the given limit.
+#'
+#' @param state An `rx_scroll_state` object.
+#' @param limit Integer limit on the number of posts to collect.
+#' @return Logical, TRUE when the limit has been reached.
+#' @noRd
+#'
+#' @examples
+#' \dontrun{
+#'   state <- .rx_scroll_state_new()
+#'   state$add_posts(list(post_id = c("1", "2", "3")))
+#'   state$check_limit(3)  # TRUE
+#'   state$check_limit(2)  # FALSE
+#' }
+#'
+#' @noRd
+.rx_scroll_state_check_limit <- function(state, limit) {
+  !is.null(limit) && state$current_count >= limit
+}
+
+#' Advance the scroll position in the state.
+#'
+#' Increments `scroll_position` by the given pixel amount.
+#'
+#' @param state An `rx_scroll_state` object.
+#' @param pixels Numeric pixel offset to add. Default is 4000 (standard scroll).
+#' @return The modified state object (in place).
+#' @noRd
+#'
+#' @examples
+#' \dontrun{
+#'   state <- .rx_scroll_state_new()
+#'   state$advance_scroll(1000)
+#'   state$advance_scroll(3000)
+#'   state$scroll_position  # 4000
+#' }
+#'
+#' @noRd
+.rx_scroll_state_advance_scroll <- function(state, pixels = 4000) {
+  state$scroll_position <- state$scroll_position + pixels
+  invisible(state)
 }

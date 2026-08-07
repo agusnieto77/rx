@@ -497,3 +497,169 @@ test_that("x_search handles scroll evaluation failure gracefully", {
   expect_true(inherits(result, "tbl_df"))
   expect_equal(nrow(result), 0L)
 })
+
+# ===================================================================
+# Scroll state tests (Task 41)
+# ===================================================================
+
+# --- Test 24: .rx_scroll_state_new creates a valid state object ---
+test_that("scroll state constructor initializes all fields", {
+  state <- .rx_scroll_state_new()
+
+  expect_s3_class(state, "rx_scroll_state")
+  expect_type(state$seen_post_ids, "character")
+  expect_equal(length(state$seen_post_ids), 0L)
+  expect_type(state$current_count, "integer")
+  expect_equal(state$current_count, 0L)
+  expect_type(state$previous_count, "integer")
+  expect_equal(state$previous_count, 0L)
+  expect_type(state$no_new_data_cycles, "integer")
+  expect_equal(state$no_new_data_cycles, 0L)
+  expect_type(state$scroll_position, "double")
+  expect_equal(state$scroll_position, 0)
+  expect_type(state$last_post_id, "character")
+  expect_equal(state$last_post_id, "")
+  expect_type(state$last_cursor, "character")
+  expect_equal(state$last_cursor, "")
+  expect_true(inherits(state$started_at, "POSIXct", "POSIXt"))
+  expect_type(state$elapsed_time, "double")
+  expect_equal(state$elapsed_time, 0)
+})
+
+# --- Test 25: add_posts updates seen_post_ids and current_count ---
+test_that("add_posts tracks new post IDs and increments count", {
+  state <- .rx_scroll_state_new()
+
+  state$add_posts(list(post_id = c("1", "2", "3")))
+
+  expect_equal(state$current_count, 3L)
+  expect_equal(length(state$seen_post_ids), 3L)
+  expect_true(all(c("1", "2", "3") %in% state$seen_post_ids))
+  expect_equal(state$previous_count, 0L)
+  expect_equal(state$no_new_data_cycles, 0L)
+  expect_equal(state$last_post_id, "1")
+})
+
+# --- Test 26: add_posts deduplicates and detects no-new-data ---
+test_that("add_posts deduplicates and increments stall counter", {
+  state <- .rx_scroll_state_new()
+
+  # First batch: 3 new posts.
+  state$add_posts(list(post_id = c("1", "2", "3")))
+  expect_equal(state$current_count, 3L)
+  expect_equal(state$no_new_data_cycles, 0L)
+
+  # Second batch: all duplicates.
+  state$add_posts(list(post_id = c("1", "2")))
+  expect_equal(state$current_count, 3L, info = "count should not grow on duplicates")
+  expect_equal(state$no_new_data_cycles, 1L)
+
+  # Third batch: all duplicates again.
+  state$add_posts(list(post_id = c("3", "2", "1")))
+  expect_equal(state$no_new_data_cycles, 2L)
+})
+
+# --- Test 27: add_posts resets stall counter on new data ---
+test_that("add_posts resets no_new_data_cycles when new IDs appear", {
+  state <- .rx_scroll_state_new()
+
+  state$add_posts(list(post_id = c("1", "2")))
+  state$add_posts(list(post_id = c("1")))  # duplicate only
+  state$add_posts(list(post_id = c("1", "3")))  # one new
+
+  expect_equal(state$current_count, 3L)
+  expect_equal(state$no_new_data_cycles, 0L, info = "stall counter should reset on new data")
+  expect_true("3" %in% state$seen_post_ids)
+})
+
+# --- Test 28: add_posts handles empty posts list ---
+test_that("add_posts with empty posts does not crash", {
+  state <- .rx_scroll_state_new()
+
+  state$add_posts(list(post_id = character(0)))
+
+  expect_equal(state$current_count, 0L)
+  expect_equal(state$no_new_data_cycles, 1L)
+})
+
+# --- Test 29: add_posts handles NULL/missing post_id ---
+test_that("add_posts handles missing post_id field gracefully", {
+  state <- .rx_scroll_state_new()
+
+  state$add_posts(list(other = "data"))
+
+  expect_equal(state$current_count, 0L)
+  expect_equal(state$no_new_data_cycles, 1L)
+})
+
+# --- Test 30: add_posts updates cursor ---
+test_that("add_posts records the cursor when provided", {
+  state <- .rx_scroll_state_new()
+
+  state$add_posts(list(post_id = c("1")), new_cursor = "cursor-abc-123")
+
+  expect_equal(state$last_cursor, "cursor-abc-123")
+})
+
+# --- Test 31: check_stalled returns TRUE when threshold exceeded ---
+test_that("check_stalled detects stalled collection", {
+  state <- .rx_scroll_state_new()
+
+  # Add some data.
+  state$add_posts(list(post_id = c("1")))
+
+  # No stalls yet.
+  expect_false(state$check_stalled(threshold = 2L))
+  expect_false(state$check_stalled(threshold = 1L))
+
+  # Two consecutive no-data batches.
+  state$add_posts(list(post_id = character(0)))  # cycle 1
+  state$add_posts(list(post_id = character(0)))  # cycle 2
+
+  expect_false(state$check_stalled(threshold = 3L))
+  expect_true(state$check_stalled(threshold = 2L))
+  expect_true(state$check_stalled(threshold = 1L))
+})
+
+# --- Test 32: check_limit enforces the limit ---
+test_that("check_limit returns TRUE when current_count >= limit", {
+  state <- .rx_scroll_state_new()
+
+  state$add_posts(list(post_id = c("1", "2", "3")))
+
+  expect_false(state$check_limit(5L))
+  expect_true(state$check_limit(3L))
+  expect_true(state$check_limit(2L))
+  expect_true(state$check_limit(1L))
+  expect_true(state$check_limit(NULL))
+})
+
+# --- Test 33: advance_scroll accumulates position ---
+test_that("advance_scroll accumulates scroll position", {
+  state <- .rx_scroll_state_new()
+
+  expect_equal(state$scroll_position, 0)
+
+  state$advance_scroll(1000)
+  expect_equal(state$scroll_position, 1000)
+
+  state$advance_scroll(3000)
+  expect_equal(state$scroll_position, 4000)
+
+  # Default is 4000.
+  state$advance_scroll()
+  expect_equal(state$scroll_position, 8000)
+})
+
+# --- Test 34: scroll state tracks elapsed_time ---
+test_that("elapsed_time increases after add_posts", {
+  state <- .rx_scroll_state_new()
+
+  # Force a tiny sleep so time advances.
+  Sys.sleep(0.05)
+
+  state$add_posts(list(post_id = c("1")))
+
+  expect_true(state$elapsed_time > 0, info = paste("elapsed_time:", state$elapsed_time))
+  expect_true(state$elapsed_time < 5, info = "elapsed_time should be reasonable")
+})
