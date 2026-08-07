@@ -791,23 +791,31 @@ Track:
 
 ---
 
-### Task 45: Store collection provenance in memory [ ]
+### Task 45: Store collection provenance in memory [x]
 
 **Goal:** Track how a search result was created.
 
 **Actions:**
-Create collection metadata containing at least:
-- collection_id
-- started_at
-- query
-- package_version
-- backend
-- parser_version
-- records
+- [x] Create collection metadata containing at least:
+  - [x] collection_id (UUID, auto-generated via `.rx_generate_uuid()`)
+  - [x] started_at (POSIXct, captured at x_search start)
+  - [x] query (the search query string)
+  - [x] package_version (from DESCRIPTION via utils::packageVersion())
+  - [x] backend (lightpanda / chromium / unknown)
+  - [x] parser_version (internal constant, `.rx_parser_version()`)
+  - [x] records (integer count of records)
+- [x] Attach provenance as `rx_collection_provenance` attribute on the result tibble
+- [x] Backward-compatible — tibble return unchanged, provenance via attr()
+- [x] Navigation failure path also attaches provenance (with record_count = 0)
+- [x] `print.rx_collection_provenance` for readable output
 
 **Acceptance criteria:**
-- `x_search()` can associate metadata with its result.
-- Metadata generation has tests.
+- [x] `x_search()` associates metadata with its result (via attribute).
+- [x] Metadata generation has tests (Tests 42–47: 6 new tests).
+
+**Files changed:**
+- `R/search.R` — added `.rx_parser_version()`, `.rx_schema_version()`, `.rx_generate_uuid()`, `.rx_collection_metadata()`, `print.rx_collection_provenance()`, `x_search()` provenance attachment
+- `tests/testthat/test-search.R` — added Tests 42–47 covering metadata creation, UUID generation, defaults, print method, x_search provenance attachment, and navigation failure provenance
 
 ---
 

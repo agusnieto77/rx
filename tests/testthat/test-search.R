@@ -1141,3 +1141,134 @@ test_that("limit larger than available fixture results returns all posts", {
   # The fixture has 4 unique posts; limit=100 should not cap them.
   expect_equal(nrow(result), 4L, info = "limit larger than available should return all 4 posts")
 })
+
+# ===================================================================
+# Collection provenance tests (Task 45)
+# ===================================================================
+
+# --- Test 42: .rx_collection_metadata creates a valid provenance object ---
+test_that(".rx_collection_metadata creates a valid provenance object", {
+  meta <- .rx_collection_metadata(
+    collection_id = "test-uuid-0001",
+    started_at = as.POSIXct("2026-08-01 12:00:00", tz = "UTC"),
+    query = "r programming",
+    backend = "lightpanda",
+    record_count = 42L
+  )
+
+  expect_s3_class(meta, "rx_collection_provenance")
+  expect_equal(meta$collection_id, "test-uuid-0001")
+  expect_equal(meta$started_at, as.POSIXct("2026-08-01 12:00:00", tz = "UTC"))
+  expect_equal(meta$query, "r programming")
+  expect_true(nzchar(meta$package_version))
+  expect_equal(meta$backend, "lightpanda")
+  expect_true(nzchar(meta$parser_version))
+  expect_equal(meta$records, 42L)
+})
+
+# --- Test 43: .rx_collection_metadata generates UUID when not provided ---
+test_that(".rx_collection_metadata generates a UUID when collection_id is NULL", {
+  meta <- .rx_collection_metadata(
+    collection_id = NULL,
+    query = "test",
+    backend = "lightpanda",
+    record_count = 0L
+  )
+
+  expect_true(nzchar(meta$collection_id))
+  # UUIDs contain hyphens — basic check.
+  expect_true(grepl("-", meta$collection_id))
+})
+
+# --- Test 44: .rx_collection_metadata defaults are sensible ---
+test_that(".rx_collection_metadata uses sensible defaults", {
+  meta <- .rx_collection_metadata()
+
+  expect_true(nzchar(meta$collection_id))
+  expect_true(inherits(meta$started_at, "POSIXct", "POSIXt"))
+  expect_equal(meta$query, "")
+  expect_true(nzchar(meta$package_version))
+  expect_equal(meta$backend, "unknown")
+  expect_true(nzchar(meta$parser_version))
+  expect_equal(meta$records, 0L)
+})
+
+# --- Test 45: .rx_collection_metadata prints correctly ---
+test_that("print.rx_collection_provenance outputs structured text", {
+  meta <- .rx_collection_metadata(
+    collection_id = "print-test-001",
+    query = "hello world",
+    backend = "chromium",
+    record_count = 7L
+  )
+
+  output <- capture.output(print(meta))
+  output_text <- paste(output, collapse = "\n")
+
+  expect_true(grepl("xtweetsR Collection Provenance", output_text))
+  expect_true(grepl("print-test-001", output_text))
+  expect_true(grepl("hello world", output_text))
+  expect_true(grepl("chromium", output_text))
+  expect_true(grepl("records       : 7", output_text))
+})
+
+# --- Test 46: x_search attaches provenance to the result tibble ---
+test_that("x_search attaches provenance to the returned tibble", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed_fixture <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list(
+    list(requestId = "req-1", url = "https://x.com/graphql/test", contentType = "application/json")
+  )
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    list(requestId = requestId, body = parsed_fixture, contentType = "application/json", error = NULL)
+  }
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  result <- x_search(mock_session, "r package")
+
+  # Provenance should be attached as an attribute.
+  provenance <- attr(result, "rx_collection_provenance")
+  expect_true(is.list(provenance))
+  expect_true(is.null(class(provenance)) || !"rx_collection_provenance" %in% c("NULL", ""))
+
+  expect_equal(provenance$query, "r package")
+  expect_true(inherits(provenance$started_at, "POSIXct", "POSIXt"))
+  expect_true(nzchar(provenance$collection_id))
+  expect_true(nzchar(provenance$package_version))
+  expect_true(nzchar(provenance$parser_version))
+  expect_equal(provenance$records, nrow(result))
+})
+
+# --- Test 47: x_search with navigation failure still attaches provenance ---
+test_that("navigation failure result carries provenance with zero records", {
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) {
+    list(status = "error", error = list(code = "NAV_FAIL"))
+  }
+
+  expect_warning(
+    result <- x_search(mock_session, "failed query"),
+    "Navigation failed"
+  )
+
+  provenance <- attr(result, "rx_collection_provenance")
+  expect_true(is.list(provenance))
+  expect_equal(provenance$query, "failed query")
+  expect_equal(provenance$records, 0L)
+})
