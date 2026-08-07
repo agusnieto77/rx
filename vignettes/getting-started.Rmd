@@ -1,0 +1,249 @@
+---
+title: "Getting Started with xtweetsR"
+subtitle: "A complete workflow for collecting and analyzing X/Twitter data"
+author: "Agustin Nieto"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with xtweetsR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Prerequisites
+
+Before using **xtweetsR**, make sure you have:
+
+- **R >= 4.2.0**
+- **Node.js >= 18** (for the TypeScript sidecar)
+- **Lightpanda** running and reachable at a CDP endpoint
+
+Install the package from source:
+
+```{r install, eval = FALSE}
+devtools::install(".")
+```
+
+## Step 1: Check your environment
+
+Always start with `x_doctor()` to verify that all dependencies are available:
+
+```{r doctor, eval = FALSE}
+library(xtweetsR)
+
+x_doctor()
+```
+
+This runs eight independent checks:
+
+| # | Check | What it verifies |
+|---|-------|-----------------|
+| 1 | R | Minimum version (4.2.0) |
+| 2 | Node.js | Runtime availability |
+| 3 | Sidecar | TypeScript compilation + ping response |
+| 4 | Lightpanda connection | CDP connect request |
+| 5 | CDP connection | Full browser session lifecycle |
+| 6 | JavaScript evaluation | `Runtime.evaluate` works (`1 + 1 = 2`) |
+| 7 | Network capture | CDP Network domain can be enabled |
+| 8 | X navigation | Navigation to `https://x.com` |
+
+A failure in one check does not prevent later checks from running. Checks 4-8 are skipped if the sidecar (check 3) is unavailable, since they all depend on it.
+
+## Step 2: Create a session
+
+A session starts the sidecar process and connects to Lightpanda:
+
+```{r session, eval = FALSE}
+session <- x_session()
+print(session)
+```
+
+By default, the endpoint is resolved through this precedence:
+
+1. `endpoint` argument in `x_session()`
+2. `LPD_ENDPOINT` environment variable
+3. Local default: `ws://127.0.0.1:21111`
+
+You can also pass a custom endpoint or disable progress messages:
+
+```{r session-custom, eval = FALSE}
+session <- x_session(endpoint = "ws://192.168.1.100:21111", quiet = TRUE)
+```
+
+## Step 3: Search for posts
+
+The core function is `x_search()`. It navigates to an X search results page, captures structured network responses, parses posts, deduplicates them, and returns a tibble:
+
+```{r search, eval = FALSE}
+results <- x_search(session, query = "rprogramming", limit = 10)
+print(results)
+```
+
+Key parameters:
+
+- **query** (required): Search term as a single string.
+- **limit** (optional): Maximum number of posts to return.
+- **scroll** (default `TRUE`): Whether to scroll the page to load more content.
+- **max_scrolls** (default `5L`): Maximum scroll iterations when `scroll = TRUE`.
+
+The function uses bounded repeated scrolling: after the initial extraction, the page is scrolled and new content is extracted in a loop. The loop stops when any of these conditions is met:
+
+- The `limit` is reached.
+- `max_scrolls` iterations have completed.
+- No new data appears for two consecutive batches (stall detection).
+
+## Step 4: Explore results with dplyr
+
+`x_search()` returns a **tibble** with 26 columns, fully compatible with `dplyr`:
+
+```{r dplyr, eval = FALSE}
+library(dplyr)
+
+# Most-liked posts
+results %>%
+  filter(like_count > 50) %>%
+  arrange(desc(like_count))
+
+# Posts by specific users
+results %>%
+  filter(username %in% c("rstudio", "hadleywickham")) %>%
+  select(username, text, like_count, reply_count)
+
+# Posts from a date range
+results %>%
+  filter(created_at >= "2025-01-01") %>%
+  count(username, sort = TRUE)
+
+# Inspect the collection provenance
+attr(results, "rx_collection_provenance")
+```
+
+The returned tibble has these column groups:
+
+- **Post identity**: `post_id`, `text`, `created_at`
+- **Author**: `author_id`, `username`, `display_name`
+- **Engagement metrics**: `reply_count`, `repost_count`, `like_count`, `quote_count`, `bookmark_count`, `view_count`
+- **Relationships**: `conversation_id`, `is_reply`, `is_repost`, `is_quote`, `reply_to_post_id`, `quoted_post_id`
+- **Entities**: `hashtags`, `mentions`, `urls` (list-columns)
+- **Media**: `media_type`, `media_urls` (list-columns)
+- **Provenance**: `collected_at`, `collection_query`, `collection_id`
+
+## Step 5: Other collection functions
+
+### User timeline
+
+Collect posts from a specific user's timeline:
+
+```{r user-posts, eval = FALSE}
+rstudio_posts <- x_user_posts(session, username = "rstudio", limit = 20)
+```
+
+Parameters are the same as `x_search()`: `limit`, `scroll`, `max_scrolls`, `quiet`. You can also append a path segment like `"media"` or `"tweets_with_replies"`:
+
+```{r user-path, eval = FALSE}
+media_only <- x_user_posts(session, username = "rstudio", path = "media")
+```
+
+### Single post
+
+Fetch a single post by its ID or URL:
+
+```{r single-post, eval = FALSE}
+post <- x_post(session, post_id = "1900000000000000001")
+```
+
+The `post_id` argument accepts both bare numeric IDs and full URLs.
+
+## Step 6: Debug tools
+
+Two functions help you inspect what's happening under the hood:
+
+```{r debug, eval = FALSE}
+# Inspect captured network traffic
+network_df <- x_debug_network(session)
+print(network_df)
+
+# Inspect page DOM (full HTML)
+full_html <- x_debug_dom(session)
+
+# Or query specific elements
+elements <- x_debug_dom(session, selector = "article")
+print(elements)
+```
+
+## Step 7: Save your collection
+
+Export results in multiple formats:
+
+```{r export, eval = FALSE}
+# JSONL -- always available
+x_save(results, "collection.jsonl")
+
+# Parquet -- requires the `arrow` package
+x_save(results, "collection.parquet")
+
+# DuckDB -- requires the `duckdb` package
+x_save(results, "collection.duckdb")
+```
+
+JSONL is an append-only format ideal for incremental collection. Parquet and DuckDB support large collections that need SQL querying.
+
+## Step 8: Resume and checkpoints
+
+For long collections, save state and resume later:
+
+```{r resume, eval = FALSE}
+# First run -- saves checkpoint
+results1 <- x_search(
+  session,
+  query = "rstats",
+  limit = 100,
+  checkpoint_path = "rstats.checkpoint.json",
+  jsonl_path = "rstats.jsonl"
+)
+
+# Resume -- skips already-seen posts
+results2 <- x_search(
+  session,
+  query = "rstats",
+  limit = 100,
+  resume = TRUE,
+  checkpoint_path = "rstats.checkpoint.json",
+  jsonl_path = "rstats.jsonl"
+)
+```
+
+The checkpoint stores `collection_id`, `seen_post_ids`, `last_cursor`, and `records_collected`. When you resume, already-collected posts are not duplicated.
+
+## Step 9: Close the session
+
+Always close your session when finished:
+
+```{r close, eval = FALSE}
+x_close(session)
+```
+
+This stops the sidecar process, closes the CDP connection, and frees memory. Repeated calls are safe -- they return invisibly without error. A finalizer also runs automatically if your R session exits without calling `x_close()`.
+
+## Summary
+
+This vignette covered the complete workflow:
+
+1. **Environment check** -- `x_doctor()`
+2. **Session creation** -- `x_session()`
+3. **Search** -- `x_search()` with scrolling and deduplication
+4. **Explore** -- `dplyr` on the returned tibble
+5. **Other collectors** -- `x_user_posts()`, `x_post()`
+6. **Debug** -- `x_debug_network()`, `x_debug_dom()`
+7. **Export** -- `x_save()` (JSONL, Parquet, DuckDB)
+8. **Resume** -- checkpoint-based collection continuity
+9. **Cleanup** -- `x_close()`
+
+All collection functions share the same architecture: network-first extraction via CDP, canonical normalization, deduplication, and provenance tracking. This means you can combine results from different queries and be confident the schema is consistent.
