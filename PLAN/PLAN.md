@@ -64,7 +64,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 3: Define package metadata
+### Task 3: Define package metadata [DONE]
 
 **Goal:** Make `DESCRIPTION` minimally correct.
 
