@@ -430,6 +430,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No posts returned.")
     empty <- .rx_search_empty_tibble()
+    empty <- .rx_relational_result(empty, list(post_id = character(0)))
     provenance <- .rx_collection_metadata(
       collection_id = collection_id,
       started_at = collection_started_at,
@@ -674,7 +675,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     quiet = quiet
   )
 
-  deduped
+  .rx_relational_result(deduped, merged_posts)
 }
 
 # ---------------------------------------------------------------------------
@@ -765,6 +766,7 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No post returned.")
     empty <- .rx_search_empty_tibble()
+    empty <- .rx_relational_result(empty, list(post_id = character(0)))
     provenance <- .rx_collection_metadata(
       collection_id = collection_id,
       started_at = collection_started_at,
@@ -827,7 +829,7 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
     quiet = quiet
   )
 
-  deduped
+  .rx_relational_result(deduped, posts)
 }
 
 #' Fetch all posts in a reply thread.
@@ -901,6 +903,7 @@ x_thread <- function(session, post_id, quiet = FALSE) {
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No thread returned.")
     empty <- .rx_search_empty_tibble()
+    empty <- .rx_relational_result(empty, list(post_id = character(0)))
     provenance <- .rx_collection_metadata(
       collection_id = collection_id,
       started_at = collection_started_at,
@@ -958,7 +961,7 @@ x_thread <- function(session, post_id, quiet = FALSE) {
     quiet = quiet
   )
 
-  deduped
+  .rx_relational_result(deduped, posts)
 }
 
 # ---------------------------------------------------------------------------
@@ -1049,6 +1052,7 @@ x_replies <- function(session, username, limit = NULL, quiet = FALSE) {
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No replies returned.")
     empty <- .rx_search_empty_tibble()
+    empty <- .rx_relational_result(empty, list(post_id = character(0)))
     provenance <- .rx_collection_metadata(
       collection_id = collection_id,
       started_at = collection_started_at,
@@ -1128,7 +1132,14 @@ x_replies <- function(session, username, limit = NULL, quiet = FALSE) {
     quiet = quiet
   )
 
-  replies
+  # Build a parsed-list from filtered results for user extraction.
+  replies_parsed <- list(
+    post_id      = replies$post_id,
+    author_id    = replies$author_id,
+    username     = replies$username,
+    display_name = replies$display_name
+  )
+  .rx_relational_result(replies, replies_parsed)
 }
 
 # ---------------------------------------------------------------------------
@@ -1222,6 +1233,7 @@ x_quotes <- function(session, post_id, limit = NULL, quiet = FALSE) {
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No quotes returned.")
     empty <- .rx_search_empty_tibble()
+    empty <- .rx_relational_result(empty, list(post_id = character(0)))
     provenance <- .rx_collection_metadata(
       collection_id = collection_id,
       started_at = collection_started_at,
@@ -1301,7 +1313,14 @@ x_quotes <- function(session, post_id, limit = NULL, quiet = FALSE) {
     quiet = quiet
   )
 
-  quotes
+  # Build a parsed-list from filtered results for user extraction.
+  quotes_parsed <- list(
+    post_id      = quotes$post_id,
+    author_id    = quotes$author_id,
+    username     = quotes$username,
+    display_name = quotes$display_name
+  )
+  .rx_relational_result(quotes, quotes_parsed)
 }
 
 #' Return an empty batch with the canonical field structure.
@@ -1371,6 +1390,69 @@ x_quotes <- function(session, post_id, limit = NULL, quiet = FALSE) {
   })
   names(cols) <- fields
   tibble::as_tibble(cols)
+}
+
+#' Wrap posts and users into a relational result object.
+#'
+#' Takes a post tibble and the parsed posts list, extracts unique
+#' users, and returns a `rx_relational` object that holds both.
+#' The object inherits from `tbl_df` so that existing code that
+#' treats the result as a tibble continues to work. The `users`
+#' tibble is accessible via `$rx_users` or the `rx_users()`
+#' accessor.
+#'
+#' @param posts A tibble of posts (from `.rx_deduplicate_posts()`).
+#' @param parsed The parsed posts list (from `.rx_search_extract_from_events()`),
+#'   used to extract unique users.
+#' @return An `rx_relational` object: a tibble with an additional
+#'   `rx_users` attribute holding a users tibble.
+#'
+#' @noRd
+.rx_relational_result <- function(posts, parsed) {
+  users <- .rx_extract_users(parsed)
+  users_tbl <- .rx_users_to_tibble(users)
+  attr(posts, "rx_users") <- users_tbl
+  class(posts) <- c("rx_relational", class(posts))
+  posts
+}
+
+#' Extract the users tibble from a relational result.
+#'
+#' @param x An `rx_relational` object (or any object).
+#' @return A tibble with user columns when `x` is an `rx_relational`,
+#'   otherwise `tibble::tibble()`.
+#' @export
+rx_users <- function(x) {
+  users <- attr(x, "rx_users")
+  if (is.null(users)) {
+    return(tibble::tibble(
+      user_id = character(0),
+      username = character(0),
+      display_name = character(0)
+    ))
+  }
+  users
+}
+
+#' Print method for `rx_relational` objects.
+#'
+#' Prints the posts tibble and the users tibble side by side.
+#'
+#' @param x An `rx_relational` object.
+#' @param ... Further arguments passed to `print()`.
+#'
+#' @return Invisible `x`.
+#'
+#' @noRd
+print.rx_relational <- function(x, ...) {
+  cat("# Posts (", nrow(x), " row(s))\n", sep = "")
+  print(as.data.frame(x), ...)
+  users <- attr(x, "rx_users")
+  if (!is.null(users) && nrow(users) > 0L) {
+    cat("\n# Users (", nrow(users), " unique user(s))\n", sep = "")
+    print(as.data.frame(users), ...)
+  }
+  invisible(x)
 }
 
 #' Extract posts from captured network events.
@@ -1967,6 +2049,7 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No posts returned.")
     empty <- .rx_search_empty_tibble()
+    empty <- .rx_relational_result(empty, list(post_id = character(0)))
     provenance <- .rx_collection_metadata(
       collection_id = collection_id,
       started_at = collection_started_at,
@@ -2186,5 +2269,5 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     quiet = quiet
   )
 
-  deduped
+  .rx_relational_result(deduped, merged_posts)
 }

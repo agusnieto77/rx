@@ -1646,9 +1646,30 @@ Implement `x_replies()` without creating a second post schema.
 
 Implement `x_quotes()`.
 
-### Iteration 85: Normalize users into a separate table [ ]
+### Iteration 85: Normalize users into a separate table [x]
 
 Add a relational users representation while preserving the simple tibble API.
+
+**Acceptance criteria:**
+- [x] `.rx_users_fields()` returns canonical user schema (3 fields: user_id, username, display_name).
+- [x] `.rx_extract_users()` extracts unique users from parsed posts, deduplicated by author_id, first-seen order.
+- [x] `.rx_users_to_tibble()` converts users list to a tibble.
+- [x] `.rx_relational_result()` wraps posts + users into an `rx_relational` object (tibble + `rx_users` attribute).
+- [x] `rx_users()` exported accessor extracts users tibble from a relational result.
+- [x] `print.rx_relational()` prints both posts and users sections.
+- [x] All 6 search functions (`x_search`, `x_post`, `x_thread`, `x_replies`, `x_quotes`, `x_user_posts`) return `rx_relational` objects.
+- [x] Navigation failure paths return relational results with empty users.
+- [x] Filtered results (`x_replies`, `x_quotes`) extract users from filtered posts only.
+- [x] 20 tests in `tests/testthat/test-users.R` covering: schema (1), empty input (2-6), deduplication (4), order preservation (7), tibble conversion (8-11), relational wrapping (12-13), accessor (14-15), edge cases (16-17), full pipeline (17), column preservation (19), print method (20-21).
+- [x] TypeScript compiles cleanly (34/34 tests pass).
+
+**Files created:**
+- `R/users.R` — `.rx_users_fields()`, `.rx_extract_users()`, `.rx_users_to_tibble()` (130 lines)
+
+**Files changed:**
+- `R/search.R` — added `.rx_relational_result()`, `rx_users()`, `print.rx_relational()`, updated all 6 search functions to return relational results
+- `tests/testthat/test-users.R` — 20 tests (Tests 1-20)
+- `NAMESPACE` — added `export(rx_users)`
 
 ### Iteration 86: Normalize media into a separate table [ ]
 
