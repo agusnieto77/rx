@@ -79,6 +79,32 @@ x_session <- function(endpoint = NULL, sidecar_path = NULL) {
   session
 }
 
+#' Close an xtweetsR session.
+#'
+#' Releases all resources held by a browser session: stops the TypeScript
+#' sidecar process, closes the CDP connection, and frees memory. Safe to
+#' call multiple times — repeated calls return invisibly without error.
+#'
+#' @param session An \code{xtweetsR_session} object returned by
+#'   \code{\link[=x_session]{x_session()}}.
+#'
+#' @return Invisibly \code{NULL}.
+#'
+#' @examples
+#' \dontrun{
+#'   sess <- x_session()
+#'   x_close(sess)
+#' }
+#'
+#' @export
+x_close <- function(session) {
+  if (is.null(session$backend)) {
+    return(invisible(NULL))
+  }
+  session$close()
+  invisible(NULL)
+}
+
 #' Print method for xtweetsR_session objects.
 #'
 #' Displays the backend type, resolved endpoint, and connection status.

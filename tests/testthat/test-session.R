@@ -100,3 +100,21 @@ test_that("x_session()$close() returns invisible NULL", {
   result <- sess$close()
   testthat::expect_null(result)
 })
+
+# --- Test 8: x_close is exported ---
+test_that("x_close is an exported function", {
+  testthat::expect_true(
+    exists("x_close", envir = asNamespace("xtweetsR")),
+    info = "x_close exists in the package namespace"
+  )
+  testthat::expect_true(
+    "x_close" %in% getNamespaceExports("xtweetsR"),
+    info = "x_close is exported"
+  )
+})
+
+# --- Test 9: x_close(NULL) does not error ---
+test_that("x_close(NULL) returns invisibly without error", {
+  result <- xtweetsR::x_close(NULL)
+  testthat::expect_null(result)
+})

@@ -202,8 +202,12 @@ test_that("dynamically inserted DOM content is observable after load", {
 
   testthat::expect_true(ready, info = "test server is ready")
 
+  # Connect to CDP before navigation/evaluation.
+  xtweetsR:::.rx_send_request(proc, "connect", list(endpoint = "ws://127.0.0.1:21111"))
+
   # Navigate to the local page.
   url <- paste0("http://127.0.0.1:", port, "/dynamic-page.html")
+  xtweetsR:::.rx_send_request(proc, "navigate", list(url = url))
 
   # Wait a moment for JS to execute (setTimeout is 50ms).
   Sys.sleep(1)
