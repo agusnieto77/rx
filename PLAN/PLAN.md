@@ -1254,7 +1254,7 @@ Add both to collection metadata.
 
 ---
 
-### Task 65: Add README quickstart [ ]
+### Task 65: Add README quickstart [x]
 
 **Goal:** Document the working MVP.
 
