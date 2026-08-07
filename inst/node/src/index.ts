@@ -79,6 +79,7 @@ interface NetworkEvent {
   fromPrefetchCache?: boolean;
   timedOut?: boolean;
   protocol?: string;
+  contentType?: string;
 }
 
 let networkEvents: NetworkEvent[] = [];
@@ -87,13 +88,24 @@ let networkEvents: NetworkEvent[] = [];
 let _captureOnRequest: ((params: Record<string, unknown>) => void) | null = null;
 let _captureOnResponse: ((params: Record<string, unknown>) => void) | null = null;
 
-function handleNetworkCaptureEnable(id: unknown): void {
+async function handleNetworkCaptureEnable(id: unknown): Promise<void> {
   if (cdpConnection === null || !cdpConnection.isConnected) {
     respondError(id, "CDP_ERROR", "Cannot enable network capture — CDP connection not active");
     return;
   }
   const conn = cdpConnection;
   networkEvents = [];
+
+  // Remove stale listeners from a prior enable call to prevent duplicate
+  // event pushes. This also fixes the race window: we register listeners
+  // BEFORE sending Network.enable so no events are lost.
+  if (_captureOnRequest !== null) {
+    conn.removeListener("Network.request", _captureOnRequest);
+    conn.removeListener("Network.requestWillBeSent", _captureOnRequest);
+  }
+  if (_captureOnResponse !== null) {
+    conn.removeListener("Network.responseReceived", _captureOnResponse);
+  }
 
   const onRequest = (params: Record<string, unknown>): void => {
     const request = params.request as Record<string, unknown> | undefined;
@@ -116,22 +128,33 @@ function handleNetworkCaptureEnable(id: unknown): void {
         ev.fromServiceWorker = Boolean(response?.fromServiceWorker);
         ev.fromPrefetchCache = Boolean(response?.fromPrefetchCache);
         ev.timedOut = Boolean(response?.timedOut);
+        // Store the content type so the body getter knows whether to
+        // attempt JSON parsing.  Only the media type (before ";") is kept
+        // to ignore charset directives — the sidecar always decodes as
+        // UTF-8 regardless of the declared encoding.
+        const ct = (response?.contentType as string | undefined) ?? "";
+        ev.contentType = ct.split(";")[0].trim();
         break;
       }
     }
   };
 
-  conn.sendCommand("Network.enable").catch((err: Error) => {
-    log("warn", "Network.enable failed", err.message);
-  });
-
-  // Store references before registering listeners so the clear handler can remove them.
+  // Register listeners BEFORE sending Network.enable to prevent the narrow
+  // race window where CDP emits events before listeners are attached.
   _captureOnRequest = onRequest;
   _captureOnResponse = onResponse;
 
   conn.on("Network.request", onRequest as (params: Record<string, unknown>) => void);
   conn.on("Network.requestWillBeSent", onRequest as (params: Record<string, unknown>) => void);
   conn.on("Network.responseReceived", onResponse as (params: Record<string, unknown>) => void);
+
+  // Now enable the CDP Network domain — await to serialize with any
+  // concurrent clear/disable call so the domain is guaranteed enabled.
+  try {
+    await conn.sendCommand("Network.enable");
+  } catch (err: unknown) {
+    log("warn", "Network.enable failed", (err as Error).message);
+  }
 
   log("info", "network capture enabled");
   respond(id, { enabled: true, eventsCaptured: networkEvents.length });
@@ -143,7 +166,16 @@ function handleNetworkCaptureGet(id: unknown): void {
   respond(id, { events });
 }
 
-function handleNetworkCaptureClear(id: unknown): void {
+async function handleNetworkCaptureClear(id: unknown): Promise<void> {
+  // Disable the CDP Network domain so the browser stops sending network
+  // events. Await to serialize with any concurrent enable call.
+  if (cdpConnection !== null && cdpConnection.isConnected) {
+    try {
+      await cdpConnection.sendCommand("Network.disable");
+    } catch {
+      // Best-effort — logging is enough.
+    }
+  }
   networkEvents = [];
   // Remove event listeners from the connection.
   if (cdpConnection !== null && _captureOnRequest !== null) {
@@ -156,6 +188,74 @@ function handleNetworkCaptureClear(id: unknown): void {
   _captureOnRequest = null;
   _captureOnResponse = null;
   respond(id, { cleared: true });
+}
+
+// ── response body retrieval ──────────────────────────────────────────
+
+/** Fetch the response body for a captured requestId via CDP. */
+async function handleNetworkCaptureGetBody(id: unknown, params?: unknown): Promise<void> {
+  let requestId: string;
+  if (typeof params === "object" && params !== null) {
+    const p = params as Record<string, unknown>;
+    if (typeof p.requestId === "string" && p.requestId.length > 0) {
+      requestId = p.requestId;
+    } else {
+      respondError(id, "INVALID_REQUEST", "requestBody requires a non-empty 'requestId' parameter");
+      return;
+    }
+  } else {
+    respondError(id, "INVALID_REQUEST", "requestBody requires a 'requestId' parameter");
+    return;
+  }
+
+  if (cdpConnection === null || !cdpConnection.isConnected) {
+    respondError(id, "CDP_ERROR", "Cannot get body — CDP connection not active");
+    return;
+  }
+
+  const conn = cdpConnection;
+
+  // Validate that the requestId exists in our captured events.
+  const event = networkEvents.find((e) => e.requestId === requestId);
+  if (!event) {
+    respondError(id, "REQUEST_ID_NOT_FOUND", `No captured event with requestId="${requestId}"`);
+    return;
+  }
+
+  // Find the content-type from the matching event.
+  const contentType = (event.contentType ?? "").split(";")[0].trim();
+
+  try {
+    const result = await conn.sendCommand("Network.getResponseBody", { requestId });
+    const body = (result as Record<string, unknown>).body as string | undefined;
+    const base64Encoded = Boolean((result as Record<string, unknown>).base64Encoded);
+
+    if (!body) {
+      respond(id, { requestId, body: null, contentType: contentType || undefined, error: "no_body_available" });
+      return;
+    }
+
+    const decoded = base64Encoded ? Buffer.from(body, "base64").toString("utf-8") : body;
+
+    // Attempt JSON parsing for application/json content types.
+    if (contentType === "application/json") {
+      try {
+        const parsed = JSON.parse(decoded);
+        respond(id, { requestId, body: parsed, contentType, error: null });
+        return;
+      } catch {
+        // Fall through to raw body if JSON parsing fails.
+      }
+    }
+
+    respond(id, { requestId, body: decoded, contentType: contentType || undefined, error: null });
+  } catch (err) {
+    respondError(
+      id,
+      "NETWORK_ERROR",
+      `Failed to retrieve response body for requestId="${requestId}": ${(err as Error).message}`
+    );
+  }
 }
 
 // ── close handler ────────────────────────────────────────────────────
@@ -628,13 +728,16 @@ async function main(): Promise<void> {
         await handleEvaluate(id, req.params);
         break;
       case "networkCaptureEnable":
-        handleNetworkCaptureEnable(id);
+        await handleNetworkCaptureEnable(id);
         break;
       case "networkCaptureGet":
         handleNetworkCaptureGet(id);
         break;
       case "networkCaptureClear":
-        handleNetworkCaptureClear(id);
+        await handleNetworkCaptureClear(id);
+        break;
+      case "networkCaptureGetBody":
+        await handleNetworkCaptureGetBody(id, req.params);
         break;
       default:
         respondError(id, "UNKNOWN_METHOD", `Method "${method}" is not implemented`);

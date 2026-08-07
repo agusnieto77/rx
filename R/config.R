@@ -46,7 +46,7 @@ NULL
   }
 
   # 2. Environment variable.
-  env_endpoint <- Sys.getenv("LPD_ENDPOINT")
+  env_endpoint <- trimws(Sys.getenv("LPD_ENDPOINT"))
   if (nzchar(env_endpoint)) {
     return(list(
       endpoint = env_endpoint,

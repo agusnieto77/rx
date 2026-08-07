@@ -382,7 +382,7 @@ Check only:
 
 ---
 
-### Task 23: Capture response bodies [ ]
+### Task 23: Capture response bodies [x]
 
 **Goal:** Read JSON bodies from selected network responses.
 

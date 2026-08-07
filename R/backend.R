@@ -12,9 +12,10 @@
 #     $navigate(url)       - navigate to URL, return list(url, status)
 #     $evaluate(expr)      - evaluate JavaScript, return list(result, error)
 #     $networkCaptureEnable() - enable CDP network event capture
-#     $networkCaptureGet()   - retrieve captured network events, clear buffer
-#     $networkCaptureClear() - clear captured network events
-#     $close()             - release browser resources, return invisible NULL
+#     $networkCaptureGet()     - retrieve captured network events, clear buffer
+#     $networkCaptureGetBody() - retrieve response body for a captured event
+#     $networkCaptureClear()   - clear captured network events
+#     $close()                 - release browser resources, return invisible NULL
 #
 #   An environment is used instead of a list so that $<- mutations (e.g.
 #   $connected <- TRUE) propagate to the caller-visible reference.
@@ -237,7 +238,51 @@ NULL
       .rx_send_request(state$.proc, "networkCaptureClear", list(), reqId = state$.reqId),
       error = function(e) list(error = list(code = "SEND_REQUEST_ERROR", message = e$message))
     )
+    if (!is.null(resp$error)) {
+      stop(
+        paste0("Network capture clear failed: ", resp$error$message),
+        call. = FALSE
+      )
+    }
     invisible(TRUE)
+  }
+
+  #' Get the response body for a captured network event.
+  #'
+  #' Uses the CDP \code{Network.getResponseBody} method to retrieve the
+  #' full response body for a specific \code{requestId}.  For JSON responses,
+  #' the body is returned as a parsed R list (via jsonlite).  For other
+  #' content types, the raw decoded string is returned.
+  #'
+  #' @param requestId Character string, the CDP request ID to retrieve.
+  #' @return A list with:
+  #'   \itemize{
+  #'     \item \code{requestId} — the request ID
+  #'     \item \code{body} — parsed JSON list / decoded string, or \code{NULL} on error
+  #'     \item \code{contentType} — the response content type
+  #'     \item \code{error} — error code string, or \code{NULL} on success
+  #'   }
+  #' @noRd
+  backend$networkCaptureGetBody <- function(requestId) {
+    if (!state$connected) {
+      stop("Backend not connected. Call connect() first.", call. = FALSE)
+    }
+    resp <- tryCatch(
+      .rx_send_request(state$.proc, "networkCaptureGetBody", list(requestId = requestId), reqId = state$.reqId),
+      error = function(e) list(error = list(code = "SEND_REQUEST_ERROR", message = e$message))
+    )
+    if (!is.null(resp$error)) {
+      stop(
+        paste0("Network body capture failed: ", resp$error$message),
+        call. = FALSE
+      )
+    }
+    list(
+      requestId     = resp$result$requestId,
+      body          = resp$result$body,
+      contentType   = resp$result$contentType,
+      error         = resp$result$error
+    )
   }
 
   #' Close the browser session and stop the sidecar.

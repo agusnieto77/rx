@@ -74,7 +74,6 @@ x_doctor <- function() {
     results <- c(results, "n/a")
     details <- c(details, "skipped -- sidecar files not present")
   } else {
-    ping_ok <- FALSE
     ping_result <- NULL
     tryCatch({
       proc <- .rx_start_sidecar(sidecar_path = sc_dir)

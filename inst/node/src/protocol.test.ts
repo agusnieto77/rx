@@ -258,4 +258,21 @@ describe("sidecar protocol", () => {
     assert.strictEqual(typeof resp.id, "number");
     assert.strictEqual((resp.error as { code: string }).code, "INVALID_REQUEST");
   });
+
+  it("networkCaptureGetBody without CDP connection returns CDP_ERROR", async () => {
+    const { proc: p } = await startSidecar();
+    const resp = await sendRequest(p, "networkCaptureGetBody", { requestId: "fake-123" });
+    assert.strictEqual(typeof resp.id, "number");
+    assert.strictEqual((resp.error as { code: string }).code, "CDP_ERROR");
+    assert.ok((resp.error as { message: string }).message.includes("CDP connection not active"));
+  });
+
+  it("networkCaptureGetBody with missing requestId returns INVALID_REQUEST", async () => {
+    const { proc: p } = await startSidecar();
+    // Connect to trigger the "no connection" path won't work, so we test
+    // the param validation first — the sidecar validates params before checking connection.
+    const resp = await sendRequest(p, "networkCaptureGetBody", {});
+    assert.strictEqual(typeof resp.id, "number");
+    assert.strictEqual((resp.error as { code: string }).code, "INVALID_REQUEST");
+  });
 });
