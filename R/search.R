@@ -258,6 +258,10 @@ print.rx_collection_provenance <- function(x, ...) {
 #' @param until Optional character string with a date (YYYY-MM-DD).
 #'   When provided, restricts results to posts up to this date.
 #'   Passed to the X search as `until:<date>`.
+#' @param lang Optional character string with an ISO 639-1 language code
+#'   (e.g. `"en"`, `"es"`, `"ja"`).  When provided, restricts results
+#'   to posts written in that language.  Passed to the X search as
+#'   `lang:<code>`.
 #'
 #' @return A tibble with the canonical post schema (26 columns) containing
 #'   posts found during the search. Returns a zero-row tibble when no
@@ -277,7 +281,7 @@ print.rx_collection_provenance <- function(x, ...) {
 #' @export
 x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 5L,
                      resume = FALSE, checkpoint_path = NULL, jsonl_path = NULL,
-                     quiet = FALSE, since = NULL, until = NULL) {
+                     quiet = FALSE, since = NULL, until = NULL, lang = NULL) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -343,6 +347,20 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     }
   }
 
+  # Validate lang.
+  if (!is.null(lang)) {
+    if (!is.character(lang) || length(lang) != 1L || anyNA(lang)) {
+      stop("lang must be a single character string with a language code, or NULL.", call. = FALSE)
+    }
+    code <- trimws(lang)
+    if (!nzchar(code)) {
+      stop("lang must be a single character string with a language code, or NULL.", call. = FALSE)
+    }
+    if (!grepl("^[A-Za-z]{2,3}$", code)) {
+      stop("lang must be a valid language code (e.g. 'en', 'es', 'ja'): ", lang, call. = FALSE)
+    }
+  }
+
   backend <- session$backend
 
   # 1b. Resume handling (Task 49).
@@ -386,7 +404,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   )
 
   # 3. Construct search URL and navigate.
-  url <- .rx_construct_search_url(query, since = since, until = until)
+  url <- .rx_construct_search_url(query, since = since, until = until, lang = lang)
 
   nav_result <- backend$navigate(url)
   if (is.null(nav_result$status) || nav_result$status == "error") {
@@ -1291,6 +1309,9 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
 #'   When provided, restricts results to posts from this date onwards.
 #' @param until Optional character string with a date (YYYY-MM-DD).
 #'   When provided, restricts results to posts up to this date.
+#' @param lang Optional character string with an ISO 639-1 language code
+#'   (e.g. `"en"`, `"es"`, `"ja"`).  When provided, restricts results
+#'   to posts written in that language.
 #'
 #' @return A tibble with the canonical post schema (26 columns) containing
 #'   posts found on the user's timeline. Returns a zero-row tibble when
@@ -1308,7 +1329,7 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
 x_user_posts <- function(session, username, limit = NULL, path = NULL,
                          scroll = TRUE, max_scrolls = 5L,
                          resume = FALSE, checkpoint_path = NULL, jsonl_path = NULL,
-                         quiet = FALSE, since = NULL, until = NULL) {
+                         quiet = FALSE, since = NULL, until = NULL, lang = NULL) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -1374,6 +1395,20 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     }
   }
 
+  # Validate lang.
+  if (!is.null(lang)) {
+    if (!is.character(lang) || length(lang) != 1L || anyNA(lang)) {
+      stop("lang must be a single character string with a language code, or NULL.", call. = FALSE)
+    }
+    code <- trimws(lang)
+    if (!nzchar(code)) {
+      stop("lang must be a single character string with a language code, or NULL.", call. = FALSE)
+    }
+    if (!grepl("^[A-Za-z]{2,3}$", code)) {
+      stop("lang must be a valid language code (e.g. 'en', 'es', 'ja'): ", lang, call. = FALSE)
+    }
+  }
+
   backend <- session$backend
 
   # 1b. Resume handling (same pattern as x_search).
@@ -1415,7 +1450,7 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
   )
 
   # 3. Construct user timeline URL and navigate.
-  url <- .rx_construct_user_timeline_url(username, path = path, since = since, until = until)
+  url <- .rx_construct_user_timeline_url(username, path = path, since = since, until = until, lang = lang)
 
   nav_result <- backend$navigate(url)
   if (is.null(nav_result$status) || nav_result$status == "error") {

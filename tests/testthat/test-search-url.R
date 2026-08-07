@@ -349,3 +349,119 @@ test_that("invalid date throws in user timeline URL", {
   expect_error(.rx_construct_user_timeline_url("rstudio", since = "bad"), "not a valid date")
   expect_error(.rx_construct_user_timeline_url("rstudio", until = NA_character_), "must be a single character")
 })
+
+# ===================================================================
+# Language filter helper (Iteration 80)
+# ===================================================================
+
+test_that(".rx_build_language_filter returns NULL when lang is NULL", {
+  expect_null(.rx_build_language_filter())
+  expect_null(.rx_build_language_filter(lang = NULL))
+})
+
+test_that(".rx_build_language_filter with valid code", {
+  expect_equal(.rx_build_language_filter("en"), "lang:en")
+  expect_equal(.rx_build_language_filter("es"), "lang:es")
+  expect_equal(.rx_build_language_filter("ja"), "lang:ja")
+})
+
+test_that(".rx_build_language_filter accepts 3-letter codes", {
+  expect_equal(.rx_build_language_filter("tl"), "lang:tl")
+  expect_equal(.rx_build_language_filter("eng"), "lang:eng")
+})
+
+test_that(".rx_build_language_filter rejects invalid codes", {
+  expect_error(.rx_build_language_filter("english"), "valid language code")
+  expect_error(.rx_build_language_filter("e"), "valid language code")
+  expect_error(.rx_build_language_filter("12"), "valid language code")
+})
+
+test_that(".rx_build_language_filter rejects NA and non-character", {
+  expect_error(.rx_build_language_filter(lang = NA_character_), "must be a single character")
+  expect_error(.rx_build_language_filter(lang = 123L), "must be a single character")
+})
+
+test_that(".rx_build_language_filter trims whitespace", {
+  result <- .rx_build_language_filter("  en  ")
+  expect_equal(result, "lang:en")
+})
+
+# -- search URL with lang ------------------------------------------------------
+
+test_that("lang appends to search URL", {
+  url <- .rx_construct_search_url("hello", lang = "en")
+  expect_true(grepl("lang%3Aen", url, ignore.case = TRUE))
+})
+
+test_that("lang with from_user", {
+  url <- .rx_construct_search_url("r stats", from_user = "rstudio", lang = "en")
+  expect_true(grepl("from%3Arstudio", url, ignore.case = TRUE))
+  expect_true(grepl("lang%3Aen", url, ignore.case = TRUE))
+})
+
+test_that("lang with date range", {
+  url <- .rx_construct_search_url("climate", since = "2024-01-01", lang = "es")
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+  expect_true(grepl("lang%3Aes", url, ignore.case = TRUE))
+})
+
+test_that("lang with arbitrary filter", {
+  url <- .rx_construct_search_url("test", lang = "ja", filter = "result_type:recent")
+  expect_true(grepl("lang%3Aja", url, ignore.case = TRUE))
+  expect_true(grepl("result_type%3Arecent", url, ignore.case = TRUE))
+})
+
+test_that("all params together (from_user, date range, lang, filter)", {
+  url <- .rx_construct_search_url("r language", from_user = "rstudio", since = "2024-01-01", until = "2024-12-31", lang = "en", filter = "result_type:recent")
+  expect_true(grepl("from%3Arstudio", url, ignore.case = TRUE))
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+  expect_true(grepl("until%3A2024-12-31", url, ignore.case = TRUE))
+  expect_true(grepl("lang%3Aen", url, ignore.case = TRUE))
+  expect_true(grepl("result_type%3Arecent", url, ignore.case = TRUE))
+})
+
+test_that("lang NULL does not append lang:", {
+  url <- .rx_construct_search_url("test", lang = NULL)
+  expect_false(grepl("lang:", url, ignore.case = TRUE))
+})
+
+test_that("invalid lang throws in search URL", {
+  expect_error(.rx_construct_search_url("test", lang = "english"), "valid language code")
+  expect_error(.rx_construct_search_url("test", lang = NA_character_), "must be a single character")
+})
+
+# -- user timeline URL with lang -----------------------------------------------
+
+test_that("lang appends to user timeline URL", {
+  url <- .rx_construct_user_timeline_url("rstudio", lang = "en")
+  expect_true(grepl("lang%3Aen", url, ignore.case = TRUE))
+  expect_true(grepl("^https://x.com/rstudio\\?", url))
+})
+
+test_that("lang combined with path", {
+  url <- .rx_construct_user_timeline_url("rstudio", path = "media", lang = "es")
+  expect_true(grepl("https://x.com/rstudio/media\\?", url))
+  expect_true(grepl("lang%3Aes", url, ignore.case = TRUE))
+})
+
+test_that("lang combined with date range", {
+  url <- .rx_construct_user_timeline_url("rstudio", since = "2024-01-01", lang = "ja")
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+  expect_true(grepl("lang%3Aja", url, ignore.case = TRUE))
+})
+
+test_that("lang combined with raw filter", {
+  url <- .rx_construct_user_timeline_url("rstudio", lang = "en", filter = "tagged_media=true")
+  expect_true(grepl("lang%3Aen", url, ignore.case = TRUE))
+  expect_true(grepl("tagged_media", url, ignore.case = TRUE))
+})
+
+test_that("lang NULL gives no lang: in user timeline URL", {
+  url <- .rx_construct_user_timeline_url("rstudio", lang = NULL)
+  expect_false(grepl("lang:", url, ignore.case = TRUE))
+})
+
+test_that("invalid lang throws in user timeline URL", {
+  expect_error(.rx_construct_user_timeline_url("rstudio", lang = "english"), "valid language code")
+  expect_error(.rx_construct_user_timeline_url("rstudio", lang = NA_character_), "must be a single character")
+})

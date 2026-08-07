@@ -82,6 +82,45 @@ NULL
   paste(parts, collapse = " ")
 }
 
+#' Build an X language filter string.
+#'
+#' Takes a language code and returns a single X search filter string such as
+#' `"lang:en"`.  X uses ISO 639-1 two-letter language codes, but also
+#' recognises a few three-letter codes (e.g. `tl` for Tagalog).
+#'
+#' @param lang Optional character string with a language code
+#'   (e.g. `"en"`, `"es"`, `"ja"`).  When provided, returns
+#'   `paste0("lang:", lang)`.
+#'
+#' @return A character string with the language filter, or `NULL` when
+#'   `lang` is `NULL` or empty.
+#'
+#' @examples
+#'   # Internal use only — not exported.
+#'   .rx_build_language_filter("en")
+#'   .rx_build_language_filter("es")
+#'   .rx_build_language_filter()
+#'
+#' @noRd
+.rx_build_language_filter <- function(lang = NULL) {
+  if (is.null(lang)) {
+    return(NULL)
+  }
+  if (!is.character(lang) || length(lang) != 1L || anyNA(lang)) {
+    stop("lang must be a single character string with a language code, or NULL.", call. = FALSE)
+  }
+  code <- trimws(lang)
+  if (!nzchar(code)) {
+    stop("lang must be a single character string with a language code, or NULL.", call. = FALSE)
+  }
+  # X accepts ISO 639-1 codes (2 letters) and a few 3-letter codes.
+  # We keep validation light: only letters, 2-3 characters.
+  if (!grepl("^[A-Za-z]{2,3}$", code)) {
+    stop("lang must be a valid language code (e.g. 'en', 'es', 'ja'): ", lang, call. = FALSE)
+  }
+  paste0("lang:", code)
+}
+
 #' Construct an X search URL from a query string.
 #'
 #' Takes a search query and returns a properly URL-encoded X search URL.
@@ -95,8 +134,11 @@ NULL
 #'   When provided, appends `since:<date>` to the query before encoding.
 #' @param until Optional character string with a date (YYYY-MM-DD).
 #'   When provided, appends `until:<date>` to the query before encoding.
+#' @param lang Optional character string with an ISO 639-1 language code
+#'   (e.g. `"en"`, `"es"`, `"ja"`).  When provided, appends
+#'   `lang:<code>` to the query before encoding.
 #' @param filter Optional character string. Raw filter appended after the
-#'   query (e.g. `"lang:en"`). The filter is
+#'   query (e.g. `"result_type:recent"`). The filter is
 #'   URL-encoded via `URLencode(raw, reserved=TRUE)`.
 #'
 #' @return Character string with the full X search URL.
@@ -106,9 +148,10 @@ NULL
 #'   .rx_construct_search_url("r programming")
 #'   .rx_construct_search_url("climate change", from_user = "alice")
 #'   .rx_construct_search_url("AI", since = "2024-01-01", until = "2024-12-31")
+#'   .rx_construct_search_url("hello", lang = "es")
 #'
 #' @noRd
-.rx_construct_search_url <- function(query, from_user = NULL, since = NULL, until = NULL, filter = NULL) {
+.rx_construct_search_url <- function(query, from_user = NULL, since = NULL, until = NULL, lang = NULL, filter = NULL) {
   # Use trimws so whitespace-only strings are rejected (nzchar("  ") is TRUE).
   if (!is.character(query) || length(query) != 1L || anyNA(query) || !nzchar(trimws(query))) {
     stop("query must be a single non-empty character string.", call. = FALSE)
@@ -133,6 +176,12 @@ NULL
   date_filter <- .rx_build_date_range_filter(since = since, until = until)
   if (!is.null(date_filter)) {
     raw <- paste0(raw, " ", date_filter)
+  }
+
+  # Append language filter.
+  lang_filter <- .rx_build_language_filter(lang = lang)
+  if (!is.null(lang_filter)) {
+    raw <- paste0(raw, " ", lang_filter)
   }
 
   # Append an arbitrary filter (caller is responsible for valid syntax).
@@ -264,6 +313,9 @@ NULL
 #'   When provided, appends `since:<date>` to the timeline query filter.
 #' @param until Optional character string with a date (YYYY-MM-DD).
 #'   When provided, appends `until:<date>` to the timeline query filter.
+#' @param lang Optional character string with an ISO 639-1 language code
+#'   (e.g. `"en"`, `"es"`, `"ja"`).  When provided, appends
+#'   `lang:<code>` to the timeline query filter.
 #' @param filter Optional character string. Raw filter appended as a
 #'   query parameter (e.g. `"tagged_media=true"`). The filter is
 #'   URL-encoded via `URLencode(raw, reserved=TRUE)`.
@@ -276,9 +328,10 @@ NULL
 #'   .rx_construct_user_timeline_url("hadleywickham", path = "media")
 #'   .rx_construct_user_timeline_url("rstudio", path = "following")
 #'   .rx_construct_user_timeline_url("rstudio", since = "2024-01-01")
+#'   .rx_construct_user_timeline_url("rstudio", lang = "en")
 #'
 #' @noRd
-.rx_construct_user_timeline_url <- function(username, path = NULL, since = NULL, until = NULL, filter = NULL) {
+.rx_construct_user_timeline_url <- function(username, path = NULL, since = NULL, until = NULL, lang = NULL, filter = NULL) {
   # Validate username.
   if (!is.character(username) || length(username) != 1L || anyNA(username) || !nzchar(trimws(username))) {
     stop("username must be a single non-empty character string.", call. = FALSE)
@@ -298,9 +351,10 @@ NULL
     url <- paste0(url, "/", trimws(path))
   }
 
-  # Build combined query filter from date range + optional raw filter.
+  # Build combined query filter from date range + language + optional raw filter.
   date_filter <- .rx_build_date_range_filter(since = since, until = until)
-  combined_parts <- c(date_filter, filter)
+  lang_filter <- .rx_build_language_filter(lang = lang)
+  combined_parts <- c(date_filter, lang_filter, filter)
   combined_parts <- combined_parts[!is.na(combined_parts) & nzchar(combined_parts)]
 
   if (length(combined_parts) > 0L) {
