@@ -27,6 +27,9 @@ function log(level, ...args) {
 // ── CDP connection state ─────────────────────────────────────────────
 let cdpConnection = null;
 let cdpEndpointUrl = null;
+// Generation counter to abort stale async operations when handleClose
+// nullifies the connection while a prior connect() is still pending.
+let connectGen = 0;
 // ── close handler ────────────────────────────────────────────────────
 function handleClose(id) {
     if (cdpConnection === null || !cdpConnection.isConnected) {
@@ -34,6 +37,8 @@ function handleClose(id) {
         log("debug", "browser close — already not connected");
         return;
     }
+    // Increment generation to abort any pending async connect().
+    connectGen++;
     cdpConnection.close();
     cdpConnection = null;
     cdpEndpointUrl = null;
@@ -58,20 +63,30 @@ function handleConnect(id, params) {
         // Fall back to default Lightpanda endpoint.
         endpointUrl = process.env.LPD_ENDPOINT ?? "ws://127.0.0.1:21111";
     }
+    const gen = ++connectGen;
     cdpConnection = new DefaultCdpConnection();
     cdpConnection
         .connect(endpointUrl)
         .then(() => {
+        // Abort if handleClose was called while we were connecting.
+        if (gen !== connectGen) {
+            cdpConnection.close();
+            cdpConnection = null;
+            return;
+        }
         cdpEndpointUrl = endpointUrl;
         respond(id, { connected: true, endpoint: endpointUrl });
         log("info", "CDP connected", endpointUrl);
     })
         .catch((err) => {
         // Connection failed — clean up and return structured error.
-        cdpConnection = null;
-        cdpEndpointUrl = null;
-        respondError(id, "LPD_CONNECTION_ERROR", `Failed to connect to CDP endpoint: ${err.message}`);
-        log("error", "CDP connection failed", endpointUrl, err.message);
+        // Only respond if we are still the active connect generation.
+        if (gen === connectGen) {
+            cdpConnection = null;
+            cdpEndpointUrl = null;
+            respondError(id, "LPD_CONNECTION_ERROR", `Failed to connect to CDP endpoint: ${err.message}`);
+            log("error", "CDP connection failed", endpointUrl, err.message);
+        }
     });
 }
 // ── navigate handler ─────────────────────────────────────────────────

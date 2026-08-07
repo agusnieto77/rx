@@ -135,7 +135,9 @@ NULL
     stop("Sidecar process is not accepting input (stdin pipe closed).", call. = FALSE)
   }
 
-  # Read the response line from stdout.
+  # Read the response line from stdout, matching by request `id`.
+  # This is important because async handlers (connect, navigate, evaluate)
+  # may send responses out of order relative to the request dispatch.
   # Timeout after 30 seconds.
   timeout <- 30
   start <- Sys.time()
@@ -152,7 +154,7 @@ NULL
             jsonlite::fromJSON(line, simplifyVector = FALSE),
             error = function(e) NULL
           )
-          if (!is.null(parsed)) {
+          if (!is.null(parsed) && identical(parsed$id, id)) {
             return(parsed)
           }
         }
@@ -195,6 +197,11 @@ NULL
   # If the sidecar returned an error, treat as not closed.
   if (!is.null(resp$error)) {
     return(list(closed = FALSE, reason = resp$error$code))
+  }
+
+  # Guard against malformed response lacking a $result field.
+  if (is.null(resp$result)) {
+    return(list(closed = FALSE, reason = "malformed_response"))
   }
 
   list(closed = isTRUE(resp$result$closed), reason = if (!isTRUE(resp$result$closed)) resp$result$reason else NULL)

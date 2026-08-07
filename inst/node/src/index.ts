@@ -60,6 +60,9 @@ function log(level: string, ...args: unknown[]): void {
 
 let cdpConnection: DefaultCdpConnection | null = null;
 let cdpEndpointUrl: string | null = null;
+// Generation counter to abort stale async operations when handleClose
+// nullifies the connection while a prior connect() is still pending.
+let connectGen = 0;
 
 // ── close handler ────────────────────────────────────────────────────
 
@@ -70,6 +73,8 @@ function handleClose(id: unknown): void {
     return;
   }
 
+  // Increment generation to abort any pending async connect().
+  connectGen++;
   cdpConnection.close();
   cdpConnection = null;
   cdpEndpointUrl = null;
@@ -99,21 +104,31 @@ function handleConnect(id: unknown, params?: unknown): void {
     endpointUrl = process.env.LPD_ENDPOINT ?? "ws://127.0.0.1:21111";
   }
 
+  const gen = ++connectGen;
   cdpConnection = new DefaultCdpConnection();
 
   cdpConnection
     .connect(endpointUrl)
     .then(() => {
+      // Abort if handleClose was called while we were connecting.
+      if (gen !== connectGen) {
+        cdpConnection!.close();
+        cdpConnection = null;
+        return;
+      }
       cdpEndpointUrl = endpointUrl;
       respond(id, { connected: true, endpoint: endpointUrl });
       log("info", "CDP connected", endpointUrl);
     })
     .catch((err: Error) => {
       // Connection failed — clean up and return structured error.
-      cdpConnection = null;
-      cdpEndpointUrl = null;
-      respondError(id, "LPD_CONNECTION_ERROR", `Failed to connect to CDP endpoint: ${err.message}`);
-      log("error", "CDP connection failed", endpointUrl, err.message);
+      // Only respond if we are still the active connect generation.
+      if (gen === connectGen) {
+        cdpConnection = null;
+        cdpEndpointUrl = null;
+        respondError(id, "LPD_CONNECTION_ERROR", `Failed to connect to CDP endpoint: ${err.message}`);
+        log("error", "CDP connection failed", endpointUrl, err.message);
+      }
     });
 }
 
