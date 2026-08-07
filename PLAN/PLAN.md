@@ -1046,7 +1046,7 @@ Add:
 
 ---
 
-### Task 56: Add hashtag, mention, and URL parsing [ ]
+### Task 56: Add hashtag, mention, and URL parsing [x]
 
 **Goal:** Extend structured post content.
 

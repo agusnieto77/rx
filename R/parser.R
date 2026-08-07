@@ -29,7 +29,10 @@ NULL
 # and walks the instruction/entry tree to find tweet entries.
 #'
 #' Returns a list with:
-#'   - 18 vectors as described below (post_id through quoted_post_id).
+#'   - 21 vectors as described below (post_id through urls).
+#'   - `hashtags` — list of character vectors with hashtag texts (Task 56).
+#'   - `mentions` — list of named character vectors with screen_name/name (Task 56).
+#'   - `urls` — list of character vectors with URL strings (Task 56).
 #'   - `cursors` — a list of cursor objects discovered in the response.
 #'     Each cursor has `cursorType` (character: "Top"/"Bottom"/etc.)
 #'     and `value` (character: the cursor token).
@@ -83,6 +86,9 @@ NULL
 #'     \item `is_quote` — logical vector, TRUE when the post is a quote
 #'     \item `reply_to_post_id` — character vector of the post being replied to (NA when not a reply)
 #'     \item `quoted_post_id` — character vector of the quoted post ID (NA when not a quote)
+#'     \item `hashtags` — list of character vectors with hashtag texts (Task 56)
+#'     \item `mentions` — list of named character vectors with screen_name and name (Task 56)
+#'     \item `urls` — list of character vectors with URL strings (Task 56)
 #'     \item `cursors` — named character vector of cursor tokens keyed by cursorType
 #'       (e.g. "Bottom" → cursor value, "Top" → cursor value); empty when absent
 #'   }
@@ -101,6 +107,8 @@ NULL
       conversation_id = character(0),
       is_reply = logical(0), is_repost = logical(0), is_quote = logical(0),
       reply_to_post_id = character(0), quoted_post_id = character(0),
+      # Entity fields (Task 56) — list-columns
+      hashtags = list(), mentions = list(), urls = list(),
       cursors = character(0)
     ))
   }
@@ -118,6 +126,8 @@ NULL
       conversation_id = character(0),
       is_reply = logical(0), is_repost = logical(0), is_quote = logical(0),
       reply_to_post_id = character(0), quoted_post_id = character(0),
+      # Entity fields (Task 56) — list-columns
+      hashtags = list(), mentions = list(), urls = list(),
       cursors = character(0)
     ))
   }
@@ -142,6 +152,10 @@ NULL
   is_quote <- logical(0)
   reply_to_post_ids <- character(0)
   quoted_post_ids <- character(0)
+  # Entity fields (Task 56) — list-columns
+  hashtags_list <- list()
+  mentions_list <- list()
+  urls_list <- list()
 
   for (inst in instructions) {
     # Only process TimelineAddEntries instructions.
@@ -228,6 +242,12 @@ NULL
         }
       )
 
+      # Extract entity fields (Task 56).
+      entities <- if (is.list(legacy) && !is.null(legacy$entities)) legacy$entities else list()
+      hashtags_list[[length(hashtags_list) + 1L]] <- .rx_extract_hashtags(entities)
+      mentions_list[[length(mentions_list) + 1L]] <- .rx_extract_mentions(entities)
+      urls_list[[length(urls_list) + 1L]] <- .rx_extract_urls(entities)
+
       post_ids <- c(post_ids, rest_id)
       texts <- c(texts, as.character(full_text))
       author_ids <- c(author_ids, author_id_str)
@@ -259,6 +279,10 @@ NULL
     is_quote = is_quote,
     reply_to_post_id = reply_to_post_ids,
     quoted_post_id = quoted_post_ids,
+    # Entity fields (Task 56)
+    hashtags = hashtags_list,
+    mentions = mentions_list,
+    urls = urls_list,
     cursors = cursors
   )
 }
@@ -449,4 +473,83 @@ NULL
   }
 
   result
+}
+
+#' Extract hashtags from entities.
+#'
+#' Returns a character vector of hashtag texts from
+#' `entities$hashtags` when available, or an empty character vector.
+#'
+#' @param entities The `entities` list from a tweet's `legacy` block.
+#' @return A character vector of hashtag texts.
+#' @noRd
+.rx_extract_hashtags <- function(entities) {
+  if (!is.list(entities) || is.null(entities$hashtags)) {
+    return(character(0))
+  }
+  hl <- entities$hashtags
+  if (!is.list(hl) || length(hl) == 0L) {
+    return(character(0))
+  }
+  sapply(hl, function(h) {
+    if (is.list(h) && !is.null(h$text) && length(h$text) == 1L && !is.na(h$text)) {
+      as.character(h$text)
+    } else {
+      NA_character_
+    }
+  }, USE.NAMES = FALSE)
+}
+
+#' Extract user mentions from entities.
+#'
+#' Returns a list of named character vectors, each with `screen_name`
+#' and `name` elements, from `entities$user_mentions`.
+#' When no mentions are present, returns an empty list.
+#'
+#' @param entities The `entities` list from a tweet's `legacy` block.
+#' @return A list of named character vectors (one per mention), or
+#'   `list()` when absent.
+#' @noRd
+.rx_extract_mentions <- function(entities) {
+  if (!is.list(entities) || is.null(entities$user_mentions)) {
+    return(list())
+  }
+  ml <- entities$user_mentions
+  if (!is.list(ml) || length(ml) == 0L) {
+    return(list())
+  }
+  lapply(ml, function(m) {
+    if (!is.list(m)) return(NULL)
+    screen <- if (!is.null(m$screen_name) && length(m$screen_name) == 1L && !is.na(m$screen_name)) as.character(m$screen_name) else NA_character_
+    name <- if (!is.null(m$name) && length(m$name) == 1L && !is.na(m$name)) as.character(m$name) else NA_character_
+    c(screen_name = screen, name = name)
+  })
+}
+
+#' Extract URLs from entities.
+#'
+#' Returns a character vector of URL strings from `entities$urls`.
+#' Prefers `expanded_url` when available, falls back to `url`.
+#'
+#' @param entities The `entities` list from a tweet's `legacy` block.
+#' @return A character vector of URL strings.
+#' @noRd
+.rx_extract_urls <- function(entities) {
+  if (!is.list(entities) || is.null(entities$urls)) {
+    return(character(0))
+  }
+  ul <- entities$urls
+  if (!is.list(ul) || length(ul) == 0L) {
+    return(character(0))
+  }
+  sapply(ul, function(u) {
+    if (!is.list(u)) return(NA_character_)
+    if (!is.null(u$expanded_url) && length(u$expanded_url) == 1L && !is.na(u$expanded_url)) {
+      as.character(u$expanded_url)
+    } else if (!is.null(u$url) && length(u$url) == 1L && !is.na(u$url)) {
+      as.character(u$url)
+    } else {
+      NA_character_
+    }
+  }, USE.NAMES = FALSE)
 }

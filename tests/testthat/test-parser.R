@@ -110,6 +110,15 @@ test_that("parser extracts all fields from x-search-response.json", {
     info = "post_id and quoted_post_id have same length"
   )
   testthat::expect_true("cursors" %in% names(result), info = "result has cursors")
+  testthat::expect_true("hashtags" %in% names(result), info = "result has hashtags")
+  testthat::expect_true("mentions" %in% names(result), info = "result has mentions")
+  testthat::expect_true("urls" %in% names(result), info = "result has urls")
+  testthat::expect_true(is.list(result$hashtags), info = "hashtags is a list")
+  testthat::expect_true(is.list(result$mentions), info = "mentions is a list")
+  testthat::expect_true(is.list(result$urls), info = "urls is a list")
+  testthat::expect_equal(length(result$hashtags), 4L, info = "hashtags has 4 elements (one per post)")
+  testthat::expect_equal(length(result$mentions), 4L, info = "mentions has 4 elements")
+  testthat::expect_equal(length(result$urls), 4L, info = "urls has 4 elements")
 })
 
 # --- Test 2: post_id values are character strings ---
@@ -386,6 +395,9 @@ test_that("empty response returns all five empty vectors", {
   testthat::expect_equal(length(result_null$username), 0L, info = "NULL returns empty username")
   testthat::expect_equal(length(result_null$display_name), 0L, info = "NULL returns empty display_name")
   testthat::expect_equal(length(result_null$created_at), 0L, info = "NULL returns empty created_at")
+  testthat::expect_equal(length(result_null$hashtags), 0L, info = "NULL returns empty hashtags")
+  testthat::expect_equal(length(result_null$mentions), 0L, info = "NULL returns empty mentions")
+  testthat::expect_equal(length(result_null$urls), 0L, info = "NULL returns empty urls")
 })
 
 # --- Test 12: created_at values match fixture values ---
@@ -615,8 +627,8 @@ test_that(".rx_extract_view_count returns 0L for missing views", {
   testthat::expect_equal(xtweetsR:::.rx_extract_view_count(list(views = list(count = 999))), 999L, info = "nested count extracted correctly")
 })
 
-# --- Test 18: Empty response returns all eighteen empty vectors ---
-test_that("empty response returns all eighteen empty vectors", {
+# --- Test 18: Empty response returns all twenty-one empty vectors ---
+test_that("empty response returns all twenty-one empty vectors", {
   result_null <- xtweetsR:::.rx_parse_posts(NULL)
   testthat::expect_equal(length(result_null$post_id), 0L, info = "NULL returns empty post_id")
   testthat::expect_equal(length(result_null$text), 0L, info = "NULL returns empty text")
@@ -636,6 +648,9 @@ test_that("empty response returns all eighteen empty vectors", {
   testthat::expect_equal(length(result_null$is_quote), 0L, info = "NULL returns empty is_quote")
   testthat::expect_equal(length(result_null$reply_to_post_id), 0L, info = "NULL returns empty reply_to_post_id")
   testthat::expect_equal(length(result_null$quoted_post_id), 0L, info = "NULL returns empty quoted_post_id")
+  testthat::expect_equal(length(result_null$hashtags), 0L, info = "NULL returns empty hashtags")
+  testthat::expect_equal(length(result_null$mentions), 0L, info = "NULL returns empty mentions")
+  testthat::expect_equal(length(result_null$urls), 0L, info = "NULL returns empty urls")
   testthat::expect_equal(length(result_null$cursors), 0L, info = "NULL returns empty cursors")
 })
 
@@ -818,4 +833,105 @@ test_that(".rx_extract_cursors returns character(0) for invalid input", {
     character(0),
     info = "missing timeline returns empty"
   )
+})
+
+# --- Test 25: Entity fields extracted from x-search-response.json ---
+test_that("hashtags, mentions, and urls are extracted from x-search-response.json", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  result <- xtweetsR:::.rx_parse_posts(parsed)
+
+  # Hashtags: tweet1 has ["RStats", "tidyverse"], tweet2 has ["rstats"], tweet3 has [], tweet4 has []
+  testthat::expect_true(is.list(result$hashtags), info = "hashtags is a list")
+  testthat::expect_equal(length(result$hashtags), 4L, info = "4 hashtag elements")
+  testthat::expect_equal(as.character(result$hashtags[[1L]]), c("RStats", "tidyverse"), info = "tweet1 hashtags")
+  testthat::expect_equal(as.character(result$hashtags[[2L]]), "rstats", info = "tweet2 hashtags")
+  testthat::expect_equal(length(result$hashtags[[3L]]), 0L, info = "tweet3 has no hashtags")
+  testthat::expect_equal(length(result$hashtags[[4L]]), 0L, info = "tweet4 has no hashtags")
+
+  # Mentions: tweet1 has [], tweet2 has [@rstudio (RStudio)]
+  testthat::expect_true(is.list(result$mentions), info = "mentions is a list")
+  testthat::expect_equal(length(result$mentions), 4L, info = "4 mention elements")
+  testthat::expect_equal(length(result$mentions[[1L]]), 0L, info = "tweet1 has no mentions")
+  testthat::expect_equal(length(result$mentions[[2L]]), 1L, info = "tweet2 has 1 mention")
+  testthat::expect_equal(result$mentions[[2L]][["screen_name"]], "rstudio", info = "mention screen_name")
+  testthat::expect_equal(result$mentions[[2L]][["name"]], "RStudio", info = "mention name")
+  testthat::expect_equal(length(result$mentions[[3L]]), 0L, info = "tweet3 has no mentions")
+  testthat::expect_equal(length(result$mentions[[4L]]), 0L, info = "tweet4 has no mentions")
+
+  # URLs: tweet1 has [https://posit.co/blog/new-release], tweet2 has [], tweet3 has [], tweet4 has []
+  testthat::expect_true(is.list(result$urls), info = "urls is a list")
+  testthat::expect_equal(length(result$urls), 4L, info = "4 url elements")
+  testthat::expect_equal(as.character(result$urls[[1L]]), "https://posit.co/blog/new-release", info = "tweet1 URL")
+  testthat::expect_equal(length(result$urls[[2L]]), 0L, info = "tweet2 has no URLs")
+  testthat::expect_equal(length(result$urls[[3L]]), 0L, info = "tweet3 has no URLs")
+  testthat::expect_equal(length(result$urls[[4L]]), 0L, info = "tweet4 has no URLs")
+})
+
+# --- Test 26: Missing entities returns empty collections ---
+test_that("tweets without entities return empty collections", {
+  # Tweet entry without entities block.
+  response_no_entities <- list(
+    data = list(
+      timeline = list(
+        instructions = list(
+          list(
+            type = "TimelineAddEntries",
+            entries = list(
+              list(
+                entryId = "tweet-600",
+                content = list(
+                  itemContent = list(
+                    tweet_results = list(
+                      result = list(
+                        rest_id = "600",
+                        legacy = list(full_text = "No entities here")
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+
+  result <- xtweetsR:::.rx_parse_posts(response_no_entities)
+
+  testthat::expect_equal(length(result$hashtags), 1L, info = "hashtags has 1 element")
+  testthat::expect_equal(length(result$hashtags[[1L]]), 0L, info = "empty hashtags for tweet without entities")
+  testthat::expect_equal(length(result$mentions), 1L, info = "mentions has 1 element")
+  testthat::expect_equal(length(result$mentions[[1L]]), 0L, info = "empty mentions for tweet without entities")
+  testthat::expect_equal(length(result$urls), 1L, info = "urls has 1 element")
+  testthat::expect_equal(length(result$urls[[1L]]), 0L, info = "empty urls for tweet without entities")
+})
+
+# --- Test 27: Entity extraction helpers handle edge cases ---
+test_that(".rx_extract_hashtags returns empty for invalid input", {
+  testthat::expect_equal(xtweetsR:::.rx_extract_hashtags(NULL), character(0), info = "NULL input")
+  testthat::expect_equal(xtweetsR:::.rx_extract_hashtags(list()), character(0), info = "empty entities")
+  testthat::expect_equal(xtweetsR:::.rx_extract_hashtags(list(hashtags = NULL)), character(0), info = "hashtags=NULL")
+  testthat::expect_equal(xtweetsR:::.rx_extract_hashtags(list(hashtags = list())), character(0), info = "empty hashtags array")
+})
+
+test_that(".rx_extract_mentions returns empty list for invalid input", {
+  testthat::expect_equal(xtweetsR:::.rx_extract_mentions(NULL), list(), info = "NULL input")
+  testthat::expect_equal(xtweetsR:::.rx_extract_mentions(list()), list(), info = "empty entities")
+  testthat::expect_equal(xtweetsR:::.rx_extract_mentions(list(user_mentions = NULL)), list(), info = "user_mentions=NULL")
+  testthat::expect_equal(xtweetsR:::.rx_extract_mentions(list(user_mentions = list())), list(), info = "empty mentions array")
+})
+
+test_that(".rx_extract_urls returns empty for invalid input", {
+  testthat::expect_equal(xtweetsR:::.rx_extract_urls(NULL), character(0), info = "NULL input")
+  testthat::expect_equal(xtweetsR:::.rx_extract_urls(list()), character(0), info = "empty entities")
+  testthat::expect_equal(xtweetsR:::.rx_extract_urls(list(urls = NULL)), character(0), info = "urls=NULL")
+  testthat::expect_equal(xtweetsR:::.rx_extract_urls(list(urls = list())), character(0), info = "empty urls array")
 })

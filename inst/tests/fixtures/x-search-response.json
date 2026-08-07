@@ -175,7 +175,12 @@
                         "quote_count": 0,
                         "bookmark_count": 11,
                         "bookmark_count_info": { "count": "11" },
-                        "views": { "count": "9800" }
+                        "views": { "count": "9800" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [],
+                          "urls": []
+                        }
                       }
                     }
                   }

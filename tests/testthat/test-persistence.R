@@ -5,11 +5,11 @@
 # Arrow or DuckDB.
 
 # --- Test 1: .rx_jsonl_empty_tibble returns empty tibble with canonical schema ---
-test_that(".rx_jsonl_empty_tibble returns a tibble with 21 canonical columns", {
+test_that(".rx_jsonl_empty_tibble returns a tibble with 24 canonical columns", {
   tbl <- xtweetsR:::.rx_jsonl_empty_tibble()
 
   testthat::expect_s3_class(tbl, "tbl_df", info = "returns a tibble")
-  testthat::expect_equal(ncol(tbl), 21L, info = "21 canonical columns")
+  testthat::expect_equal(ncol(tbl), 24L, info = "24 canonical columns")
   testthat::expect_equal(nrow(tbl), 0L, info = "zero rows")
   testthat::expect_equal(
     colnames(tbl),
@@ -60,7 +60,7 @@ test_that("write and read back a small tibble preserves data", {
   loaded <- xtweetsR:::.rx_jsonl_read(tmp)
 
   testthat::expect_equal(nrow(loaded), n, info = "row count matches")
-  testthat::expect_equal(ncol(loaded), 21L, info = "column count matches")
+  testthat::expect_equal(ncol(loaded), 24L, info = "column count matches")
   testthat::expect_equal(
     loaded$post_id,
     paste0("post-", 1:n),
@@ -185,7 +185,8 @@ test_that("writing a zero-row tibble does not create content", {
     switch(type_map[[f]],
       character = character(0),
       integer = integer(0),
-      logical = logical(0)
+      logical = logical(0),
+      list = list()
     )
   })
   names(cols) <- fields
@@ -210,7 +211,7 @@ test_that("reading a non-existent file returns an empty canonical tibble", {
 
   testthat::expect_s3_class(loaded, "tbl_df", info = "returns a tibble")
   testthat::expect_equal(nrow(loaded), 0L, info = "zero rows")
-  testthat::expect_equal(ncol(loaded), 21L, info = "21 columns")
+  testthat::expect_equal(ncol(loaded), 24L, info = "24 columns")
 })
 
 # --- Test 7: Column types are preserved through round-trip ---
@@ -277,7 +278,8 @@ test_that(".rx_checkpoint_from_state creates a valid checkpoint from scroll stat
     switch(type_map[[f]],
       character = character(0),
       integer = integer(0),
-      logical = logical(0)
+      logical = logical(0),
+      list = list()
     )
   })
   names(cols) <- fields

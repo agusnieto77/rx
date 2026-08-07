@@ -277,9 +277,9 @@ test_that("user timeline extraction produces all canonical fields", {
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   tibble_posts <- xtweetsR:::.rx_normalized_to_tibble(normalized)
 
-  # Should have the 21 canonical columns.
+  # Should have the 24 canonical columns.
   expect_true(inherits(tibble_posts, "tbl_df"))
-  expect_equal(ncol(tibble_posts), 21L)
+  expect_equal(ncol(tibble_posts), 24L)
   fields <- .rx_canonical_fields()
   expect_equal(sort(names(tibble_posts)), sort(fields))
 
@@ -445,7 +445,7 @@ test_that("x_user_posts returns empty tibble when fixture has no posts", {
 
   expect_true(inherits(result, "tbl_df"))
   expect_equal(nrow(result), 0L)
-  expect_equal(ncol(result), 21L)
+  expect_equal(ncol(result), 24L)
 
   provenance <- attr(result, "rx_collection_provenance")
   expect_equal(provenance$records, 0L)

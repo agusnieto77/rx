@@ -5,7 +5,7 @@
 # normalizer are deliberately separate:
 #
 #   parser  -> list-of-vectors with post-level fields (+ cursors)
-#   normalizer -> validates, coerces, and pads to the 21-field canonical schema
+#   normalizer -> validates, coerces, and pads to the 24-field canonical schema
 #   dedup   -> removes duplicate posts by post_id, first-seen order
 #
 #   Note: observation-level provenance fields (collected_at, collection_query,
@@ -54,11 +54,14 @@ NULL
 #'   - is_quote — logical
 #'   - reply_to_post_id — character
 #'   - quoted_post_id — character
+#'   - hashtags — list of character vectors (Task 56)
+#'   - mentions — list of named character vectors (Task 56)
+#'   - urls — list of character vectors (Task 56)
 #'   - collected_at — character (ISO-8601 timestamp, Task 46)
 #'   - collection_query — character (search query string, Task 46)
 #'   - collection_id — character (UUID, Task 46)
 #'
-#' @return A character vector of 21 field names in canonical order.
+#' @return A character vector of 24 field names in canonical order.
 #' @keywords internal
 .rx_canonical_fields <- function() {
   c(
@@ -70,6 +73,8 @@ NULL
     "conversation_id",
     "is_reply", "is_repost", "is_quote",
     "reply_to_post_id", "quoted_post_id",
+    # Entity fields (Task 56) — list-columns
+    "hashtags", "mentions", "urls",
     # Observation-level provenance (Task 46)
     "collected_at", "collection_query", "collection_id"
   )
@@ -93,6 +98,8 @@ NULL
     conversation_id = "character",
     is_reply = "logical", is_repost = "logical", is_quote = "logical",
     reply_to_post_id = "character", quoted_post_id = "character",
+    # Entity fields (Task 56) — list-columns
+    hashtags = "list", mentions = "list", urls = "list",
     # Observation-level provenance (Task 46)
     collected_at = "character", collection_query = "character", collection_id = "character"
   )
@@ -116,6 +123,8 @@ NULL
     conversation_id = NA_character_,
     is_reply = FALSE, is_repost = FALSE, is_quote = FALSE,
     reply_to_post_id = NA_character_, quoted_post_id = NA_character_,
+    # Entity fields (Task 56) — list-columns use list(NULL) as NA
+    hashtags = list(NULL), mentions = list(NULL), urls = list(NULL),
     # Observation-level provenance (Task 46)
     collected_at = NA_character_, collection_query = NA_character_, collection_id = NA_character_
   )
@@ -192,7 +201,9 @@ NULL
     result[[field]] <- switch(type,
       character = character(0),
       integer = integer(0),
-      logical = logical(0)
+      logical = logical(0),
+      list = list(),
+      list()
     )
   }
   result
@@ -201,9 +212,9 @@ NULL
 #' Coerce a raw vector to its expected type, padding to target length.
 #'
 # @param raw The raw vector from the parser.
-# @param expected_type One of "character", "integer", "logical".
+# @param expected_type One of "character", "integer", "logical", "list".
 # @param n The target length (from post_id count).
-# @param na_val The NA default for padding.
+# @param na_val The NA default for padding (used only for character/integer/logical types).
 #' @return A vector of the expected type, length `n`.
 #' @noRd
 .rx_coerce <- function(raw, expected_type, n, na_val) {
@@ -245,7 +256,7 @@ NULL
 #' that Task 37 introduces.
 #'
 #' @param normalized A list as returned by `.rx_normalize_posts()`.
-#' @return A `tibble` with 21 columns matching the canonical schema.
+#' @return A `tibble` with 24 columns matching the canonical schema.
 #'   Zero rows when `normalized` is empty.
 #'
 #' @examples
