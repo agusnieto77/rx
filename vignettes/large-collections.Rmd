@@ -1,0 +1,364 @@
+---
+title: "Large Collections"
+subtitle: "Managing limits, checkpoints, resume, and export for large-scale collection"
+author: "Agustin Nieto"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Large Collections}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Introduction
+
+When collecting data at scale from X/Twitter, three concerns dominate:
+
+1. **Memory** -- downloading thousands of posts in one call can exhaust available RAM.
+2. **Resilience** -- network failures, Lightpanda crashes, or X rate-limits can interrupt a long collection.
+3. **Storage** -- once collected, the data needs to be saved in a format suitable for analysis (JSONL for incremental pipelines, Parquet for columnar analytics, DuckDB for SQL queries).
+
+This vignette covers how to handle each concern with **xtweetsR**.
+
+## The `limit` parameter
+
+Every collection function (`x_search()`, `x_user_posts()`) accepts a `limit` parameter:
+
+```r
+results <- x_search(session, query = "rstats", limit = 100)
+```
+
+`limit` caps the total number of **unique** posts returned. The function stops scrolling and returns early once the limit is reached. If no limit is specified (`NULL`, the default), the function uses bounded scrolling (`max_scrolls` iterations with stall detection) but does not impose a hard cap on the result count.
+
+**Recommended practice:** Always set `limit` for production collection. A typical research query might use `limit = 500` to `limit = 5000`. Larger limits require more memory and more scrolling iterations.
+
+```{r, eval = FALSE}
+# Collect up to 200 posts about a topic.
+results <- x_search(session, query = "machine learning", limit = 200)
+
+# Collect all available posts (use with caution).
+all_posts <- x_search(session, query = "rstats")
+```
+
+## Checkpoints
+
+A checkpoint is a JSON file that stores the collection state at a point in time:
+
+```
+{
+  "collection_id": "550e8400-e29b-41d4-a716-446655440000",
+  "query": "rstats",
+  "seen_post_ids": ["1234567890123456789", "1234567890123456790", ...],
+  "last_cursor": "cursor-batch-3",
+  "last_post_id": "1234567890123456999",
+  "records_collected": 147
+}
+```
+
+The checkpoint is written by `.rx_checkpoint_write()` at the end of a search when `resume = TRUE`. You can specify where it is stored:
+
+```{r, eval = FALSE}
+# The checkpoint defaults to a temp file, but you should specify it explicitly
+# so you can resume later.
+results <- x_search(
+  session,
+  query = "rstats",
+  limit = 1000,
+  checkpoint_path = "collections/rstats.checkpoint.json",
+  jsonl_path = "collections/rstats.jsonl"
+)
+```
+
+Checkpoint fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `collection_id` | character | UUID that identifies this collection run |
+| `query` | character | The search query string |
+| `seen_post_ids` | character vector | All post IDs collected so far |
+| `last_cursor` | character | Cursor from the last network response |
+| `last_post_id` | character | ID of the last post collected |
+| `records_collected` | integer | Count of unique posts collected |
+
+## Resume workflow
+
+Resume allows you to continue a collection from where it left off. The workflow is:
+
+### First run
+
+```{r, eval = FALSE}
+# Collect the first batch. The checkpoint is written at the end.
+batch1 <- x_search(
+  session,
+  query = "rstats",
+  limit = 500,
+  checkpoint_path = "collections/rstats.checkpoint.json",
+  jsonl_path = "collections/rstats.jsonl"
+)
+
+# batch1 contains up to 500 posts. The checkpoint saves the state.
+print(attr(batch1, "rx_collection_provenance"))
+```
+
+### Resume
+
+```{r, eval = FALSE}
+# Resume continues from the checkpoint. Already-collected posts are skipped.
+batch2 <- x_search(
+  session,
+  query = "rstats",
+  limit = 500,
+  resume = TRUE,
+  checkpoint_path = "collections/rstats.checkpoint.json",
+  jsonl_path = "collections/rstats.jsonl"
+)
+
+# batch2 contains only NEW posts not in the checkpoint.
+# The total unique posts = nrow(batch1) + nrow(batch2), with no duplicates.
+```
+
+### How resume works
+
+1. **Checkpoint read:** `.rx_checkpoint_read()` loads the saved state from `checkpoint_path`.
+2. **State pre-population:** `.rx_scroll_state_new(seen_post_ids = checkpoint$seen_post_ids)` initializes the scroll state with previously seen IDs.
+3. **Deduplication:** New posts are deduplicated against `seen_post_ids` before being added to the result.
+4. **Checkpoint write:** After the search completes, `.rx_checkpoint_write()` overwrites the checkpoint with the updated state.
+
+The `collection_id` is preserved across resume calls so all posts from a multi-run collection share the same identifier.
+
+### Resume without a checkpoint
+
+If `resume = TRUE` but no checkpoint file exists, the function behaves normally (no resume, no error). This makes it safe to always set `resume = TRUE` in scripts:
+
+```{r, eval = FALSE}
+# Safe to call even on the first run -- behaves like resume = FALSE
+# when no checkpoint exists.
+results <- x_search(
+  session,
+  query = "rstats",
+  limit = 200,
+  resume = TRUE,
+  checkpoint_path = "collections/rstats.checkpoint.json",
+  jsonl_path = "collections/rstats.jsonl"
+)
+```
+
+### JSONL incremental persistence
+
+While `checkpoint_path` stores collection *state*, `jsonl_path` stores the actual post data in append-only JSONL format. Each call to `x_search()` with `resume = TRUE` appends new posts to the JSONL file rather than overwriting it.
+
+JSONL (JSON Lines) is ideal for incremental pipelines because:
+- Each line is a self-contained JSON object (one post per line).
+- Appending is safe -- no need to read the entire file.
+- The file can be read back at any time with `.rx_jsonl_read()`.
+- It works as an intermediate format between collection and final storage.
+
+```{r, eval = FALSE}
+# Read a JSONL file back into a tibble.
+posts <- .rx_jsonl_read("collections/rstats.jsonl")
+print(nrow(posts))  # Total posts across all collection runs
+```
+
+## Export formats
+
+The `x_save()` function writes a post tibble to disk. The format is determined by the file extension:
+
+```{r, eval = FALSE}
+# JSONL -- always available, append-friendly
+x_save(results, "results.jsonl")
+
+# Parquet -- requires the `arrow` package
+x_save(results, "results.parquet")
+
+# DuckDB -- requires the `duckdb` package
+x_save(results, "results.duckdb")
+```
+
+### JSONL
+
+Always available (uses `jsonlite`). Each row becomes one JSON object on a line.
+
+**Best for:** Incremental collection pipelines, data transfer between systems, human-readable inspection.
+
+**Trade-offs:**
+- Pros: Simple, append-friendly, no external dependencies.
+- Cons: No columnar compression, slower for large-file scanning, no SQL support.
+
+### Parquet
+
+Uses the `arrow` package (`Suggests`). Columnar binary format with compression.
+
+**Best for:** Analytics pipelines, large datasets, interoperability with Spark/Pandas.
+
+**Trade-offs:**
+- Pros: Columnar compression (smaller files), fast column scans, widely supported.
+- Cons: Requires `arrow` (falls back to JSONL with a warning if missing), not append-friendly.
+
+### DuckDB
+
+Uses the `duckdb` package (`Suggests`). Creates a database file with a single `posts` table.
+
+**Best for:** Interactive SQL analysis, ad-hoc queries, local data warehouse.
+
+**Trade-offs:**
+- Pros: Full SQL support, fast queries, can query files directly.
+- Cons: Requires `duckdb` (falls back to JSONL with a warning if missing), not a simple file format.
+
+### Fallback behavior
+
+If the required package (`arrow` or `duckdb`) is not installed, `x_save()` falls back to JSONL with a warning:
+
+```
+Warning: The 'arrow' package is not installed.
+Falling back to JSONL at 'results.jsonl'.
+Install arrow for native Parquet support.
+```
+
+The fallback uses a `.jsonl` extension so the user knows the format changed.
+
+## Complete large-collection pattern
+
+Here is a complete example that combines all the concepts:
+
+```{r, eval = FALSE}
+library(xtweetsR)
+
+# 1. Start session.
+session <- x_session()
+
+# 2. Define collection parameters.
+query      <- "rstats"
+limit      <- 1000
+max_scrolls <- 20L
+base_dir   <- "collections/rstats"
+
+# Create the output directory if needed.
+dir.create(base_dir, showWarnings = FALSE, recursive = TRUE)
+
+checkpoint_path <- file.path(base_dir, "checkpoint.json")
+jsonl_path      <- file.path(base_dir, "posts.jsonl")
+parquet_path    <- file.path(base_dir, "posts.parquet")
+
+# 3. Check for an existing checkpoint.
+existing_checkpoint <- .rx_checkpoint_read(checkpoint_path)
+resume <- !is.null(existing_checkpoint)
+
+# 4. Run the search (resume if checkpoint exists).
+results <- x_search(
+  session,
+  query = query,
+  limit = limit,
+  max_scrolls = max_scrolls,
+  resume = resume,
+  checkpoint_path = checkpoint_path,
+  jsonl_path = jsonl_path
+)
+
+# 5. Show collection provenance.
+cat("Collection metadata:\n")
+print(attr(results, "rx_collection_provenance"))
+
+# 6. Save to Parquet for analytics.
+x_save(results, parquet_path)
+
+# 7. Close session.
+x_close(session)
+```
+
+## Troubleshooting
+
+### Resume not picking up new posts
+
+Check that `checkpoint_path` and `jsonl_path` are the same on every call. If the path changes between calls, resume will not work.
+
+### Checkpoint file not written
+
+The checkpoint is only written when `resume = TRUE`. If you want to save state without resuming, call `.rx_checkpoint_write()` manually:
+
+```{r, eval = FALSE}
+# Save state manually (not tied to a search run).
+# The scroll state object must be passed from a running search.
+```
+
+### JSONL file grows very large
+
+JSONL is append-only. If you run multiple search calls with the same `jsonl_path`, the file accumulates all posts. Use `x_save()` with `.jsonl` extension (append=FALSE by default) to create a fresh snapshot:
+
+```{r, eval = FALSE}
+# Create a clean snapshot from accumulated JSONL.
+accumulated <- .rx_jsonl_read("collections/rstats.jsonl")
+x_save(accumulated, "collections/rstats-snapshot.jsonl")
+```
+
+### Parquet vs JSONL for large collections
+
+For collections over 100K posts:
+- Use Parquet for storage (smaller files, faster reads).
+- Use JSONL for incremental collection (append-friendly).
+- Convert JSONL to Parquet after collection using `x_save(.rx_jsonl_read(path), "output.parquet")`.
+
+## Function reference
+
+### `x_search()`
+
+```r
+x_search(
+  session,
+  query,
+  limit = NULL,
+  scroll = TRUE,
+  max_scrolls = 5L,
+  resume = FALSE,
+  checkpoint_path = NULL,
+  jsonl_path = NULL,
+  quiet = FALSE
+)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `session` | `xtweetsR_session` | (required) | Browser session from `x_session()` |
+| `query` | character | (required) | Search query string |
+| `limit` | integer or NULL | NULL | Maximum posts to return |
+| `scroll` | logical | TRUE | Enable scroll-based collection |
+| `max_scrolls` | integer | 5L | Max scroll iterations |
+| `resume` | logical | FALSE | Resume from checkpoint |
+| `checkpoint_path` | character or NULL | NULL | Path to checkpoint JSON file |
+| `jsonl_path` | character or NULL | NULL | Path to JSONL incremental file |
+| `quiet` | logical | FALSE | Suppress progress messages |
+
+### `x_save()`
+
+```r
+x_save(posts, path)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `posts` | tibble | Post tibble from `x_search()` or similar |
+| `path` | character | Output file path (extension determines format) |
+
+Supported extensions: `.jsonl`, `.parquet`, `.duckdb`.
+
+### Persistence helpers
+
+```r
+# Read JSONL file back into a tibble.
+.rx_jsonl_read(path)
+
+# Write tibble to JSONL.
+.rx_jsonl_write(path, posts, append = TRUE)
+
+# Read checkpoint file.
+.rx_checkpoint_read(path)
+
+# Write checkpoint file.
+.rx_checkpoint_write(path, checkpoint)
+```

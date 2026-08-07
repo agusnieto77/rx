@@ -1321,19 +1321,22 @@ Document:
 
 ---
 
-### Task 68: Add large-collection documentation [ ]
+### Task 68: Add large-collection documentation [x]
 
 **Goal:** Document checkpoints and resume.
 
 **Actions:**
 Show:
-- finite `limit`
-- checkpoint path
-- resume
-- JSONL/Parquet/DuckDB options currently implemented
+- [x] finite `limit`
+- [x] checkpoint path
+- [x] resume
+- [x] JSONL/Parquet/DuckDB options currently implemented
 
 **Acceptance criteria:**
-- Documentation matches real function signatures.
+- [x] Documentation matches real function signatures.
+
+**Files created:**
+- `vignettes/large-collections.Rmd` -- 11 sections covering: limit parameter, checkpoint structure and fields, resume workflow (first run + resume + how it works), JSONL incremental persistence, export formats (JSONL, Parquet, DuckDB) with trade-offs and fallback behavior, complete large-collection pattern example, troubleshooting guide, and function reference tables.
 
 ---
 
