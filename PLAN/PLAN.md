@@ -1274,7 +1274,7 @@ README should include:
 
 ---
 
-### Task 66: Add architecture documentation [ ]
+### Task 66: Add architecture documentation [x]
 
 **Goal:** Explain the implementation that actually exists.
 
