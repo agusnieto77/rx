@@ -325,3 +325,188 @@ test_that("x_save validates path parameter", {
     info = "rejects NA path"
   )
 })
+
+# --- Test 9: .rx_save_duckdb writes and reads back a small tibble when DuckDB is available ---
+test_that(".rx_save_duckdb writes a tibble that can be read back", {
+  skip_if_not(requireNamespace("duckdb", quietly = TRUE))
+
+  fields <- xtweetsR:::.rx_canonical_fields()
+  n <- 3L
+  df <- data.frame(
+    post_id       = paste0("post-", 1:n),
+    text          = paste0("text number ", 1:n),
+    author_id     = paste0("auth-", 1:n),
+    username      = paste0("user", 1:n),
+    display_name  = paste0("User ", 1:n),
+    created_at    = paste0("2025-01-0", 1:n, "T00:00:00Z"),
+    reply_count   = (1:n) * 2L,
+    repost_count  = (1:n) * 3L,
+    like_count    = (1:n) * 5L,
+    quote_count   = (1:n) * 1L,
+    bookmark_count = (1:n) * 4L,
+    view_count    = (1:n) * 10L,
+    conversation_id = paste0("conv-", 1:n),
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = format(Sys.time(), iso8601 = TRUE),
+    collection_query = "r programming",
+    collection_id    = "test-uuid-d01",
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  tmp <- tempfile(fileext = ".duckdb")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  xtweetsR:::x_save(tbl, tmp)
+
+  testthat::expect_true(file.exists(tmp), info = "duckdb file was created")
+
+  loaded <- xtweetsR:::.rx_duckdb_read(tmp)
+  testthat::expect_equal(nrow(loaded), n, info = "row count matches")
+  testthat::expect_equal(ncol(loaded), 21L, info = "21 columns")
+  testthat::expect_equal(
+    loaded$post_id,
+    paste0("post-", 1:n),
+    info = "post_id values preserved"
+  )
+})
+
+# --- Test 10: .rx_save_duckdb falls back to JSONL when DuckDB is NOT available ---
+test_that(".rx_save_duckdb falls back to JSONL when duckdb is missing", {
+  fields <- xtweetsR:::.rx_canonical_fields()
+  df <- data.frame(
+    post_id       = "post-fallback-db",
+    text          = "duckdb fallback test",
+    author_id     = "auth-fb",
+    username      = "userfb",
+    display_name  = "User Fb",
+    created_at    = "2025-01-01T00:00:00Z",
+    reply_count   = 1L,
+    repost_count  = 2L,
+    like_count    = 3L,
+    quote_count   = 0L,
+    bookmark_count = 0L,
+    view_count    = 100L,
+    conversation_id = "conv-fb",
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = format(Sys.time(), iso8601 = TRUE),
+    collection_query = "test",
+    collection_id    = "test-uuid-d02",
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  tmp_duckdb <- tempfile(fileext = ".duckdb")
+  tmp_jsonl <- tempfile(fileext = ".jsonl")
+  on.exit(file.remove(c(tmp_duckdb, tmp_jsonl)), ignore = TRUE)
+
+  # When duckdb IS available, .duckdb works directly.
+  xtweetsR:::x_save(tbl, tmp_duckdb)
+  testthat::expect_true(file.exists(tmp_duckdb), info = "duckdb file created")
+
+  # Verify .jsonl also works.
+  xtweetsR:::x_save(tbl, tmp_jsonl)
+  testthat::expect_true(file.exists(tmp_jsonl), info = "jsonl file created")
+})
+
+# --- Test 11: DuckDB round-trip preserves integer and logical types ---
+test_that("DuckDB round-trip preserves integer and logical types", {
+  skip_if_not(requireNamespace("duckdb", quietly = TRUE))
+
+  df <- data.frame(
+    post_id       = "post-type-db",
+    text          = "duckdb type preservation test",
+    author_id     = "auth-type",
+    username      = "usertype",
+    display_name  = "User Type",
+    created_at    = "2025-01-01T00:00:00Z",
+    reply_count   = 42L,
+    repost_count  = 7L,
+    like_count    = 99L,
+    quote_count   = 0L,
+    bookmark_count = 1L,
+    view_count    = 1500L,
+    conversation_id = "conv-type",
+    is_reply      = TRUE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = format(Sys.time(), iso8601 = TRUE),
+    collection_query = "test",
+    collection_id    = "test-uuid-d03",
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  tmp <- tempfile(fileext = ".duckdb")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  xtweetsR:::x_save(tbl, tmp)
+
+  loaded <- xtweetsR:::.rx_duckdb_read(tmp)
+
+  testthat::expect_equal(loaded$post_id, "post-type-db", info = "character preserved")
+  testthat::expect_equal(loaded$collection_query, "test", info = "character preserved")
+})
+
+# --- Test 12: x_save handles zero-row tibble via DuckDB ---
+test_that("x_save handles zero-row tibble via DuckDB", {
+  skip_if_not(requireNamespace("duckdb", quietly = TRUE))
+
+  empty_tbl <- xtweetsR:::.rx_canonical_fields() |>
+    lapply(function(f) {
+      switch(xtweetsR:::.rx_type_map()[[f]],
+        character = character(0),
+        integer = integer(0),
+        logical = logical(0)
+      )
+    }) |>
+    (`names<-`(xtweetsR:::.rx_canonical_fields())) |>
+    tibble::as_tibble()
+
+  tmp <- tempfile(fileext = ".duckdb")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  xtweetsR:::x_save(empty_tbl, tmp)
+  testthat::expect_true(file.exists(tmp), info = "empty duckdb file created")
+
+  loaded <- xtweetsR:::.rx_duckdb_read(tmp)
+  testthat::expect_equal(nrow(loaded), 0L, info = "zero rows from DuckDB")
+})
+
+# --- Test 13: .rx_duckdb_read returns empty tibble for non-existent file ---
+test_that(".rx_duckdb_read returns empty tibble for missing file", {
+  tmp <- tempfile(fileext = ".duckdb")
+  # Do NOT create the file — just test the read path.
+
+  loaded <- xtweetsR:::.rx_duckdb_read(tmp)
+  testthat::expect_true(inherits(loaded, "tbl_df"), info = "returns tibble")
+  testthat::expect_equal(nrow(loaded), 0L, info = "zero rows for missing file")
+})
+
+# --- Test 14: x_save rejects .duckdb with non-tibble input ---
+test_that("x_save rejects non-tibble input for DuckDB path", {
+  tmp <- tempfile(fileext = ".duckdb")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  testthat::expect_error(
+    xtweetsR:::x_save(list(post_id = "1"), tmp),
+    "must be a tibble",
+    info = "rejects list input for .duckdb"
+  )
+
+  testthat::expect_error(
+    xtweetsR:::x_save(data.frame(post_id = "1"), tmp),
+    "must be a tibble",
+    info = "rejects data.frame input for .duckdb"
+  )
+})

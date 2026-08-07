@@ -3,6 +3,7 @@
 # This module provides export functions for post collections.
 # Supported formats:
 #   - Parquet (via Arrow, optional — Task 50)
+#   - DuckDB (via duckdb, optional — Task 51)
 #   - JSONL (via jsonlite, always available — Task 47)
 #
 # Each format is implemented behind an optional-dependency guard:
@@ -24,6 +25,7 @@ NULL
 #' The file format is inferred from the file extension:
 #'
 #' - `.parquet` — writes using the Arrow package (if available).
+#' - `.duckdb` — writes using the DuckDB package (if available).
 #' - `.jsonl` — writes using jsonlite (always available, same as
 #'   [`.rx_jsonl_write()`]).
 #'
@@ -35,10 +37,14 @@ NULL
 #' installed, calling `x_save()` on a `.parquet` file falls back
 #' to JSONL with a warning and a `.jsonl` extension.
 #'
+#' DuckDB support requires the `duckdb` package. If DuckDB is not
+#' installed, calling `x_save()` on a `.duckdb` file falls back
+#' to JSONL with a warning and a `.jsonl` extension.
+#'
 #' @param posts A tibble with the canonical post schema (as returned
 #'   by [x_search()]).
 #' @param path Character string with the output file path. The
-#'   extension determines the format (`.parquet` or `.jsonl`).
+#'   extension determines the format (`.parquet`, `.duckdb`, or `.jsonl`).
 #'
 #' @return Invisible NULL.
 #'
@@ -67,12 +73,14 @@ x_save <- function(posts, path) {
 
   if (ext == "parquet") {
     .rx_save_parquet(posts, path)
+  } else if (ext == "duckdb") {
+    .rx_save_duckdb(posts, path)
   } else if (ext == "jsonl") {
     .rx_jsonl_write(path, posts, append = FALSE)
   } else {
     stop(
       "Unsupported file extension '", ext, "'. ",
-      "Use '.parquet' or '.jsonl'.",
+      "Use '.parquet', '.duckdb', or '.jsonl'.",
       call. = FALSE
     )
   }
@@ -124,4 +132,119 @@ x_save <- function(posts, path) {
   arrow::write_parquet(posts, path)
 
   invisible(NULL)
+}
+
+#' Save a tibble as a DuckDB database.
+#'
+#' Writes a post tibble to a DuckDB database file containing a single
+#' `posts` table.  This is an internal helper used by [x_save()] when
+#' the target path ends with `.duckdb`.
+#'
+#' # Optional dependency
+#' If the `duckdb` package is not installed, this function falls back
+#' to writing JSONL with a `.jsonl` extension instead.  A warning is
+#' issued to inform the user that DuckDB is missing.
+#'
+#' @param posts A tibble with the canonical post schema.
+#' @param path Character string with the output `.duckdb` path.
+#'
+#' @return Invisible NULL.
+#'
+#' @noRd
+.rx_save_duckdb <- function(posts, path) {
+  if (!requireNamespace("duckdb", quietly = TRUE)) {
+    warning(
+      "The 'duckdb' package is not installed. ",
+      "Falling back to JSONL at '",
+      sub("\\.duckdb$", ".jsonl", path),
+      "'. Install duckdb for native DuckDB support.",
+      call. = FALSE
+    )
+    .rx_jsonl_write(sub("\\.duckdb$", ".jsonl", path), posts, append = FALSE)
+    return(invisible(NULL))
+  }
+
+  con <- tryCatch(
+    duckdb::dbConnect(duckdb::DuckDB(), path),
+    error = function(e) {
+      stop("Failed to connect to DuckDB at '", path, "': ", e$message, call. = FALSE)
+    }
+  )
+  on.exit(duckdb::dbDisconnect(con), add = TRUE)
+
+  # Guard: zero-row tibble — create an empty posts table.
+  if (nrow(posts) == 0L) {
+    fields <- .rx_canonical_fields()
+    type_map <- .rx_type_map()
+    for (f in fields) {
+      col_type <- switch(type_map[[f]],
+        character = "VARCHAR",
+        integer = "BIGINT",
+        logical = "BOOLEAN",
+        "VARCHAR"
+      )
+      duckdb::dbExecute(con, paste0("ALTER TABLE posts ADD COLUMN ", f, " ", col_type))
+    }
+    return(invisible(NULL))
+  }
+
+  # Write the posts table.
+  # dbWriteTable creates the table and writes all rows in one call.
+  tryCatch(
+    duckdb::dbWriteTable(con, "posts", posts, row.names = FALSE, overwrite = TRUE),
+    error = function(e) {
+      stop("Failed to write posts table: ", e$message, call. = FALSE)
+    }
+  )
+
+  invisible(NULL)
+}
+
+#' Read a DuckDB database back into a tibble.
+#'
+#' Opens a DuckDB database file, queries the `posts` table, and
+#' returns the result as a tibble.  If the file does not exist
+#' or DuckDB is not available, returns an empty canonical tibble.
+#'
+#' @param path Character string with the `.duckdb` file path.
+#' @return A tibble with columns matching the canonical post schema.
+#'
+#' @noRd
+.rx_duckdb_read <- function(path) {
+  # Guard: file does not exist.
+  if (!file.exists(path)) {
+    return(.rx_jsonl_empty_tibble())
+  }
+
+  if (!requireNamespace("duckdb", quietly = TRUE)) {
+    return(.rx_jsonl_empty_tibble())
+  }
+
+  con <- tryCatch(
+    duckdb::dbConnect(duckdb::DuckDB(), path),
+    error = function(e) {
+      warning("Failed to connect to DuckDB at '", path, "': ", e$message)
+      return(NULL)
+    }
+  )
+
+  if (is.null(con)) {
+    return(.rx_jsonl_empty_tibble())
+  }
+
+  on.exit(duckdb::dbDisconnect(con), add = TRUE)
+
+  result <- tryCatch(
+    duckdb::dbGetQuery(con, "SELECT * FROM posts"),
+    error = function(e) {
+      warning("Failed to query DuckDB: ", e$message)
+      return(NULL)
+    }
+  )
+
+  if (is.null(result) || !is.data.frame(result)) {
+    return(.rx_jsonl_empty_tibble())
+  }
+
+  tibble::as_tibble(result)
 }

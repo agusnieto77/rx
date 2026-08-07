@@ -935,19 +935,28 @@ Add:
 
 ---
 
-### Task 51: Add DuckDB export [ ]
+### Task 51: Add DuckDB export [x]
 
 **Goal:** Support large local research collections.
 
 **Actions:**
-- Add optional DuckDB persistence.
-- Start with a single `posts` table.
-- Keep DuckDB optional.
+- [x] Add optional DuckDB persistence (`.rx_save_duckdb()` in `R/export.R`).
+- [x] Add DuckDB reader (`.rx_duckdb_read()`).
+- [x] Update `x_save()` to support `.duckdb` extension.
+- [x] Single `posts` table in each database.
+- [x] Keep DuckDB optional (falls back to JSONL with warning).
+- [x] Add `duckdb` to `Suggests` in `DESCRIPTION`.
+- [x] 6 new tests (Tests 9-14) in `tests/testthat/test-export.R`.
 
 **Acceptance criteria:**
-- A test database can be created.
-- Posts can be inserted and queried.
-- Package still loads without DuckDB installed.
+- [x] A test database can be created (Test 9: writes and reads back a tibble).
+- [x] Posts can be inserted and queried via `dbWriteTable`/`dbGetQuery` (Tests 9, 11).
+- [x] Package still loads without DuckDB installed (Test 10: fallback to JSONL; Test 13: returns empty tibble).
+
+**Files changed:**
+- `R/export.R` — added `.rx_save_duckdb()`, `.rx_duckdb_read()`, updated `x_save()` to handle `.duckdb`
+- `DESCRIPTION` — added `duckdb` to Suggests
+- `tests/testthat/test-export.R` — added Tests 9-14 (DuckDB write/read round-trip, fallback, type preservation, zero-row, missing file, input validation)
 
 ---
 

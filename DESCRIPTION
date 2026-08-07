@@ -16,6 +16,7 @@ Imports:
 Suggests:
     arrow,
     curl,
+    duckdb,
     pkgload,
     testthat (>= 3.0.0),
     withr
