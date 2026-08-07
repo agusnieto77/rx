@@ -439,3 +439,90 @@ test_that("NA character values are preserved as NA_character_", {
     info = "NA display_name preserved"
   )
 })
+
+# --- Test 19: .rx_normalized_to_tibble returns a tibble (Task 37) ---
+test_that(".rx_normalized_to_tibble returns a tibble that inherits from tbl_df", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  normalized <- xtweetsR:::.rx_normalize_posts(parsed)
+  tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
+
+  testthat::expect_s3_class(tbl, "tbl_df", info = "result inherits from tbl_df")
+  testthat::expect_s3_class(tbl, "tbl", info = "result inherits from tbl")
+  testthat::expect_s3_class(tbl, "data.frame", info = "result inherits from data.frame")
+})
+
+# --- Test 20: Tibble has correct number of rows and columns (Task 37) ---
+test_that("tibble has 18 columns and 4 rows from fixture", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  normalized <- xtweetsR:::.rx_normalize_posts(parsed)
+  tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
+
+  testthat::expect_equal(ncol(tbl), 18L, info = "18 canonical columns")
+  testthat::expect_equal(nrow(tbl), 4L, info = "4 posts from fixture")
+})
+
+# --- Test 21: post_id is character in the tibble (Task 37) ---
+test_that("post_id is character in the tibble", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  normalized <- xtweetsR:::.rx_normalize_posts(parsed)
+  tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
+
+  testthat::expect_true(
+    is.character(tbl$post_id),
+    info = "post_id is character in tibble"
+  )
+})
+
+# --- Test 22: Empty normalized list returns zero-row tibble (Task 37) ---
+test_that("empty normalized returns zero-row tibble", {
+  empty_norm <- xtweetsR:::.rx_normalize_posts(NULL)
+  tbl <- xtweetsR:::.rx_normalized_to_tibble(empty_norm)
+
+  testthat::expect_s3_class(tbl, "tbl_df", info = "still a tibble")
+  testthat::expect_equal(nrow(tbl), 0L, info = "zero rows")
+})
+
+# --- Test 23: NULL input returns empty tibble (Task 37) ---
+test_that(".rx_normalized_to_tibble(NULL) returns empty tibble", {
+  tbl <- xtweetsR:::.rx_normalized_to_tibble(NULL)
+  testthat::expect_s3_class(tbl, "tbl_df", info = "still a tibble")
+  testthat::expect_equal(nrow(tbl), 0L, info = "zero rows")
+})
+
+# --- Test 24: Tibble column names match canonical fields (Task 37) ---
+test_that("tibble column names match canonical schema", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  normalized <- xtweetsR:::.rx_normalize_posts(parsed)
+  tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
+
+  expected <- xtweetsR:::.rx_canonical_fields()
+  testthat::expect_equal(names(tbl), expected, info = "column names match canonical fields")
+})

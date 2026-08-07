@@ -217,3 +217,51 @@ NULL
     raw
   )
 }
+
+#' Convert a normalized post list to a tibble.
+#'
+#' Takes the list-of-vectors output from `.rx_normalize_posts()` and
+#' builds a `tibble` with one row per post. Column types are preserved:
+#' character IDs stay character, integers stay integers, logicals stay logical.
+#'
+#' This is the final step in the parser->normalizer->tibble pipeline
+#' that Task 37 introduces.
+#'
+#' @param normalized A list as returned by `.rx_normalize_posts()`.
+#' @return A `tibble` with 18 columns matching the canonical schema.
+#'   Zero rows when `normalized` is empty.
+#'
+#' @examples
+#'   # Internal use only — not exported.
+#'   # parsed <- xtweetsR:::.rx_parse_posts(response)
+#'   # normalized <- xtweetsR:::.rx_normalize_posts(parsed)
+#'   # posts <- xtweetsR:::.rx_normalized_to_tibble(normalized)
+#'
+#' @noRd
+.rx_normalized_to_tibble <- function(normalized) {
+  # Guard: not a list or no fields at all.
+  if (!is.list(normalized) || length(normalized) == 0L) {
+    return(tibble::tibble())
+  }
+
+  # Detect the row count from the first field (post_id).
+  n <- length(normalized[[1]])
+  if (n == 0L) {
+    # Empty result — return a tibble with the right columns but zero rows.
+    # Preserve each field's type.
+    type_map <- .rx_type_map()
+    cols <- lapply(names(normalized), function(f) {
+      switch(type_map[[f]],
+        character = character(0),
+        integer = integer(0),
+        logical = logical(0)
+      )
+    })
+    names(cols) <- names(normalized)
+    return(tibble::as_tibble(cols))
+  }
+
+  # Build the tibble directly from the list.
+  # The normalizer already guarantees consistent lengths and correct types.
+  tibble::as_tibble(normalized)
+}
