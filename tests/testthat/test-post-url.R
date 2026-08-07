@@ -274,3 +274,59 @@ test_that("x_post returns empty tibble when no events captured", {
   expect_equal(nrow(result), 0L)
   expect_equal(ncol(result), 21L)
 })
+
+# --- Test 25: x_post returns empty tibble when response body is unparseable ---
+test_that("x_post handles unparseable response body gracefully", {
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list(
+    list(requestId = "req-1", url = "https://x.com/graphql", contentType = "application/json")
+  )
+  # Return a response body that is NOT valid post data (a simple string).
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    list(requestId = requestId, body = "not json at all", contentType = "application/json", error = NULL)
+  }
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  result <- x_post(mock_session, "1234567890123456789")
+
+  expect_true(inherits(result, "tbl_df"))
+  expect_equal(nrow(result), 0L)
+  expect_equal(ncol(result), 21L)
+
+  # Provenance should still be attached.
+  provenance <- attr(result, "rx_collection_provenance")
+  expect_true(is.list(provenance))
+  expect_equal(provenance$records, 0L)
+  expect_true(grepl("^post:", provenance$query))
+})
+
+# --- Test 26: x_post provenance is attached when no events are captured ---
+test_that("x_post attaches provenance with zero-row result on no-events", {
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  result <- x_post(mock_session, "9876543210987654321")
+
+  provenance <- attr(result, "rx_collection_provenance")
+  expect_true(is.list(provenance))
+  expect_true("collection_id" %in% names(provenance))
+  expect_true("started_at" %in% names(provenance))
+  expect_true("query" %in% names(provenance))
+  expect_true("backend" %in% names(provenance))
+  expect_true("records" %in% names(provenance))
+  expect_equal(provenance$records, 0L)
+  expect_equal(provenance$query, "post:9876543210987654321")
+  expect_true(provenance$backend %in% c("lightpanda", "chromium", "unknown"))
+  expect_true(inherits(provenance$started_at, "POSIXct"))
+})

@@ -1029,17 +1029,20 @@ Add:
 
 ---
 
-### Task 55: Implement minimal `x_post()` extraction [ ]
+### Task 55: Implement minimal `x_post()` extraction [x]
 
 **Goal:** Return one canonical post.
 
 **Actions:**
-- Reuse existing parser and normalizer.
-- Return one-row tibble when found.
+- [x] Reuse existing parser and normalizer.
+- [x] Return one-row tibble when found.
 
 **Acceptance criteria:**
-- No separate incompatible schema is created.
-- Unit tests cover not-found behavior.
+- [x] No separate incompatible schema is created (x_post() reuses .rx_parse_posts(), .rx_normalize_posts(), .rx_deduplicate_posts()).
+- [x] Unit tests cover not-found behavior (Tests 25-26: 2 new tests).
+
+**Files changed:**
+- `tests/testthat/test-post-url.R` — added Tests 25 (unparseable response body) and 26 (provenance on no-events)
 
 ---
 
