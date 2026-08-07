@@ -1,0 +1,232 @@
+{
+  "data": {
+    "timeline": {
+      "instructions": [
+        {
+          "type": "TimelineAddEntries",
+          "entries": [
+            {
+              "entryId": "tweet-1900000000000000300",
+              "sortIndex": "1900000000000000300",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000300",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMzAw",
+                            "legacy": {
+                              "screen_name": "data_scientist_01",
+                              "name": "Data Scientist"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Wed Aug 06 08:00:00 +0000 2026",
+                        "full_text": "This is a great analysis! https://x.com/rstudio/status/1900000000000000100",
+                        "conversation_id_str": "1900000000000000300",
+                        "reply_count": 0,
+                        "retweet_count": 3,
+                        "favorite_count": 12,
+                        "quote_count": 0,
+                        "bookmark_count": 1,
+                        "views": { "count": "1500" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [],
+                          "urls": [
+                            { "url": "https://t.co/xyz789", "expanded_url": "https://x.com/rstudio/status/1900000000000000100" }
+                          ]
+                        },
+                        "quoted_status_id_str": "1900000000000000100"
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000301",
+              "sortIndex": "1900000000000000301",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000301",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMzAx",
+                            "legacy": {
+                              "screen_name": "r_community",
+                              "name": "R Community"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Wed Aug 06 09:00:00 +0000 2026",
+                        "full_text": "Agree with this perspective on browser automation in R. The future is bright!",
+                        "conversation_id_str": "1900000000000000301",
+                        "reply_count": 1,
+                        "retweet_count": 5,
+                        "favorite_count": 25,
+                        "quote_count": 0,
+                        "bookmark_count": 2,
+                        "views": { "count": "3200" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000302",
+              "sortIndex": "1900000000000000302",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000302",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMzAy",
+                            "legacy": {
+                              "screen_name": "hadleywickham",
+                              "name": "Hadley Wickham"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Wed Aug 06 10:00:00 +0000 2026",
+                        "full_text": "Finally someone building proper tooling for this! https://x.com/rstudio/status/1900000000000000100",
+                        "conversation_id_str": "1900000000000000302",
+                        "reply_count": 2,
+                        "retweet_count": 15,
+                        "favorite_count": 80,
+                        "quote_count": 1,
+                        "bookmark_count": 10,
+                        "views": { "count": "12000" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [],
+                          "urls": [
+                            { "url": "https://t.co/abc456", "expanded_url": "https://x.com/rstudio/status/1900000000000000100" }
+                          ]
+                        },
+                        "quoted_status_id_str": "1900000000000000100"
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000303",
+              "sortIndex": "1900000000000000303",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000303",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMzAz",
+                            "legacy": {
+                              "screen_name": "tech_blogger",
+                              "name": "Tech Blogger"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Wed Aug 06 11:00:00 +0000 2026",
+                        "full_text": "Interesting thread on data science tools. Worth checking out for anyone doing web scraping.",
+                        "conversation_id_str": "1900000000000000303",
+                        "reply_count": 0,
+                        "retweet_count": 8,
+                        "favorite_count": 35,
+                        "quote_count": 0,
+                        "bookmark_count": 5,
+                        "views": { "count": "5600" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000304",
+              "sortIndex": "1900000000000000304",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000304",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMzA0",
+                            "legacy": {
+                              "screen_name": "rstats_david",
+                              "name": "David Robinson"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Wed Aug 06 12:00:00 +0000 2026",
+                        "full_text": "This is exactly what I've been looking for! https://x.com/rstudio/status/1900000000000000100",
+                        "conversation_id_str": "1900000000000000304",
+                        "reply_count": 1,
+                        "retweet_count": 7,
+                        "favorite_count": 45,
+                        "quote_count": 0,
+                        "bookmark_count": 8,
+                        "views": { "count": "7800" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [],
+                          "urls": [
+                            { "url": "https://t.co/def789", "expanded_url": "https://x.com/rstudio/status/1900000000000000100" }
+                          ]
+                        },
+                        "quoted_status_id_str": "1900000000000000100"
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

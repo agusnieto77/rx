@@ -1642,7 +1642,7 @@ Implement `x_replies()` without creating a second post schema.
 - `R/search.R` — added `x_replies()` function (~100 lines) after `x_thread()`
 - `NAMESPACE` — added `export(x_replies)`
 
-### Iteration 84: Add quote-post extraction [ ]
+### Iteration 84: Add quote-post extraction [x]
 
 Implement `x_quotes()`.
 

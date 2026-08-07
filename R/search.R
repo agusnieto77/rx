@@ -1131,6 +1131,179 @@ x_replies <- function(session, username, limit = NULL, quiet = FALSE) {
   replies
 }
 
+# ---------------------------------------------------------------------------
+# x_quotes() — Quote tweets of a specific post (Iteration 84)
+# ---------------------------------------------------------------------------
+
+#' Fetch quote tweets of a specific post.
+#'
+#' Searches X for posts that quote a given post (by post ID or URL) and
+#' returns only the posts that are actual quote tweets.  Internally this
+#' reuses the same network-capture → parse → normalize → deduplicate
+#' pipeline as [x_search()], [x_post()], [x_thread()], and [x_replies()].
+#'
+#' Unlike [x_search()], which returns all matching posts, this function
+#' filters the result set to include only posts where [is_quote] is `TRUE`
+#' and [quoted_post_id] matches the target post.  This makes it useful for
+#' tracking how a specific post is being quoted across the platform.
+#'
+#' @param session An `xtweetsR_session` object returned by [x_session()].
+#' @param post_id A character string with a bare post ID or a full
+#'   X/Twitter post URL.
+#' @param limit Optional integer limiting the maximum number of quote posts
+#'   returned. When \code{NULL} (default), no limit is applied.
+#' @param quiet Logical, default `FALSE`. When `TRUE`, progress messages
+#'   are suppressed.
+#'
+#' @return A tibble with the canonical post schema (26 columns)
+#'   containing only quote tweets of the specified post.
+#'   Returns a zero-row tibble when no quotes are found.
+#'
+#' @examples
+#' \dontrun{
+#'   sess <- x_session()
+#'   quotes <- x_quotes(sess, "1234567890123456789")
+#'   print(quotes)
+#'   x_close(sess)
+#' }
+#'
+#' @export
+x_quotes <- function(session, post_id, limit = NULL, quiet = FALSE) {
+  # 1. Validate inputs.
+  if (!inherits(session, "xtweetsR_session")) {
+    stop("session must be an xtweetsR_session object.", call. = FALSE)
+  }
+  if (!session$connected) {
+    stop("Session is not connected. Call x_session() first.", call. = FALSE)
+  }
+  if (!is.character(post_id) || length(post_id) != 1L || anyNA(post_id) || !nzchar(trimws(post_id))) {
+    stop("post_id must be a single non-empty character string (URL or post ID).", call. = FALSE)
+  }
+  if (!is.null(limit)) {
+    if (!is.numeric(limit) || length(limit) != 1L || anyNA(limit) || limit < 1L) {
+      stop("limit must be a positive integer, or NULL.", call. = FALSE)
+    }
+    limit <- as.integer(limit)
+  }
+
+  backend <- session$backend
+
+  # 1b. Normalize the post identifier to a canonical URL.
+  canonical_url <- .rx_normalize_post_url(post_id)
+
+  # 1c. Capture collection start time and generate collection_id for provenance.
+  collection_started_at <- Sys.time()
+  collection_id <- .rx_generate_uuid()
+  backend_label <- "unknown"
+  if (inherits(session$backend, "rx_lightpanda_backend")) {
+    backend_label <- "lightpanda"
+  } else if (inherits(session$backend, "rx_chromium_backend")) {
+    backend_label <- "chromium"
+  }
+
+  # 2. Enable network capture before navigation.
+  tryCatch(
+    backend$networkCaptureEnable(),
+    error = function(e) {
+      stop(.rx_error_network(
+        paste0("Failed to enable network capture: ", e$message)
+      ))
+    }
+  )
+
+  # 3. Construct search URL: search for the post URL to find quote tweets.
+  encoded_url <- URLencode(canonical_url, reserved = TRUE)
+  url <- paste0("https://x.com/search?q=", encoded_url, "&f=live")
+
+  nav_result <- backend$navigate(url)
+  if (is.null(nav_result$status) || nav_result$status == "error") {
+    # Navigation failed — return empty tibble.
+    error_info <- if (!is.null(nav_result$error)) nav_result$error$code else "unknown"
+    .rx_search_cleanup(backend)
+    warning("Navigation failed (", error_info, "). No quotes returned.")
+    empty <- .rx_search_empty_tibble()
+    provenance <- .rx_collection_metadata(
+      collection_id = collection_id,
+      started_at = collection_started_at,
+      query = paste0("quotes:", trimws(post_id)),
+      backend = backend_label,
+      record_count = 0L
+    )
+    attr(empty, "rx_collection_provenance") <- provenance
+    return(empty)
+  } else {
+    .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
+  }
+
+  # 4. Wait for network responses to arrive (search results load asynchronously).
+  Sys.sleep(3)
+
+  # 5. Capture events and extract posts.
+  events <- tryCatch(
+    backend$networkCaptureGet(),
+    error = function(e) {
+      .rx_search_cleanup(backend)
+      warning("Failed to retrieve network events: ", e$message)
+      return(list())
+    }
+  )
+
+  posts <- .rx_search_extract_from_events(events, backend)
+
+  # 5b. Observation-level provenance.
+  n_posts <- if (length(posts$post_id) > 0L) length(posts$post_id) else 0L
+  posts$collected_at     <- rep(format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), n_posts)
+  posts$collection_query <- rep(paste0("quotes:", trimws(post_id)), n_posts)
+  posts$collection_id    <- rep(collection_id, n_posts)
+
+  # 6. Normalize, convert to tibble, deduplicate.
+  normalized <- .rx_normalize_posts(posts)
+  tibble_posts <- .rx_normalized_to_tibble(normalized)
+  deduped <- .rx_deduplicate_posts(tibble_posts)
+
+  # 7. Filter to only quote tweets of the target post.
+  quote_mask <- deduped$is_quote == TRUE & deduped$quoted_post_id == trimws(post_id)
+  quotes <- deduped[quote_mask, , drop = FALSE]
+
+  # 7b. Observation-level provenance for filtered results.
+  n_quotes <- if (nrow(quotes) > 0L) nrow(quotes) else 0L
+  quotes$collected_at     <- rep(format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), n_quotes)
+  quotes$collection_query <- rep(paste0("quotes:", trimws(post_id)), n_quotes)
+  quotes$collection_id    <- rep(collection_id, n_quotes)
+
+  # 8. Apply limit.
+  if (!is.null(limit) && nrow(quotes) > limit) {
+    quotes <- quotes[seq_len(limit), , drop = FALSE]
+  }
+
+  # 9. Clean up network capture.
+  .rx_search_cleanup(backend)
+
+  # 10. Attach collection provenance metadata.
+  provenance <- .rx_collection_metadata(
+    collection_id = collection_id,
+    started_at = collection_started_at,
+    query = paste0("quotes:", trimws(post_id)),
+    backend = backend_label,
+    record_count = as.integer(nrow(quotes))
+  )
+  attr(quotes, "rx_collection_provenance") <- provenance
+
+  .rx_progress(
+    "Found ", nrow(deduped), " post(s), ", nrow(quotes), " quote(s)",
+    quiet = quiet
+  )
+
+  .rx_progress(
+    "Quotes collected: ", nrow(quotes), " post(s) in ",
+    round(as.numeric(difftime(Sys.time(), collection_started_at, units = "secs")), 1),
+    "s",
+    quiet = quiet
+  )
+
+  quotes
+}
+
 #' Return an empty batch with the canonical field structure.
 #'
 #' Used to maintain consistent field structure when a scroll iteration
