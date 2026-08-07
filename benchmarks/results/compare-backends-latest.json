@@ -1,0 +1,121 @@
+{
+  "timestamp": "2026-08-07T22:47:03.589Z",
+  "nodeVersion": "v24.18.0",
+  "sidecarPath": "G:\\RALPHEX\\rx\\inst\\node\\dist\\index.js",
+  "backends": [
+    {
+      "backend": "cdp (Lightpanda)",
+      "version": "0.1.0",
+      "results": {
+        "connection": {
+          "status": "fail",
+          "error": "{\"code\":\"LPD_CONNECTION_ERROR\",\"message\":\"Failed to connect to CDP endpoint: CDP WebSocket error: connect ECONNREFUSED 127.0.0.1:21111\"}"
+        }
+      }
+    },
+    {
+      "backend": "chromium (Puppeteer)",
+      "version": "0.1.0",
+      "results": {
+        "connection": {
+          "status": "ok",
+          "time_ms": 1483.5240000000001,
+          "backend": "chromium",
+          "endpoint": "ws://127.0.0.1:60581/devtools/browser/5af4515f-82a3-4e71-9676-eca955c4da00"
+        },
+        "navigation": {
+          "name": "navigation",
+          "status": "ok",
+          "avg": 240.54829999999998,
+          "min": 59.991199999999935,
+          "max": 1315.0875,
+          "p50": 61.89339999999993,
+          "p95": 939.2831999999992,
+          "errors": [],
+          "metadata": {
+            "url": "http://127.0.0.1:18766/dynamic-page.html",
+            "validRuns": 7,
+            "totalRuns": 7
+          }
+        },
+        "js_evaluation": {
+          "name": "javascript_evaluation",
+          "status": "ok",
+          "avg": 61.78890000000016,
+          "min": 60.91320000000087,
+          "max": 62.543399999999565,
+          "p50": 61.91010000000006,
+          "p95": 62.480069999999614,
+          "errors": [
+            "iter 2: Sidecar request timeout: evaluate",
+            "iter 3: Sidecar request timeout: navigate",
+            "iter 4: Sidecar request timeout: navigate"
+          ],
+          "metadata": {
+            "validRuns": 3,
+            "totalRuns": 7,
+            "postCounts": [
+              {
+                "url": "http://127.0.0.1:18766/dynamic-page.html",
+                "title": "Dynamic Test Page",
+                "postCount": 3,
+                "bodyLength": 2656
+              },
+              {
+                "url": "http://127.0.0.1:18766/dynamic-page.html",
+                "title": "Dynamic Test Page",
+                "postCount": 3,
+                "bodyLength": 2656
+              },
+              {
+                "url": "http://127.0.0.1:18766/dynamic-page.html?_t=1786142830806",
+                "title": "Dynamic Test Page",
+                "postCount": 3,
+                "postIds": [
+                  "1",
+                  "2",
+                  "3"
+                ],
+                "bodyLength": 2656
+              }
+            ]
+          }
+        },
+        "dom_inspect": {
+          "name": "dom_inspect",
+          "status": "fail",
+          "avg": 0,
+          "min": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "errors": [
+            "navigation failed: Sidecar request timeout: navigate"
+          ],
+          "metadata": {
+            "available": false,
+            "reason": "Navigation prerequisite failed"
+          }
+        },
+        "network_capture": {
+          "name": "network_capture",
+          "status": "fail",
+          "avg": 0,
+          "min": 0,
+          "max": 0,
+          "p50": 0,
+          "p95": 0,
+          "errors": [
+            "warmup 1: Sidecar request timeout: networkCaptureEnable",
+            "warmup 2: Sidecar request timeout: networkCaptureEnable",
+            "iter 1: Sidecar request timeout: networkCaptureEnable"
+          ],
+          "metadata": {
+            "available": false,
+            "reason": "All runs failed"
+          }
+        }
+      }
+    }
+  ]
+}
