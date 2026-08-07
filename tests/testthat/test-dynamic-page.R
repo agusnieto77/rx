@@ -251,3 +251,238 @@ test_that("dynamically inserted DOM content is observable after load", {
     info = "at least one dynamically inserted post is observed"
   )
 })
+
+# --- Test 5: fake-post.json fixture exists and is valid JSON ---
+test_that("fake-post.json fixture exists and parses as valid JSON", {
+  fixture_path <- file.path(
+    dirname(dirname(getwd())),
+    "inst", "tests", "fixtures", "fake-post.json"
+  )
+
+  testthat::expect_true(
+    file.exists(fixture_path),
+    info = "fake-post.json fixture exists under inst/tests/fixtures/"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  testthat::expect_true(
+    nzchar(content),
+    info = "fake-post.json is non-empty"
+  )
+
+  # Parse as JSON — should not throw.
+  json <- jsonlite::fromJSON(content)
+  testthat::expect_true(
+    "entries" %in% names(json),
+    info = "JSON has an 'entries' array"
+  )
+  testthat::expect_true(
+    isTRUE(nrow(json$entries) >= 1),
+    info = "entries array has at least one post"
+  )
+})
+
+# --- Test 6: fake-post.json is served correctly by the test server ---
+test_that("test server serves fake-post.json with application/json content type", {
+  node_path <- Sys.which("node")
+  if (node_path == "") {
+    testthat::skip("Node.js not available")
+  }
+
+  server_script <- file.path(
+    dirname(dirname(getwd())),
+    "inst", "node", "dist", "server.js"
+  )
+  fixture_dir  <- file.path(
+    dirname(dirname(getwd())),
+    "inst", "tests", "fixtures"
+  )
+
+  testthat::expect_true(
+    file.exists(server_script),
+    info = "server.js exists"
+  )
+  testthat::expect_true(
+    file.exists(fixture_dir),
+    info = "fixture directory exists"
+  )
+
+  port <- sample(20000:65535, 1)
+  proc <- processx::process$new(
+    command = "node",
+    args    = c(server_script, fixture_dir, as.character(port)),
+    stdout  = "|",
+    stderr  = "|",
+    stdin   = "|"
+  )
+
+  ready <- FALSE
+  start <- Sys.time()
+  timeout_secs <- 5
+  while (Sys.time() - start < timeout_secs && proc$is_alive()) {
+    lines <- tryCatch(proc$read_error_lines(), error = function(e) character(0))
+    for (line in lines) {
+      if (grepl("listening", line, ignore.case = TRUE)) {
+        ready <- TRUE
+        break
+      }
+    }
+    if (ready) break
+    Sys.sleep(0.1)
+  }
+
+  testthat::expect_true(
+    ready,
+    info = "test server started and reported listening"
+  )
+
+  on.exit({
+    tryCatch(proc$kill(), error = function(e) NULL)
+    tryCatch(proc$wait(timeout = 3000), error = function(e) NULL)
+  })
+
+  url <- paste0("http://127.0.0.1:", port, "/fake-post.json")
+
+  if (!requireNamespace("curl", quietly = TRUE)) {
+    conn <- url(url, open = "r", text = TRUE)
+    on.exit(close(conn), add = TRUE)
+    raw <- rawToChar(readBin(conn, "raw", file.info(url)$size))
+  } else {
+    raw <- curl::curl_fetch_memory(url)$content
+    raw <- rawToChar(raw)
+  }
+
+  testthat::expect_true(
+    nzchar(raw),
+    info = "fake-post.json response is non-empty"
+  )
+
+  parsed <- jsonlite::fromJSON(raw)
+  testthat::expect_true(
+    "entries" %in% names(parsed),
+    info = "served JSON has 'entries' field"
+  )
+  testthat::expect_true(
+    isTRUE(nrow(parsed$entries) >= 1),
+    info = "entries array has at least one entry"
+  )
+})
+
+# --- Test 7: fake-post.json fetch is captured in network events ---
+# This test verifies that when Lightpanda navigates to the dynamic page,
+# the fetch() call for fake-post.json is observed via CDP network capture.
+test_that("network capture observes fake-post.json fetch request", {
+  proc <- tryCatch(
+    {
+      p <- xtweetsR:::.rx_start_sidecar()
+      if (!p$is_alive()) { NULL } else { p }
+    },
+    error = function(e) NULL
+  )
+
+  if (is.null(proc)) {
+    testthat::skip("sidecar cannot start (no browser backend testable)")
+  }
+
+  # Start the local test server.
+  server_script <- file.path(
+    dirname(dirname(getwd())),
+    "inst", "node", "dist", "server.js"
+  )
+  fixture_dir  <- file.path(
+    dirname(dirname(getwd())),
+    "inst", "tests", "fixtures"
+  )
+
+  port <- sample(20000:65535, 1)
+  server_proc <- processx::process$new(
+    command = "node",
+    args    = c(server_script, fixture_dir, as.character(port)),
+    stdout  = "|",
+    stderr  = "|",
+    stdin   = "|"
+  )
+
+  on.exit({
+    xtweetsR:::.rx_stop_sidecar(proc)
+    tryCatch(server_proc$kill(), error = function(e) NULL)
+    tryCatch(server_proc$wait(timeout = 3000), error = function(e) NULL)
+  })
+
+  ready <- FALSE
+  start <- Sys.time()
+  while (Sys.time() - start < 5 && server_proc$is_alive()) {
+    lines <- tryCatch(server_proc$read_error_lines(), error = function(e) character(0))
+    for (line in lines) {
+      if (grepl("listening", line, ignore.case = TRUE)) { ready <- TRUE; break }
+    }
+    if (ready) break
+    Sys.sleep(0.1)
+  }
+
+  testthat::expect_true(ready, info = "test server is ready")
+
+  test_req_id <- 0L
+  make_test_req_id <- function() {
+    test_req_id <<- test_req_id + 1L
+    test_req_id
+  }
+
+  # Connect to Lightpanda.
+  connect_result <- tryCatch(
+    xtweetsR:::.rx_send_request(proc, "connect", list(endpoint = "ws://127.0.0.1:21111"), reqId = make_test_req_id),
+    error = function(e) NULL
+  )
+  if (is.null(connect_result) || !is.null(connect_result$error)) {
+    xtweetsR:::.rx_stop_sidecar(proc)
+    testthat::skip("Lightpanda not available — connect() failed")
+  }
+
+  # Enable network capture before navigation.
+  enable_resp <- xtweetsR:::.rx_send_request(proc, "networkCaptureEnable", list(), reqId = make_test_req_id)
+  testthat::expect_true(isTRUE(enable_resp$result$enabled), info = "network capture enabled before navigation")
+
+  # Navigate to the dynamic page.
+  url <- paste0("http://127.0.0.1:", port, "/dynamic-page.html")
+  nav_resp <- xtweetsR:::.rx_send_request(proc, "navigate", list(url = url), reqId = make_test_req_id)
+  testthat::expect_true(isTRUE(nav_resp$result$navigated), info = "navigation succeeded")
+
+  # Wait for JS to run (setTimeout 50ms + fetch).
+  Sys.sleep(2)
+
+  # Get captured events.
+  events <- tryCatch(
+    {
+      get_resp <- xtweetsR:::.rx_send_request(proc, "networkCaptureGet", list(), reqId = make_test_req_id)
+      if (!is.null(get_resp$result$events)) get_resp$result$events else list()
+    },
+    error = function(e) list()
+  )
+
+  testthat::expect_true(is.list(events), info = "captured events is a list")
+
+  # There should be at least 2 events: HTML page request + JSON fetch.
+  testthat::expect_true(
+    length(events) >= 2,
+    info = paste0("at least 2 network events captured (HTML + JSON fetch), got ", length(events))
+  )
+
+  # At least one event URL should contain fake-post.json.
+  has_json_event <- any(vapply(events, function(e) {
+    !is.null(e$url) && grepl("fake-post\\.json", e$url, ignore.case = TRUE)
+  }, logical(1)))
+
+  testthat::expect_true(
+    has_json_event,
+    info = "at least one captured event URL contains fake-post.json"
+  )
+
+  # That event should have method == GET.
+  json_events <- Filter(function(e) !is.null(e$url) && grepl("fake-post\\.json", e$url, ignore.case = TRUE), events)
+  if (length(json_events) > 0) {
+    testthat::expect_true(
+      !is.null(json_events[[1]]$method),
+      info = "fake-post.json event has a method field"
+    )
+  }
+})

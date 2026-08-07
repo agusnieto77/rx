@@ -1,0 +1,63 @@
+{
+  "entries": [
+    {
+      "post_id": "1800000000000000001",
+      "text": "This is a fake post for local testing. It mimics the structure of an X/Twitter timeline entry.",
+      "author": {
+        "id": "900000000000000001",
+        "username": "testuser_one",
+        "display_name": "Test User One"
+      },
+      "created_at": "2026-08-07T10:00:00.000Z",
+      "metrics": {
+        "reply_count": 2,
+        "repost_count": 5,
+        "like_count": 42,
+        "quote_count": 1,
+        "bookmark_count": 0,
+        "view_count": 1234
+      },
+      "relationships": {
+        "conversation_id": "1800000000000000001",
+        "is_reply": false,
+        "is_repost": false,
+        "is_quote": false
+      },
+      "entities": {
+        "hashtags": ["testing", "fixture"],
+        "mentions": [],
+        "urls": []
+      }
+    },
+    {
+      "post_id": "1800000000000000002",
+      "text": "Another fake post with a reply relationship, used to verify relationship field extraction.",
+      "author": {
+        "id": "900000000000000002",
+        "username": "testuser_two",
+        "display_name": "Test User Two"
+      },
+      "created_at": "2026-08-07T10:05:00.000Z",
+      "metrics": {
+        "reply_count": 0,
+        "repost_count": 0,
+        "like_count": 1,
+        "quote_count": 0,
+        "bookmark_count": 0,
+        "view_count": 10
+      },
+      "relationships": {
+        "conversation_id": "1800000000000000001",
+        "is_reply": true,
+        "is_repost": false,
+        "is_quote": false,
+        "reply_to_post_id": "1800000000000000001"
+      },
+      "entities": {
+        "hashtags": [],
+        "mentions": ["testuser_one"],
+        "urls": ["https://example.com"]
+      }
+    }
+  ]
+}

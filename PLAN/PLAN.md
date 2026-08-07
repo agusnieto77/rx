@@ -368,7 +368,7 @@ Check only:
 
 ---
 
-### Task 22: Add a local JSON network fixture [ ]
+### Task 22: Add a local JSON network fixture [x]
 
 **Goal:** Prove structured network-response extraction.
 

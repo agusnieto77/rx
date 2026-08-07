@@ -50,6 +50,26 @@
         });
         window.dispatchEvent(event);
       }, 50);
+
+      // Fetch a local JSON fixture that contains fake post-like data.
+      // This simulates how X/Twitter loads timeline entries via
+      // XHR/fetch and lets network-capture tools observe the request.
+      fetch("fake-post.json")
+        .then(function (response) {
+          return response.json();
+        })
+        .then(function (data) {
+          var metaEl = document.getElementById("page-meta");
+          if (metaEl) {
+            metaEl.setAttribute(
+              "data-fixture-entries",
+              String((data.entries || []).length)
+            );
+          }
+        })
+        .catch(function () {
+          // Silently ignore — the fixture may not exist in non-test contexts.
+        });
     })();
   </script>
 </body>
