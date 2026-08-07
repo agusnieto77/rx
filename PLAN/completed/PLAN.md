@@ -1528,20 +1528,26 @@ Run:
 
 ---
 
-### Task 77: Final repository cleanup [ ]
+### Task 77: Final repository cleanup [x]
 
 **Goal:** Remove development debris without changing behavior.
 
 **Actions:**
-- Remove obsolete temporary scripts.
-- Remove dead code.
-- Remove unused dependencies.
-- Verify `.gitignore`.
-- Confirm no tokens or credentials are committed.
+- [x] Remove obsolete temporary scripts (`benchmarks/run.sh` — references non-existent `benchmark.ts`; actual harness is `benchmark.js`).
+- [x] Remove dead code (3 task source files from early MVP: `task27-navigate-x.ts`, `task28-open-x-search.ts`, `task29-capture-x-network.ts` — never imported by any other file).
+- [x] No unused dependencies in `Imports` (jsonlite, processx, tibble all used; Suggests deps correctly optional).
+- [x] Verified `.gitignore` covers env, node_modules, dist, tarballs, R artifacts.
+- [x] Confirmed no tokens or credentials are committed (all token/secret references are environment-variable-based configuration).
 
 **Acceptance criteria:**
-- Full regression tests still pass.
-- Git diff contains only intentional project files.
+- [x] Full regression tests still pass (TypeScript: 34/34, compiles cleanly).
+- [x] Git diff contains only 4 intentional deletions (1 obsolete script + 3 dead source files, 1084 lines removed).
+
+**Files removed:**
+- `benchmarks/run.sh` — 39 lines, shell wrapper referencing non-existent `benchmark.ts`
+- `inst/node/src/task27-navigate-x.ts` — 249 lines, early MVP navigation spike
+- `inst/node/src/task28-open-x-search.ts` — 289 lines, early MVP search spike
+- `inst/node/src/task29-capture-x-network.ts` — 507 lines, early MVP network capture spike
 
 ---
 
