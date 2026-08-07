@@ -33,6 +33,12 @@ test_that("parser extracts all fields from x-search-response.json", {
   testthat::expect_true("quote_count" %in% names(result), info = "result has quote_count")
   testthat::expect_true("bookmark_count" %in% names(result), info = "result has bookmark_count")
   testthat::expect_true("view_count" %in% names(result), info = "result has view_count")
+  testthat::expect_true("conversation_id" %in% names(result), info = "result has conversation_id")
+  testthat::expect_true("is_reply" %in% names(result), info = "result has is_reply")
+  testthat::expect_true("is_repost" %in% names(result), info = "result has is_repost")
+  testthat::expect_true("is_quote" %in% names(result), info = "result has is_quote")
+  testthat::expect_true("reply_to_post_id" %in% names(result), info = "result has reply_to_post_id")
+  testthat::expect_true("quoted_post_id" %in% names(result), info = "result has quoted_post_id")
   testthat::expect_true(length(result$post_id) >= 1, info = "at least one post returned")
   testthat::expect_true(length(result$text) >= 1, info = "at least one text returned")
   testthat::expect_equal(
@@ -79,6 +85,30 @@ test_that("parser extracts all fields from x-search-response.json", {
     length(result$post_id), length(result$view_count),
     info = "post_id and view_count have same length"
   )
+  testthat::expect_equal(
+    length(result$post_id), length(result$conversation_id),
+    info = "post_id and conversation_id have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$is_reply),
+    info = "post_id and is_reply have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$is_repost),
+    info = "post_id and is_repost have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$is_quote),
+    info = "post_id and is_quote have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$reply_to_post_id),
+    info = "post_id and reply_to_post_id have same length"
+  )
+  testthat::expect_equal(
+    length(result$post_id), length(result$quoted_post_id),
+    info = "post_id and quoted_post_id have same length"
+  )
 })
 
 # --- Test 2: post_id values are character strings ---
@@ -119,7 +149,8 @@ test_that("extracted post_ids match fixture rest_id values exactly", {
   expected_ids <- c(
     "1900000000000000001",
     "1900000000000000002",
-    "1900000000000000003"
+    "1900000000000000003",
+    "1900000000000000004"
   )
 
   testthat::expect_equal(
@@ -144,7 +175,8 @@ test_that("extracted text values match fixture full_text values exactly", {
   expected_texts <- c(
     "New release of the tidyverse ecosystem is out. Check it out!",
     "Using R to analyze climate data — here is a quick walkthrough of the pipeline.",
-    "Quasiquotation in R is powerful once you understand it. Thread below on when to use !! vs {{"
+    "Quasiquotation in R is powerful once you understand it. Thread below on when to use !! vs {{",
+    "Great thread on quasiquotation! Here is my take on the design trade-offs."
   )
 
   testthat::expect_equal(
@@ -273,12 +305,12 @@ test_that("author fields are extracted correctly from x-search-response.json", {
   )
   testthat::expect_equal(
     result$username,
-    c("rstudio", "rstats_david", "landc"),
+    c("rstudio", "rstats_david", "landc", "hadleywickham"),
     info = "usernames match fixture"
   )
   testthat::expect_equal(
     result$display_name,
-    c("RStudio", "David Robinson", "Lionel Henry"),
+    c("RStudio", "David Robinson", "Lionel Henry", "Hadley Wickham"),
     info = "display names match fixture"
   )
 })
@@ -376,7 +408,8 @@ test_that("created_at values match fixture timestamps", {
     c(
       "Mon Aug 04 14:30:00 +0000 2026",
       "Mon Aug 04 15:00:00 +0000 2026",
-      "Mon Aug 04 15:30:00 +0000 2026"
+      "Mon Aug 04 15:30:00 +0000 2026",
+      "Mon Aug 04 16:00:00 +0000 2026"
     ),
     info = "created_at values match fixture"
   )
@@ -471,45 +504,45 @@ test_that("engagement metrics are extracted correctly from x-search-response.jso
 
   result <- xtweetsR:::.rx_parse_posts(parsed)
 
-  # reply_count: 12, 5, 20
+  # reply_count: 12, 5, 20, 8
   testthat::expect_equal(
     result$reply_count,
-    c(12L, 5L, 20L),
+    c(12L, 5L, 20L, 8L),
     info = "reply_count matches fixture"
   )
 
-  # repost_count (from retweet_count): 45, 8, 30
+  # repost_count (from retweet_count): 45, 8, 30, 15
   testthat::expect_equal(
     result$repost_count,
-    c(45L, 8L, 30L),
+    c(45L, 8L, 30L, 15L),
     info = "repost_count matches fixture"
   )
 
-  # like_count (from favorite_count): 230, 67, 150
+  # like_count (from favorite_count): 230, 67, 150, 92
   testthat::expect_equal(
     result$like_count,
-    c(230L, 67L, 150L),
+    c(230L, 67L, 150L, 92L),
     info = "like_count matches fixture"
   )
 
-  # quote_count: 3, 1, 5
+  # quote_count: 3, 1, 5, 0
   testthat::expect_equal(
     result$quote_count,
-    c(3L, 1L, 5L),
+    c(3L, 1L, 5L, 0L),
     info = "quote_count matches fixture"
   )
 
-  # bookmark_count: 18, 4, 42
+  # bookmark_count: 18, 4, 42, 11
   testthat::expect_equal(
     result$bookmark_count,
-    c(18L, 4L, 42L),
+    c(18L, 4L, 42L, 11L),
     info = "bookmark_count matches fixture"
   )
 
-  # view_count (from views$count): 15420, 4210, 28500
+  # view_count (from views$count): 15420, 4210, 28500, 9800
   testthat::expect_equal(
     result$view_count,
-    c(15420L, 4210L, 28500L),
+    c(15420L, 4210L, 28500L, 9800L),
     info = "view_count matches fixture"
   )
 
@@ -581,8 +614,8 @@ test_that(".rx_extract_view_count returns 0L for missing views", {
   testthat::expect_equal(xtweetsR:::.rx_extract_view_count(list(views = list(count = 999))), 999L, info = "nested count extracted correctly")
 })
 
-# --- Test 18: Empty response returns all twelve empty vectors ---
-test_that("empty response returns all twelve empty vectors", {
+# --- Test 18: Empty response returns all eighteen empty vectors ---
+test_that("empty response returns all eighteen empty vectors", {
   result_null <- xtweetsR:::.rx_parse_posts(NULL)
   testthat::expect_equal(length(result_null$post_id), 0L, info = "NULL returns empty post_id")
   testthat::expect_equal(length(result_null$text), 0L, info = "NULL returns empty text")
@@ -596,4 +629,122 @@ test_that("empty response returns all twelve empty vectors", {
   testthat::expect_equal(length(result_null$quote_count), 0L, info = "NULL returns empty quote_count")
   testthat::expect_equal(length(result_null$bookmark_count), 0L, info = "NULL returns empty bookmark_count")
   testthat::expect_equal(length(result_null$view_count), 0L, info = "NULL returns empty view_count")
+  testthat::expect_equal(length(result_null$conversation_id), 0L, info = "NULL returns empty conversation_id")
+  testthat::expect_equal(length(result_null$is_reply), 0L, info = "NULL returns empty is_reply")
+  testthat::expect_equal(length(result_null$is_repost), 0L, info = "NULL returns empty is_repost")
+  testthat::expect_equal(length(result_null$is_quote), 0L, info = "NULL returns empty is_quote")
+  testthat::expect_equal(length(result_null$reply_to_post_id), 0L, info = "NULL returns empty reply_to_post_id")
+  testthat::expect_equal(length(result_null$quoted_post_id), 0L, info = "NULL returns empty quoted_post_id")
+})
+
+# --- Test 19: Relationship fields extracted correctly from fixture ---
+test_that("relationship fields are extracted correctly from x-search-response.json", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  result <- xtweetsR:::.rx_parse_posts(parsed)
+
+  # conversation_id: present on all 4 tweets
+  testthat::expect_true(all(is.character(result$conversation_id)), info = "conversation_id is character")
+  testthat::expect_equal(
+    result$conversation_id,
+    c("1900000000000000001", "1900000000000000002", "1900000000000000003", "1900000000000000003"),
+    info = "conversation_id matches fixture"
+  )
+
+  # is_reply: only tweet 2 is a reply
+  testthat::expect_true(all(is.logical(result$is_reply)), info = "is_reply is logical")
+  testthat::expect_equal(
+    result$is_reply,
+    c(FALSE, TRUE, FALSE, FALSE),
+    info = "is_reply matches fixture"
+  )
+
+  # is_repost: none are reposts
+  testthat::expect_true(all(is.logical(result$is_repost)), info = "is_repost is logical")
+  testthat::expect_equal(
+    result$is_repost,
+    c(FALSE, FALSE, FALSE, FALSE),
+    info = "is_repost matches fixture"
+  )
+
+  # is_quote: only tweet 4 is a quote
+  testthat::expect_true(all(is.logical(result$is_quote)), info = "is_quote is logical")
+  testthat::expect_equal(
+    result$is_quote,
+    c(FALSE, FALSE, FALSE, TRUE),
+    info = "is_quote matches fixture"
+  )
+
+  # reply_to_post_id: only tweet 2 has one
+  testthat::expect_true(all(is.character(result$reply_to_post_id)), info = "reply_to_post_id is character")
+  testthat::expect_equal(
+    result$reply_to_post_id,
+    c(NA_character_, "1900000000000000001", NA_character_, NA_character_),
+    info = "reply_to_post_id matches fixture"
+  )
+
+  # quoted_post_id: only tweet 4 has one
+  testthat::expect_true(all(is.character(result$quoted_post_id)), info = "quoted_post_id is character")
+  testthat::expect_equal(
+    result$quoted_post_id,
+    c(NA_character_, NA_character_, NA_character_, "1900000000000000003"),
+    info = "quoted_post_id matches fixture"
+  )
+})
+
+# --- Test 20: Missing relationship fields return safe defaults ---
+test_that("missing relationship fields return safe defaults", {
+  # Tweet entry without any relationship data.
+  response_no_relationships <- list(
+    data = list(
+      timeline = list(
+        instructions = list(
+          list(
+            type = "TimelineAddEntries",
+            entries = list(
+              list(
+                entryId = "tweet-500",
+                content = list(
+                  itemContent = list(
+                    tweet_results = list(
+                      result = list(
+                        rest_id = "500",
+                        legacy = list(full_text = "No relationships here")
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+
+  result <- xtweetsR:::.rx_parse_posts(response_no_relationships)
+
+  testthat::expect_equal(length(result$post_id), 1L, info = "post extracted despite missing relationships")
+  testthat::expect_true(all(is.na(result$conversation_id)), info = "conversation_id is NA when missing")
+  testthat::expect_false(all(result$is_reply), info = "is_reply is FALSE when not a reply")
+  testthat::expect_false(all(result$is_repost), info = "is_repost is FALSE when not a repost")
+  testthat::expect_false(all(result$is_quote), info = "is_quote is FALSE when not a quote")
+  testthat::expect_true(all(is.na(result$reply_to_post_id)), info = "reply_to_post_id is NA when not a reply")
+  testthat::expect_true(all(is.na(result$quoted_post_id)), info = "quoted_post_id is NA when not a quote")
+})
+
+# --- Test 21: Helper function .rx_extract_bool handles edge cases ---
+test_that(".rx_extract_bool returns FALSE for invalid input", {
+  testthat::expect_false(xtweetsR:::.rx_extract_bool(NULL, "in_reply_to_status_id_str"), info = "NULL legacy returns FALSE")
+  testthat::expect_false(xtweetsR:::.rx_extract_bool(list(), "in_reply_to_status_id_str"), info = "empty legacy returns FALSE")
+  testthat::expect_false(xtweetsR:::.rx_extract_bool(list(full_text = "hi"), "in_reply_to_status_id_str"), info = "missing field returns FALSE")
+  testthat::expect_false(xtweetsR:::.rx_extract_bool(list(in_reply_to_status_id_str = NA), "in_reply_to_status_id_str"), info = "NA field returns FALSE")
+  testthat::expect_false(xtweetsR:::.rx_extract_bool(list(in_reply_to_status_id_str = NULL), "in_reply_to_status_id_str"), info = "NULL field returns FALSE")
+  testthat::expect_true(xtweetsR:::.rx_extract_bool(list(in_reply_to_status_id_str = "123"), "in_reply_to_status_id_str"), info = "present field returns TRUE")
 })

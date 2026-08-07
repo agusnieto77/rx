@@ -583,7 +583,7 @@ Extract when available:
 
 ---
 
-### Task 35: Extend parser with relationship fields [ ]
+### Task 35: Extend parser with relationship fields [x]
 
 **Goal:** Represent replies and quotes.
 
@@ -597,8 +597,17 @@ Extract when available:
 - quoted_post_id
 
 **Acceptance criteria:**
-- IDs remain character.
-- Unit tests cover at least one missing relationship case.
+- [x] IDs remain character (conversation_id, reply_to_post_id, quoted_post_id).
+- [x] Logical flags (is_reply, is_repost, is_quote).
+- [x] Unit tests cover all relationship types: fixture match (Test 19), missing relationship defaults (Test 20), helper edge cases (Test 21).
+- [x] Existing tests updated: Tests 1-15 now cover 4 tweets instead of 3; Tests 1, 18 now check all 18 fields.
+- [x] New helper `.rx_extract_bool()` for safe boolean extraction.
+- [x] Parser now returns 18 fields instead of 12.
+
+**Files changed:**
+- `R/parser.R` — added 6 relationship field extractions, 1 new helper (`.rx_extract_bool()`), updated return value to 18 fields, updated roxygen docs
+- `inst/tests/fixtures/x-search-response.json` — added 4th tweet (quote tweet by @hadleywickham) to cover is_quote and quoted_post_id paths
+- `tests/testthat/test-parser.R` — added 4 new tests (19-21), updated tests 1/3/4/8/12/15/18 to cover 4 tweets and 18 fields
 
 ---
 

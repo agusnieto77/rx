@@ -143,6 +143,45 @@
                 },
                 "clientEventInfo": { "component": "search", "section": "timeline" }
               }
+            },
+            {
+              "entryId": "tweet-1900000000000000004",
+              "sortIndex": "1900000000000000004",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000004",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMDA0",
+                            "legacy": {
+                              "screen_name": "hadleywickham",
+                              "name": "Hadley Wickham"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Mon Aug 04 16:00:00 +0000 2026",
+                        "full_text": "Great thread on quasiquotation! Here is my take on the design trade-offs.",
+                        "conversation_id_str": "1900000000000000003",
+                        "quoted_status_id_str": "1900000000000000003",
+                        "reply_count": 8,
+                        "retweet_count": 15,
+                        "favorite_count": 92,
+                        "quote_count": 0,
+                        "bookmark_count": 11,
+                        "bookmark_count_info": { "count": "11" },
+                        "views": { "count": "9800" }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "search", "section": "timeline" }
+              }
             }
           ]
         },

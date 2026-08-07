@@ -11,6 +11,7 @@
 # Task 32 scope: add author identity fields (author_id, username, display_name).
 # Task 33 scope: add timestamp (created_at).
 # Task 34 scope: add engagement metrics (reply_count, repost_count, like_count, quote_count, bookmark_count, view_count).
+# Task 35 scope: add relationship fields (conversation_id, is_reply, is_repost, is_quote, reply_to_post_id, quoted_post_id).
 #
 # @name parser
 # @aliases parser
@@ -27,7 +28,7 @@ NULL
 # `jsonlite::fromJSON(..., simplifyVector = FALSE)` on the timeline JSON)
 # and walks the instruction/entry tree to find tweet entries.
 #'
-#' Returns a list with twelve vectors:
+#' Returns a list with eighteen vectors:
 #'   - `post_id` — the tweet `rest_id`
 #'   - `text` — the tweet `full_text`
 #'   - `author_id` — the user `id` from core.user_results.result.id
@@ -40,6 +41,12 @@ NULL
 #'   - `quote_count` — integer count of quotes
 #'   - `bookmark_count` — integer count of bookmarks
 #'   - `view_count` — integer count of views (from `views.count`)
+#'   - `conversation_id` — the tweet `conversation_id_str` (character, NA when unavailable)
+#'   - `is_reply` — logical, TRUE when `in_reply_to_status_id_str` is present
+#'   - `is_repost` — logical, TRUE when `retweeted_status_id_str` is present
+#'   - `is_quote` — logical, TRUE when `quoted_status_id_str` is present
+#'   - `reply_to_post_id` — the tweet `in_reply_to_status_id_str` (character, NA when not a reply)
+#'   - `quoted_post_id` — the tweet `quoted_status_id_str` (character, NA when not a quote)
 #'
 #' Only entries that contain a valid `rest_id` are included.
 #' Entries that lack the expected nesting (e.g. cursor entries,
@@ -58,6 +65,18 @@ NULL
 #'     \item `username` — character vector of usernames (NA when unavailable)
 #'     \item `display_name` — character vector of display names (NA when unavailable)
 #'     \item `created_at` — character vector of raw timestamp strings (NA when unavailable)
+#'     \item `reply_count` — integer count of replies
+#'     \item `repost_count` — integer count of reposts
+#'     \item `like_count` — integer count of likes
+#'     \item `quote_count` — integer count of quotes
+#'     \item `bookmark_count` — integer count of bookmarks
+#'     \item `view_count` — integer count of views
+#'     \item `conversation_id` — character vector of conversation IDs (NA when unavailable)
+#'     \item `is_reply` — logical vector, TRUE when the post is a reply
+#'     \item `is_repost` — logical vector, TRUE when the post is a repost
+#'     \item `is_quote` — logical vector, TRUE when the post is a quote
+#'     \item `reply_to_post_id` — character vector of the post being replied to (NA when not a reply)
+#'     \item `quoted_post_id` — character vector of the quoted post ID (NA when not a quote)
 #'   }
 #'
 #' @noRd
@@ -70,7 +89,10 @@ NULL
       display_name = character(0), created_at = character(0),
       reply_count = integer(0), repost_count = integer(0),
       like_count = integer(0), quote_count = integer(0),
-      bookmark_count = integer(0), view_count = integer(0)
+      bookmark_count = integer(0), view_count = integer(0),
+      conversation_id = character(0),
+      is_reply = logical(0), is_repost = logical(0), is_quote = logical(0),
+      reply_to_post_id = character(0), quoted_post_id = character(0)
     ))
   }
 
@@ -83,7 +105,10 @@ NULL
       display_name = character(0), created_at = character(0),
       reply_count = integer(0), repost_count = integer(0),
       like_count = integer(0), quote_count = integer(0),
-      bookmark_count = integer(0), view_count = integer(0)
+      bookmark_count = integer(0), view_count = integer(0),
+      conversation_id = character(0),
+      is_reply = logical(0), is_repost = logical(0), is_quote = logical(0),
+      reply_to_post_id = character(0), quoted_post_id = character(0)
     ))
   }
 
@@ -101,6 +126,12 @@ NULL
   quote_count <- integer(0)
   bookmark_count <- integer(0)
   view_count <- integer(0)
+  conversation_ids <- character(0)
+  is_reply <- logical(0)
+  is_repost <- logical(0)
+  is_quote <- logical(0)
+  reply_to_post_ids <- character(0)
+  quoted_post_ids <- character(0)
 
   for (inst in instructions) {
     # Only process TimelineAddEntries instructions.
@@ -157,6 +188,35 @@ NULL
       bookmark_count <- c(bookmark_count, .rx_extract_int(legacy, "bookmark_count"))
       view_count <- c(view_count, .rx_extract_view_count(legacy))
 
+      # Extract relationship fields from legacy.
+      conversation_ids <- c(conversation_ids,
+        if (is.list(legacy) && !is.null(legacy$conversation_id_str)) {
+          val <- legacy$conversation_id_str
+          if (is.null(val) || anyNA(val)) NA_character_ else as.character(val)
+        } else {
+          NA_character_
+        }
+      )
+      is_reply <- c(is_reply, .rx_extract_bool(legacy, "in_reply_to_status_id_str"))
+      is_repost <- c(is_repost, .rx_extract_bool(legacy, "retweeted_status_id_str"))
+      is_quote <- c(is_quote, .rx_extract_bool(legacy, "quoted_status_id_str"))
+      reply_to_post_ids <- c(reply_to_post_ids,
+        if (is.list(legacy) && !is.null(legacy$in_reply_to_status_id_str)) {
+          val <- legacy$in_reply_to_status_id_str
+          if (is.null(val) || anyNA(val)) NA_character_ else as.character(val)
+        } else {
+          NA_character_
+        }
+      )
+      quoted_post_ids <- c(quoted_post_ids,
+        if (is.list(legacy) && !is.null(legacy$quoted_status_id_str)) {
+          val <- legacy$quoted_status_id_str
+          if (is.null(val) || anyNA(val)) NA_character_ else as.character(val)
+        } else {
+          NA_character_
+        }
+      )
+
       post_ids <- c(post_ids, rest_id)
       texts <- c(texts, as.character(full_text))
       author_ids <- c(author_ids, author_id_str)
@@ -178,7 +238,13 @@ NULL
     like_count = like_count,
     quote_count = quote_count,
     bookmark_count = bookmark_count,
-    view_count = view_count
+    view_count = view_count,
+    conversation_id = conversation_ids,
+    is_reply = is_reply,
+    is_repost = is_repost,
+    is_quote = is_quote,
+    reply_to_post_id = reply_to_post_ids,
+    quoted_post_id = quoted_post_ids
   )
 }
 
@@ -213,6 +279,21 @@ NULL
   count <- views$count
   if (is.null(count) || anyNA(count)) return(0L)
   as.integer(count)
+}
+
+#' Extract a boolean flag from legacy data.
+#'
+#' Returns TRUE when the named field exists, is not NULL, and is not NA.
+#' Returns FALSE otherwise (missing field, NULL, or NA).
+#'
+#' @param legacy The tweet$legacy list.
+#' @param field The field name to check (e.g. "in_reply_to_status_id_str").
+#' @return A single logical (FALSE when the field is missing or NA).
+#' @noRd
+.rx_extract_bool <- function(legacy, field) {
+  if (!is.list(legacy)) return(FALSE)
+  val <- legacy[[field]]
+  isTRUE(val)
 }
 
 #' Find the tweet result object inside an entry.
