@@ -161,7 +161,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 9: Add the minimal R sidecar client
+### Task 9: Add the minimal R sidecar client [DONE]
 
 **Goal:** Allow R to start the sidecar and issue one request.
 

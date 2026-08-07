@@ -11,12 +11,21 @@
 #'
 #' @return A `processx::process` object representing the running sidecar.
 #' @noRd
-.rx_start_sidecar <- function() {
-  sidecar_dir <- system.file("node", package = "xtweetsR")
-
-  # If not installed, look relative to package source.
-  if (sidecar_dir === "" || !file.exists(file.path(sidecar_dir, "dist", "index.js"))) {
-    sidecar_dir <- file.path(.libPaths()[1], "xtweetsR", "node")
+.rx_start_sidecar <- function(sidecar_path = NULL) {
+  # Allow override for tests (e.g., pointing to source tree).
+  if (!is.null(sidecar_path) && file.exists(file.path(sidecar_path, "dist", "index.js"))) {
+    sidecar_dir <- sidecar_path
+  } else {
+    sidecar_dir <- system.file("node", package = "xtweetsR")
+    if (sidecar_dir == "" || !file.exists(file.path(sidecar_dir, "dist", "index.js"))) {
+      # Look relative to the running R session's working directory
+      # (useful during development before `R CMD INSTALL`).
+      pkg_root <- normalizePath(".", mustWork = FALSE)
+      dev_path <- file.path(pkg_root, "inst", "node")
+      if (file.exists(file.path(dev_path, "dist", "index.js"))) {
+        sidecar_dir <- dev_path
+      }
+    }
   }
 
   js_path <- file.path(sidecar_dir, "dist", "index.js")
