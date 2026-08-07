@@ -1,0 +1,195 @@
+{
+  "data": {
+    "timeline": {
+      "instructions": [
+        {
+          "type": "TimelineAddEntries",
+          "entries": [
+            {
+              "entryId": "tweet-1900000000000000100",
+              "sortIndex": "1900000000000000100",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000100",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMTAw",
+                            "legacy": {
+                              "screen_name": "rstudio",
+                              "name": "RStudio"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Tue Aug 05 10:00:00 +0000 2026",
+                        "full_text": "We just released a new R package for working with browser automation. Stay tuned for demos!",
+                        "conversation_id_str": "1900000000000000100",
+                        "reply_count": 3,
+                        "retweet_count": 20,
+                        "favorite_count": 95,
+                        "quote_count": 2,
+                        "bookmark_count": 12,
+                        "views": { "count": "8500" },
+                        "entities": {
+                          "hashtags": [
+                            { "text": "RStats" },
+                            { "text": "browserautomation" }
+                          ],
+                          "user_mentions": [],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "permalink", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000101",
+              "sortIndex": "1900000000000000101",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000101",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMTAx",
+                            "legacy": {
+                              "screen_name": "hadleywickham",
+                              "name": "Hadley Wickham"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Tue Aug 05 10:30:00 +0000 2026",
+                        "full_text": "This looks fantastic! Can't wait to try it with our data pipelines.",
+                        "conversation_id_str": "1900000000000000100",
+                        "in_reply_to_status_id_str": "1900000000000000100",
+                        "reply_count": 0,
+                        "retweet_count": 1,
+                        "favorite_count": 15,
+                        "quote_count": 0,
+                        "bookmark_count": 0,
+                        "views": { "count": "2100" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [
+                            { "screen_name": "rstudio", "name": "RStudio", "id_str": "910000000000000100" }
+                          ],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "permalink", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000102",
+              "sortIndex": "1900000000000000102",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000102",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMTAy",
+                            "legacy": {
+                              "screen_name": "rstats_david",
+                              "name": "David Robinson"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Tue Aug 05 11:00:00 +0000 2026",
+                        "full_text": "Finally someone is solving this properly. The network-first approach is the right way to go.",
+                        "conversation_id_str": "1900000000000000100",
+                        "in_reply_to_status_id_str": "1900000000000000100",
+                        "reply_count": 1,
+                        "retweet_count": 3,
+                        "favorite_count": 22,
+                        "quote_count": 0,
+                        "bookmark_count": 2,
+                        "views": { "count": "1800" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [
+                            { "screen_name": "rstudio", "name": "RStudio", "id_str": "910000000000000100" }
+                          ],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "permalink", "section": "timeline" }
+              }
+            },
+            {
+              "entryId": "tweet-1900000000000000103",
+              "sortIndex": "1900000000000000103",
+              "content": {
+                "itemContent": {
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1900000000000000103",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "id": "VXNlcjo5MTAwMDAwMDAwMDAwMDAwMTAz",
+                            "legacy": {
+                              "screen_name": "r-bloggers",
+                              "name": "R-bloggers"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "created_at": "Tue Aug 05 12:00:00 +0000 2026",
+                        "full_text": "@rstudio @hadleywickham @rstats_david Great thread! I'll write a blog post about this.",
+                        "conversation_id_str": "1900000000000000100",
+                        "in_reply_to_status_id_str": "1900000000000000101",
+                        "reply_count": 0,
+                        "retweet_count": 0,
+                        "favorite_count": 5,
+                        "quote_count": 0,
+                        "bookmark_count": 1,
+                        "views": { "count": "950" },
+                        "entities": {
+                          "hashtags": [],
+                          "user_mentions": [
+                            { "screen_name": "rstudio", "name": "RStudio", "id_str": "910000000000000100" },
+                            { "screen_name": "hadleywickham", "name": "Hadley Wickham", "id_str": "910000000000000101" },
+                            { "screen_name": "rstats_david", "name": "David Robinson", "id_str": "910000000000000102" }
+                          ],
+                          "urls": []
+                        }
+                      }
+                    }
+                  }
+                },
+                "clientEventInfo": { "component": "permalink", "section": "timeline" }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

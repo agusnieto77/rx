@@ -1604,9 +1604,24 @@ Add `lang` handling with unit tests.
 
 Add `latest` and `top` where technically supported.
 
-### Iteration 82: Add thread extraction [ ]
+### Iteration 82: Add thread extraction [x]
 
 Implement `x_thread()` by reusing the canonical parser.
+
+**Acceptance criteria:**
+- [x] `x_thread()` added to `R/search.R` — navigates to post URL, captures network events, extracts all thread posts (parent + replies) via the same parse → normalize → deduplicate pipeline as `x_search()` and `x_post()`.
+- [x] `x_thread()` exported in `NAMESPACE`.
+- [x] Thread fixture created at `inst/tests/fixtures/x-thread-response.json` (4 posts: 1 parent + 3 replies, all sharing `conversation_id`).
+- [x] 20 tests in `tests/testthat/test-thread.R` covering: input validation (4 tests), URL normalization (3 tests), navigation failure (1 test), fixture integration (4 tests), empty/unparseable response (3 tests), deduplication (1 test), provenance (2 tests), edge cases (2 tests).
+- [x] TypeScript compiles cleanly (34/34 tests pass).
+
+**Files created:**
+- `inst/tests/fixtures/x-thread-response.json` — thread fixture with parent tweet + 3 replies (4.8 KB)
+- `tests/testthat/test-thread.R` — 20 tests for `x_thread()`
+
+**Files changed:**
+- `R/search.R` — added `x_thread()` function (~90 lines) after `x_post()`
+- `NAMESPACE` — added `export(x_thread)`
 
 ### Iteration 83: Add replies extraction [ ]
 
