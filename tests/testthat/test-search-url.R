@@ -465,3 +465,150 @@ test_that("invalid lang throws in user timeline URL", {
   expect_error(.rx_construct_user_timeline_url("rstudio", lang = "english"), "valid language code")
   expect_error(.rx_construct_user_timeline_url("rstudio", lang = NA_character_), "must be a single character")
 })
+
+# ===================================================================
+# Search mode filter (Iteration 81)
+# ===================================================================
+
+test_that(".rx_build_search_mode_filter returns NULL when mode is NULL", {
+  expect_null(.rx_build_search_mode_filter())
+  expect_null(.rx_build_search_mode_filter(mode = NULL))
+})
+
+test_that(".rx_build_search_mode_filter with 'latest'", {
+  expect_equal(.rx_build_search_mode_filter("latest"), "f=live")
+})
+
+test_that(".rx_build_search_mode_filter with 'top'", {
+  expect_equal(.rx_build_search_mode_filter("top"), "f=top")
+})
+
+test_that(".rx_build_search_mode_filter is case-insensitive", {
+  expect_equal(.rx_build_search_mode_filter("LATEST"), "f=live")
+  expect_equal(.rx_build_search_mode_filter("TOP"), "f=top")
+  expect_equal(.rx_build_search_mode_filter("Latest"), "f=live")
+  expect_equal(.rx_build_search_mode_filter("Top"), "f=top")
+})
+
+test_that(".rx_build_search_mode_filter trims whitespace", {
+  expect_equal(.rx_build_search_mode_filter("  latest  "), "f=live")
+  expect_equal(.rx_build_search_mode_filter("  top  "), "f=top")
+})
+
+test_that(".rx_build_search_mode_filter rejects invalid values", {
+  expect_error(.rx_build_search_mode_filter("recent"), "must be 'latest' or 'top'")
+  expect_error(.rx_build_search_mode_filter("realtime"), "must be 'latest' or 'top'")
+  expect_error(.rx_build_search_mode_filter("default"), "must be 'latest' or 'top'")
+})
+
+test_that(".rx_build_search_mode_filter rejects NA and non-character", {
+  expect_error(.rx_build_search_mode_filter(mode = NA_character_), "must be 'latest', 'top', or NULL")
+  expect_error(.rx_build_search_mode_filter(mode = 123L), "must be 'latest', 'top', or NULL")
+})
+
+test_that(".rx_build_search_mode_filter rejects empty string", {
+  expect_error(.rx_build_search_mode_filter(mode = ""), "must be 'latest', 'top', or NULL")
+})
+
+test_that(".rx_build_search_mode_filter rejects multi-element vector", {
+  expect_error(.rx_build_search_mode_filter(mode = c("latest", "top")), "must be 'latest', 'top', or NULL")
+})
+
+# -- search URL with mode ------------------------------------------------------
+
+test_that("mode 'latest' appends f=live to search URL", {
+  url <- .rx_construct_search_url("r programming", mode = "latest")
+  expect_true(grepl("f%3Dlive", url, ignore.case = TRUE))
+})
+
+test_that("mode 'top' appends f=top to search URL", {
+  url <- .rx_construct_search_url("r programming", mode = "top")
+  expect_true(grepl("f%3Dtop", url, ignore.case = TRUE))
+})
+
+test_that("mode NULL does not append f=", {
+  url <- .rx_construct_search_url("test", mode = NULL)
+  expect_false(grepl("f%3D", url, ignore.case = TRUE))
+})
+
+test_that("mode with from_user", {
+  url <- .rx_construct_search_url("r stats", from_user = "rstudio", mode = "latest")
+  expect_true(grepl("from%3Arstudio", url, ignore.case = TRUE))
+  expect_true(grepl("f%3Dlive", url, ignore.case = TRUE))
+})
+
+test_that("mode with date range", {
+  url <- .rx_construct_search_url("climate", since = "2024-01-01", mode = "top")
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+  expect_true(grepl("f%3Dtop", url, ignore.case = TRUE))
+})
+
+test_that("mode with lang", {
+  url <- .rx_construct_search_url("test", lang = "en", mode = "latest")
+  expect_true(grepl("lang%3Aen", url, ignore.case = TRUE))
+  expect_true(grepl("f%3Dlive", url, ignore.case = TRUE))
+})
+
+test_that("all params together (from_user, date range, lang, mode, filter)", {
+  url <- .rx_construct_search_url(
+    "r language",
+    from_user = "rstudio",
+    since = "2024-01-01",
+    until = "2024-12-31",
+    lang = "en",
+    mode = "latest",
+    filter = "result_type:recent"
+  )
+  expect_true(grepl("from%3Arstudio", url, ignore.case = TRUE))
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+  expect_true(grepl("until%3A2024-12-31", url, ignore.case = TRUE))
+  expect_true(grepl("lang%3Aen", url, ignore.case = TRUE))
+  expect_true(grepl("f%3Dlive", url, ignore.case = TRUE))
+  expect_true(grepl("result_type%3Arecent", url, ignore.case = TRUE))
+})
+
+test_that("invalid mode throws in search URL", {
+  expect_error(.rx_construct_search_url("test", mode = "recent"), "must be 'latest' or 'top'")
+  expect_error(.rx_construct_search_url("test", mode = NA_character_), "must be 'latest', 'top', or NULL")
+})
+
+# -- user timeline URL with mode -----------------------------------------------
+
+test_that("mode 'latest' appends to user timeline URL", {
+  url <- .rx_construct_user_timeline_url("rstudio", mode = "latest")
+  expect_true(grepl("f%3Dlive", url, ignore.case = TRUE))
+  expect_true(grepl("^https://x.com/rstudio\\?", url))
+})
+
+test_that("mode 'top' appends to user timeline URL", {
+  url <- .rx_construct_user_timeline_url("hadley", mode = "top")
+  expect_true(grepl("f%3Dtop", url, ignore.case = TRUE))
+})
+
+test_that("mode combined with path", {
+  url <- .rx_construct_user_timeline_url("rstudio", path = "media", mode = "latest")
+  expect_true(grepl("https://x.com/rstudio/media\\?", url))
+  expect_true(grepl("f%3Dlive", url, ignore.case = TRUE))
+})
+
+test_that("mode combined with date range", {
+  url <- .rx_construct_user_timeline_url("rstudio", since = "2024-01-01", mode = "top")
+  expect_true(grepl("since%3A2024-01-01", url, ignore.case = TRUE))
+  expect_true(grepl("f%3Dtop", url, ignore.case = TRUE))
+})
+
+test_that("mode combined with raw filter", {
+  url <- .rx_construct_user_timeline_url("rstudio", mode = "latest", filter = "tagged_media=true")
+  expect_true(grepl("f%3Dlive", url, ignore.case = TRUE))
+  expect_true(grepl("tagged_media", url, ignore.case = TRUE))
+})
+
+test_that("mode NULL gives no f= in user timeline URL", {
+  url <- .rx_construct_user_timeline_url("rstudio", mode = NULL)
+  expect_false(grepl("f%3D", url, ignore.case = TRUE))
+})
+
+test_that("invalid mode throws in user timeline URL", {
+  expect_error(.rx_construct_user_timeline_url("rstudio", mode = "recent"), "must be 'latest' or 'top'")
+  expect_error(.rx_construct_user_timeline_url("rstudio", mode = NA_character_), "must be 'latest', 'top', or NULL")
+})

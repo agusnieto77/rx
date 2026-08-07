@@ -121,6 +121,42 @@ NULL
   paste0("lang:", code)
 }
 
+#' Build an X search mode filter.
+#'
+#' Maps a user-friendly mode name to the X search-mode query parameter value.
+#' X uses `f=live` for real-time (latest) results and `f=top` for
+#' algorithmically-top results (the default).
+#'
+#' @param mode Character string: `"latest"` or `"top"`.  When `NULL`,
+#'   returns `NULL` (no mode filter appended).
+#'
+#' @return A character string such as `"f=live"` or `"f=top"`, or `NULL`.
+#'
+#' @examples
+#'   # Internal use only — not exported.
+#'   .rx_build_search_mode_filter("latest")
+#'   .rx_build_search_mode_filter("top")
+#'   .rx_build_search_mode_filter()
+#'
+#' @noRd
+.rx_build_search_mode_filter <- function(mode = NULL) {
+  if (is.null(mode)) {
+    return(NULL)
+  }
+  if (!is.character(mode) || length(mode) != 1L || anyNA(mode)) {
+    stop("mode must be 'latest', 'top', or NULL.", call. = FALSE)
+  }
+  mode <- tolower(trimws(mode))
+  if (!nzchar(mode)) {
+    stop("mode must be 'latest', 'top', or NULL.", call. = FALSE)
+  }
+  switch(mode,
+    latest = "f=live",
+    top    = "f=top",
+    stop("mode must be 'latest' or 'top'.", call. = FALSE)
+  )
+}
+
 #' Construct an X search URL from a query string.
 #'
 #' Takes a search query and returns a properly URL-encoded X search URL.
@@ -137,6 +173,9 @@ NULL
 #' @param lang Optional character string with an ISO 639-1 language code
 #'   (e.g. `"en"`, `"es"`, `"ja"`).  When provided, appends
 #'   `lang:<code>` to the query before encoding.
+#' @param mode Optional character string: `"latest"` or `"top"`.  When
+#'   provided, appends `f=live` (latest) or `f=top` (top) as a query
+#'   parameter to select the X/Twitter search mode.
 #' @param filter Optional character string. Raw filter appended after the
 #'   query (e.g. `"result_type:recent"`). The filter is
 #'   URL-encoded via `URLencode(raw, reserved=TRUE)`.
@@ -149,9 +188,10 @@ NULL
 #'   .rx_construct_search_url("climate change", from_user = "alice")
 #'   .rx_construct_search_url("AI", since = "2024-01-01", until = "2024-12-31")
 #'   .rx_construct_search_url("hello", lang = "es")
+#'   .rx_construct_search_url("hello", mode = "latest")
 #'
 #' @noRd
-.rx_construct_search_url <- function(query, from_user = NULL, since = NULL, until = NULL, lang = NULL, filter = NULL) {
+.rx_construct_search_url <- function(query, from_user = NULL, since = NULL, until = NULL, lang = NULL, mode = NULL, filter = NULL) {
   # Use trimws so whitespace-only strings are rejected (nzchar("  ") is TRUE).
   if (!is.character(query) || length(query) != 1L || anyNA(query) || !nzchar(trimws(query))) {
     stop("query must be a single non-empty character string.", call. = FALSE)
@@ -182,6 +222,12 @@ NULL
   lang_filter <- .rx_build_language_filter(lang = lang)
   if (!is.null(lang_filter)) {
     raw <- paste0(raw, " ", lang_filter)
+  }
+
+  # Append search mode (latest/top).
+  mode_filter <- .rx_build_search_mode_filter(mode = mode)
+  if (!is.null(mode_filter)) {
+    raw <- paste0(raw, " ", mode_filter)
   }
 
   # Append an arbitrary filter (caller is responsible for valid syntax).
@@ -316,6 +362,9 @@ NULL
 #' @param lang Optional character string with an ISO 639-1 language code
 #'   (e.g. `"en"`, `"es"`, `"ja"`).  When provided, appends
 #'   `lang:<code>` to the timeline query filter.
+#' @param mode Optional character string: `"latest"` or `"top"`.  When
+#'   provided, appends `f=live` (latest) or `f=top` (top) as a query
+#'   parameter to select the search mode.
 #' @param filter Optional character string. Raw filter appended as a
 #'   query parameter (e.g. `"tagged_media=true"`). The filter is
 #'   URL-encoded via `URLencode(raw, reserved=TRUE)`.
@@ -329,9 +378,10 @@ NULL
 #'   .rx_construct_user_timeline_url("rstudio", path = "following")
 #'   .rx_construct_user_timeline_url("rstudio", since = "2024-01-01")
 #'   .rx_construct_user_timeline_url("rstudio", lang = "en")
+#'   .rx_construct_user_timeline_url("rstudio", mode = "latest")
 #'
 #' @noRd
-.rx_construct_user_timeline_url <- function(username, path = NULL, since = NULL, until = NULL, lang = NULL, filter = NULL) {
+.rx_construct_user_timeline_url <- function(username, path = NULL, since = NULL, until = NULL, lang = NULL, mode = NULL, filter = NULL) {
   # Validate username.
   if (!is.character(username) || length(username) != 1L || anyNA(username) || !nzchar(trimws(username))) {
     stop("username must be a single non-empty character string.", call. = FALSE)
@@ -351,10 +401,11 @@ NULL
     url <- paste0(url, "/", trimws(path))
   }
 
-  # Build combined query filter from date range + language + optional raw filter.
+  # Build combined query filter from date range + language + mode + optional raw filter.
   date_filter <- .rx_build_date_range_filter(since = since, until = until)
   lang_filter <- .rx_build_language_filter(lang = lang)
-  combined_parts <- c(date_filter, lang_filter, filter)
+  mode_filter <- .rx_build_search_mode_filter(mode = mode)
+  combined_parts <- c(date_filter, lang_filter, mode_filter, filter)
   combined_parts <- combined_parts[!is.na(combined_parts) & nzchar(combined_parts)]
 
   if (length(combined_parts) > 0L) {

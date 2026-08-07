@@ -1600,7 +1600,7 @@ Add `since` and `until` query helpers with unit tests.
 
 Add `lang` handling with unit tests.
 
-### Iteration 81: Add search mode [ ]
+### Iteration 81: Add search mode [x]
 
 Add `latest` and `top` where technically supported.
 

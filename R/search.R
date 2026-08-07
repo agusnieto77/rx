@@ -262,6 +262,9 @@ print.rx_collection_provenance <- function(x, ...) {
 #'   (e.g. `"en"`, `"es"`, `"ja"`).  When provided, restricts results
 #'   to posts written in that language.  Passed to the X search as
 #'   `lang:<code>`.
+#' @param mode Optional character string: `"latest"` or `"top"`.
+#'   When provided, sets the X search mode to real-time (latest) or
+#'   algorithmically-top (top).  Passed as `f=live` or `f=top`.
 #'
 #' @return A tibble with the canonical post schema (26 columns) containing
 #'   posts found during the search. Returns a zero-row tibble when no
@@ -281,7 +284,7 @@ print.rx_collection_provenance <- function(x, ...) {
 #' @export
 x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 5L,
                      resume = FALSE, checkpoint_path = NULL, jsonl_path = NULL,
-                     quiet = FALSE, since = NULL, until = NULL, lang = NULL) {
+                     quiet = FALSE, since = NULL, until = NULL, lang = NULL, mode = NULL) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -361,6 +364,20 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     }
   }
 
+  # Validate mode.
+  if (!is.null(mode)) {
+    if (!is.character(mode) || length(mode) != 1L || anyNA(mode)) {
+      stop("mode must be 'latest', 'top', or NULL.", call. = FALSE)
+    }
+    mode <- tolower(trimws(mode))
+    if (!nzchar(mode)) {
+      stop("mode must be 'latest', 'top', or NULL.", call. = FALSE)
+    }
+    if (!mode %in% c("latest", "top")) {
+      stop("mode must be 'latest' or 'top'.", call. = FALSE)
+    }
+  }
+
   backend <- session$backend
 
   # 1b. Resume handling (Task 49).
@@ -404,7 +421,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   )
 
   # 3. Construct search URL and navigate.
-  url <- .rx_construct_search_url(query, since = since, until = until, lang = lang)
+  url <- .rx_construct_search_url(query, since = since, until = until, lang = lang, mode = mode)
 
   nav_result <- backend$navigate(url)
   if (is.null(nav_result$status) || nav_result$status == "error") {
@@ -1312,6 +1329,9 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
 #' @param lang Optional character string with an ISO 639-1 language code
 #'   (e.g. `"en"`, `"es"`, `"ja"`).  When provided, restricts results
 #'   to posts written in that language.
+#' @param mode Optional character string: `"latest"` or `"top"`.
+#'   When provided, sets the X search mode to real-time (latest) or
+#'   algorithmically-top (top).  Passed as `f=live` or `f=top`.
 #'
 #' @return A tibble with the canonical post schema (26 columns) containing
 #'   posts found on the user's timeline. Returns a zero-row tibble when
@@ -1329,7 +1349,7 @@ x_post <- function(session, post_id, limit = 1L, quiet = FALSE) {
 x_user_posts <- function(session, username, limit = NULL, path = NULL,
                          scroll = TRUE, max_scrolls = 5L,
                          resume = FALSE, checkpoint_path = NULL, jsonl_path = NULL,
-                         quiet = FALSE, since = NULL, until = NULL, lang = NULL) {
+                         quiet = FALSE, since = NULL, until = NULL, lang = NULL, mode = NULL) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -1409,6 +1429,20 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     }
   }
 
+  # Validate mode.
+  if (!is.null(mode)) {
+    if (!is.character(mode) || length(mode) != 1L || anyNA(mode)) {
+      stop("mode must be 'latest', 'top', or NULL.", call. = FALSE)
+    }
+    mode <- tolower(trimws(mode))
+    if (!nzchar(mode)) {
+      stop("mode must be 'latest', 'top', or NULL.", call. = FALSE)
+    }
+    if (!mode %in% c("latest", "top")) {
+      stop("mode must be 'latest' or 'top'.", call. = FALSE)
+    }
+  }
+
   backend <- session$backend
 
   # 1b. Resume handling (same pattern as x_search).
@@ -1450,7 +1484,7 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
   )
 
   # 3. Construct user timeline URL and navigate.
-  url <- .rx_construct_user_timeline_url(username, path = path, since = since, until = until, lang = lang)
+  url <- .rx_construct_user_timeline_url(username, path = path, since = since, until = until, lang = lang, mode = mode)
 
   nav_result <- backend$navigate(url)
   if (is.null(nav_result$status) || nav_result$status == "error") {
