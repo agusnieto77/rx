@@ -10,6 +10,7 @@
 // Log:      written to stderr, never to stdout.
 
 import { createInterface } from "readline";
+import { DefaultCdpConnection } from "./browser/connection.js";
 
 const VERSION = "0.1.0";
 
@@ -53,6 +54,51 @@ function log(level: string, ...args: unknown[]): void {
     JSON.stringify({ type: level, ts: new Date().toISOString(), args }) +
       "\n"
   );
+}
+
+// ── CDP connection state ─────────────────────────────────────────────
+
+let cdpConnection: DefaultCdpConnection | null = null;
+let cdpEndpointUrl: string | null = null;
+
+// ── connect handler ──────────────────────────────────────────────────
+
+function handleConnect(id: unknown, params?: unknown): void {
+  if (cdpConnection !== null && cdpConnection.isConnected) {
+    respond(id, { connected: true, endpoint: cdpEndpointUrl ?? "unknown" });
+    log("info", "already connected to CDP");
+    return;
+  }
+
+  let endpointUrl: string | undefined;
+  if (typeof params === "object" && params !== null) {
+    const p = params as Record<string, unknown>;
+    if (typeof p.endpoint === "string") {
+      endpointUrl = p.endpoint;
+    }
+  }
+
+  if (!endpointUrl) {
+    // Fall back to default Lightpanda endpoint.
+    endpointUrl = process.env.LPD_ENDPOINT ?? "ws://127.0.0.1:21111";
+  }
+
+  cdpConnection = new DefaultCdpConnection();
+
+  cdpConnection
+    .connect(endpointUrl)
+    .then(() => {
+      cdpEndpointUrl = endpointUrl;
+      respond(id, { connected: true, endpoint: endpointUrl });
+      log("info", "CDP connected", endpointUrl);
+    })
+    .catch((err: Error) => {
+      // Connection failed — clean up and return structured error.
+      cdpConnection = null;
+      cdpEndpointUrl = null;
+      respondError(id, "LPD_CONNECTION_ERROR", `Failed to connect to CDP endpoint: ${err.message}`);
+      log("error", "CDP connection failed", endpointUrl, err.message);
+    });
 }
 
 // ── ping handler ─────────────────────────────────────────────────────
@@ -107,6 +153,9 @@ async function main(): Promise<void> {
     switch (method) {
       case "ping":
         handlePing(id);
+        break;
+      case "connect":
+        handleConnect(id, req.params);
         break;
       default:
         respondError(id, "UNKNOWN_METHOD", `Method "${method}" is not implemented`);

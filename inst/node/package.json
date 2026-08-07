@@ -10,7 +10,11 @@
     "test": "node --test dist/**/*.test.js"
   },
   "devDependencies": {
-    "typescript": "^5.8.0",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.8.0"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
   }
 }

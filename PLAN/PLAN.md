@@ -231,7 +231,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 13: Implement Lightpanda connection in the sidecar
+### Task 13: Implement Lightpanda connection in the sidecar [DONE]
 
 **Goal:** Connect the sidecar to an already-running Lightpanda CDP endpoint.
 

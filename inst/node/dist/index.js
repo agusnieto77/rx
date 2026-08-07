@@ -9,6 +9,7 @@
 // Error:    { "id": <same>, "error": { "code": string, "message": string } }
 // Log:      written to stderr, never to stdout.
 import { createInterface } from "readline";
+import { DefaultCdpConnection } from "./browser/connection.js";
 const VERSION = "0.1.0";
 // ── helpers ──────────────────────────────────────────────────────────
 function respond(id, result) {
@@ -22,6 +23,43 @@ function respondError(id, code, message) {
 function log(level, ...args) {
     process.stderr.write(JSON.stringify({ type: level, ts: new Date().toISOString(), args }) +
         "\n");
+}
+// ── CDP connection state ─────────────────────────────────────────────
+let cdpConnection = null;
+let cdpEndpointUrl = null;
+// ── connect handler ──────────────────────────────────────────────────
+function handleConnect(id, params) {
+    if (cdpConnection !== null && cdpConnection.isConnected) {
+        respond(id, { connected: true, endpoint: cdpEndpointUrl ?? "unknown" });
+        log("info", "already connected to CDP");
+        return;
+    }
+    let endpointUrl;
+    if (typeof params === "object" && params !== null) {
+        const p = params;
+        if (typeof p.endpoint === "string") {
+            endpointUrl = p.endpoint;
+        }
+    }
+    if (!endpointUrl) {
+        // Fall back to default Lightpanda endpoint.
+        endpointUrl = process.env.LPD_ENDPOINT ?? "ws://127.0.0.1:21111";
+    }
+    cdpConnection = new DefaultCdpConnection();
+    cdpConnection
+        .connect(endpointUrl)
+        .then(() => {
+        cdpEndpointUrl = endpointUrl;
+        respond(id, { connected: true, endpoint: endpointUrl });
+        log("info", "CDP connected", endpointUrl);
+    })
+        .catch((err) => {
+        // Connection failed — clean up and return structured error.
+        cdpConnection = null;
+        cdpEndpointUrl = null;
+        respondError(id, "LPD_CONNECTION_ERROR", `Failed to connect to CDP endpoint: ${err.message}`);
+        log("error", "CDP connection failed", endpointUrl, err.message);
+    });
 }
 // ── ping handler ─────────────────────────────────────────────────────
 function handlePing(id) {
@@ -64,6 +102,9 @@ async function main() {
         switch (method) {
             case "ping":
                 handlePing(id);
+                break;
+            case "connect":
+                handleConnect(id, req.params);
                 break;
             default:
                 respondError(id, "UNKNOWN_METHOD", `Method "${method}" is not implemented`);

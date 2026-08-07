@@ -149,4 +149,27 @@ describe("sidecar protocol", () => {
     assert.strictEqual(resp.id, "ping");
     assert.strictEqual((resp.result as { pong: boolean }).pong, true);
   });
+
+  it("connect to unreachable endpoint returns LPD_CONNECTION_ERROR", async () => {
+    const { proc: p } = await startSidecar();
+    const resp = await sendRequest(p, "connect", { endpoint: "ws://127.0.0.1:1" });
+    assert.strictEqual(resp.id, "connect");
+    assert.strictEqual((resp.error as { code: string }).code, "LPD_CONNECTION_ERROR");
+    assert.strictEqual(typeof (resp.error as { message: string }).message, "string");
+    assert.ok((resp.error as { message: string }).message.includes("Failed to connect to CDP endpoint"));
+  });
+
+  it("connect with no endpoint falls back to default and returns LPD_CONNECTION_ERROR", async () => {
+    const { proc: p } = await startSidecar();
+    const resp = await sendRequest(p, "connect", {});
+    assert.strictEqual(resp.id, "connect");
+    assert.strictEqual((resp.error as { code: string }).code, "LPD_CONNECTION_ERROR");
+  });
+
+  it("connect with invalid endpoint format returns LPD_CONNECTION_ERROR", async () => {
+    const { proc: p } = await startSidecar();
+    const resp = await sendRequest(p, "connect", { endpoint: "not-a-url" });
+    assert.strictEqual(resp.id, "connect");
+    assert.strictEqual((resp.error as { code: string }).code, "LPD_CONNECTION_ERROR");
+  });
 });
