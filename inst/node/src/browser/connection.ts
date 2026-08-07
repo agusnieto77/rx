@@ -169,6 +169,19 @@ export class DefaultCdpConnection implements CdpConnection {
     }
   }
 
+  /** Register a one-shot listener that is automatically removed after firing once. */
+  once(event: string, listener: (params: Record<string, unknown>) => void): void {
+    const wrapper = (params: Record<string, unknown>) => {
+      this.removeListener(event, wrapper);
+      try {
+        listener(params);
+      } catch {
+        // Listener errors should not propagate.
+      }
+    };
+    this.on(event, wrapper);
+  }
+
   // -- close ------------------------------------------------------------
 
   close(): void {

@@ -183,5 +183,43 @@ describe("sidecar protocol", () => {
         assert.strictEqual(closeResp.id, "close");
         assert.strictEqual(closeResp.result.closed, false);
     });
+    it("navigate without connection returns PAGE_LOAD_ERROR", async () => {
+        const { proc: p } = await startSidecar();
+        const resp = await sendRequest(p, "navigate", { url: "http://example.com" });
+        assert.strictEqual(resp.id, "navigate");
+        assert.strictEqual(resp.error.code, "PAGE_LOAD_ERROR");
+        assert.ok(resp.error.message.includes("CDP connection not active"));
+    });
+    it("navigate with missing url returns INVALID_REQUEST", async () => {
+        const { proc: p } = await startSidecar();
+        const resp = await sendRequest(p, "navigate", {});
+        assert.strictEqual(resp.id, "navigate");
+        assert.strictEqual(resp.error.code, "INVALID_REQUEST");
+    });
+    it("evaluate without connection returns CDP_ERROR", async () => {
+        const { proc: p } = await startSidecar();
+        const resp = await sendRequest(p, "evaluate", { expr: "1+1" });
+        assert.strictEqual(resp.id, "evaluate");
+        assert.strictEqual(resp.error.code, "CDP_ERROR");
+        assert.ok(resp.error.message.includes("CDP connection not active"));
+    });
+    it("evaluate with missing expr returns INVALID_REQUEST", async () => {
+        const { proc: p } = await startSidecar();
+        const resp = await sendRequest(p, "evaluate", {});
+        assert.strictEqual(resp.id, "evaluate");
+        assert.strictEqual(resp.error.code, "INVALID_REQUEST");
+    });
+    it("navigate with empty url returns INVALID_REQUEST", async () => {
+        const { proc: p } = await startSidecar();
+        const resp = await sendRequest(p, "navigate", { url: "" });
+        assert.strictEqual(resp.id, "navigate");
+        assert.strictEqual(resp.error.code, "INVALID_REQUEST");
+    });
+    it("evaluate with empty expr returns INVALID_REQUEST", async () => {
+        const { proc: p } = await startSidecar();
+        const resp = await sendRequest(p, "evaluate", { expr: "" });
+        assert.strictEqual(resp.id, "evaluate");
+        assert.strictEqual(resp.error.code, "INVALID_REQUEST");
+    });
 });
 //# sourceMappingURL=protocol.test.js.map

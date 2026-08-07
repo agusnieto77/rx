@@ -117,6 +117,130 @@ function handleConnect(id: unknown, params?: unknown): void {
     });
 }
 
+// ── navigate handler ─────────────────────────────────────────────────
+
+const NAVIGATE_TIMEOUT_MS = 30_000;
+
+function handleNavigate(id: unknown, params?: unknown): void {
+  // Validate params first (before connection check).
+  let url: string;
+  if (typeof params === "object" && params !== null) {
+    const p = params as Record<string, unknown>;
+    if (typeof p.url === "string" && p.url.length > 0) {
+      url = p.url;
+    } else {
+      respondError(id, "INVALID_REQUEST", "navigate requires a non-empty 'url' parameter");
+      return;
+    }
+  } else {
+    respondError(id, "INVALID_REQUEST", "navigate requires a 'url' parameter");
+    return;
+  }
+
+  if (cdpConnection === null || !cdpConnection.isConnected) {
+    respondError(id, "PAGE_LOAD_ERROR", "Cannot navigate — CDP connection not active");
+    log("warn", "navigate failed — not connected");
+    return;
+  }
+
+  // Wrap navigation in a promise that resolves on Page.loadEventFired or times out.
+  const navPromise = new Promise<Record<string, unknown>>((resolve, reject) => {
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        cdpConnection!.removeListener("Page.loadEventFired", onLoad);
+        reject(new Error(`Navigation timeout after ${NAVIGATE_TIMEOUT_MS}ms to ${url}`));
+      }
+    }, NAVIGATE_TIMEOUT_MS);
+
+    const onLoad = (): void => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        cdpConnection!.removeListener("Page.loadEventFired", onLoad);
+        resolve({ loadEventFired: true });
+      }
+    };
+
+    // Also listen for frameStoppedLoading as a fallback.
+    const onFrameStopped = (): void => {
+      // Do not settle here — loadEventFired is the stronger signal.
+      log("debug", "Page.frameStoppedLoading received for", url);
+    };
+
+    cdpConnection!.on("Page.loadEventFired", onLoad);
+    cdpConnection!.on("Page.frameStoppedLoading", onFrameStopped);
+
+    // Enable the Page domain first.
+    cdpConnection!
+      .sendCommand("Page.enable")
+      .then(() => cdpConnection!.sendCommand("Page.navigate", { url }))
+      .then((result) => {
+        // Navigation sent; waiting for loadEventFired.
+        log("debug", "Page.navigate sent for", url, "loaderId=", (result as Record<string, unknown>).loaderId);
+      })
+      .catch((err: Error) => {
+        // Page.enable or Page.navigate failed.
+        cdpConnection!.removeListener("Page.loadEventFired", onLoad);
+        cdpConnection!.removeListener("Page.frameStoppedLoading", onFrameStopped);
+        clearTimeout(timeout);
+        settled = true;
+        reject(err);
+      });
+  });
+
+  navPromise
+    .then((result) => {
+      respond(id, { url, navigated: true, result });
+      log("info", "navigated to", url);
+    })
+    .catch((err: Error) => {
+      respondError(id, "PAGE_LOAD_ERROR", `Navigation failed: ${err.message}`);
+      log("error", "navigation failed for", url, err.message);
+    });
+}
+
+// ── evaluate handler ─────────────────────────────────────────────────
+
+function handleEvaluate(id: unknown, params?: unknown): void {
+  // Validate params first (before connection check).
+  let expr: string;
+  if (typeof params === "object" && params !== null) {
+    const p = params as Record<string, unknown>;
+    if (typeof p.expr === "string" && p.expr.length > 0) {
+      expr = p.expr;
+    } else {
+      respondError(id, "INVALID_REQUEST", "evaluate requires a non-empty 'expr' parameter");
+      return;
+    }
+  } else {
+    respondError(id, "INVALID_REQUEST", "evaluate requires an 'expr' parameter");
+    return;
+  }
+
+  if (cdpConnection === null || !cdpConnection.isConnected) {
+    respondError(id, "CDP_ERROR", "Cannot evaluate — CDP connection not active");
+    log("warn", "evaluate failed — not connected");
+    return;
+  }
+
+  // Use Page.enable + Runtime.evaluate via CDP.
+  cdpConnection
+    .sendCommand("Runtime.enable")
+    .then(() => cdpConnection!.sendCommand("Page.enable"))
+    .then(() => cdpConnection!.sendCommand("Runtime.evaluate", { expression: expr, returnByValue: true }))
+    .then((result) => {
+      respond(id, { evaluated: true, result });
+      log("debug", "evaluate succeeded for expression length", expr.length);
+    })
+    .catch((err: Error) => {
+      respondError(id, "CDP_ERROR", `JavaScript evaluation failed: ${err.message}`);
+      log("error", "evaluate failed", expr.slice(0, 120), err.message);
+    });
+}
+
 // ── ping handler ─────────────────────────────────────────────────────
 
 function handlePing(id: unknown): void {
@@ -175,6 +299,12 @@ async function main(): Promise<void> {
         break;
       case "close":
         handleClose(id);
+        break;
+      case "navigate":
+        handleNavigate(id, req.params);
+        break;
+      case "evaluate":
+        handleEvaluate(id, req.params);
         break;
       default:
         respondError(id, "UNKNOWN_METHOD", `Method "${method}" is not implemented`);

@@ -273,7 +273,7 @@ Use JSON Lines over stdin/stdout unless a simpler already-working mechanism exis
 
 ---
 
-### Task 16: Implement browser navigation
+### Task 16: Implement browser navigation [DONE]
 
 **Goal:** Navigate Lightpanda to the local dynamic test page.
 

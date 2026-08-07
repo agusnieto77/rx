@@ -25,6 +25,8 @@ export declare class DefaultCdpConnection implements CdpConnection {
     sendCommand(method: string, params?: Record<string, unknown>): Promise<Record<string, unknown>>;
     on(event: string, listener: (params: Record<string, unknown>) => void): void;
     removeListener(event: string, listener: (params: Record<string, unknown>) => void): void;
+    /** Register a one-shot listener that is automatically removed after firing once. */
+    once(event: string, listener: (params: Record<string, unknown>) => void): void;
     close(): void;
     private handleMessage;
 }

@@ -112,6 +112,19 @@ export class DefaultCdpConnection {
             set.delete(listener);
         }
     }
+    /** Register a one-shot listener that is automatically removed after firing once. */
+    once(event, listener) {
+        const wrapper = (params) => {
+            this.removeListener(event, wrapper);
+            try {
+                listener(params);
+            }
+            catch {
+                // Listener errors should not propagate.
+            }
+        };
+        this.on(event, wrapper);
+    }
     // -- close ------------------------------------------------------------
     close() {
         if (this.ws !== null) {
