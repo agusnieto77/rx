@@ -113,6 +113,7 @@ function handleNavigate(id, params) {
                 settled = true;
                 clearTimeout(timeout);
                 cdpConnection.removeListener("Page.loadEventFired", onLoad);
+                cdpConnection.removeListener("Page.frameStoppedLoading", onFrameStopped);
                 resolve({ loadEventFired: true });
             }
         };

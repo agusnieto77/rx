@@ -7,7 +7,7 @@
 
 import { createServer } from "node:http";
 import { readFileSync, statSync } from "node:fs";
-import { extname } from "node:path";
+import { extname, join, relative } from "node:path";
 
 const EXT_CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -24,20 +24,21 @@ const EXT_CONTENT_TYPES: Record<string, string> = {
 };
 
 function serveFile(dir: string, pathname: string): { status: number; body?: Buffer; contentType?: string } {
-  // Prevent path traversal.
-  const safe = pathname.replace(/\.\./g, "");
-  if (safe !== pathname) {
+  // Prevent path traversal: use path.join for safe resolution, then
+  // verify the resolved path is still inside the serving directory.
+  const resolved = join(dir, pathname);
+  const rel = relative(dir, resolved);
+  if (rel.startsWith("..") || !rel) {
     return { status: 403 };
   }
 
-  const filePath = dir + safe;
   try {
-    const stat = statSync(filePath);
+    const stat = statSync(resolved);
     if (!stat.isFile()) {
       return { status: 404 };
     }
-    const data = readFileSync(filePath);
-    const ct = EXT_CONTENT_TYPES[extname(filePath).toLowerCase()] || "application/octet-stream";
+    const data = readFileSync(resolved);
+    const ct = EXT_CONTENT_TYPES[extname(resolved).toLowerCase()] || "application/octet-stream";
     return { status: 200, body: data, contentType: ct };
   } catch {
     return { status: 404 };

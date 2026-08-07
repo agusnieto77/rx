@@ -2,6 +2,36 @@
 #' @import processx
 NULL
 
+# Internal: shared path resolution for sidecar location
+#
+# Tries (in order):
+#   1. Explicit path if it contains dist/index.js
+#   2. Installed package via system.file("node", package = "xtweetsR")
+#   3. Development layout relative to current working directory
+#
+# @param sidecar_path Optional explicit path to the sidecar directory.
+# @return Character string with the resolved sidecar directory, or NULL if not found.
+# @noRd
+.rx_resolve_sidecar_path <- function(sidecar_path = NULL) {
+  if (!is.null(sidecar_path) &&
+      file.exists(file.path(sidecar_path, "dist", "index.js"))) {
+    return(sidecar_path)
+  }
+
+  sc_dir <- system.file("node", package = "xtweetsR")
+  if (sc_dir != "" && file.exists(file.path(sc_dir, "dist", "index.js"))) {
+    return(sc_dir)
+  }
+
+  pkg_root <- normalizePath(".", mustWork = FALSE)
+  dev_path <- file.path(pkg_root, "inst", "node")
+  if (file.exists(file.path(dev_path, "dist", "index.js"))) {
+    return(dev_path)
+  }
+
+  NULL
+}
+
 # Internal: R-sidecar communication layer
 # Manages the TypeScript sidecar process and implements the JSONL
 # request/response protocol defined in inst/node/src/index.ts.
@@ -16,31 +46,16 @@ NULL
 #' @return A `processx::process` object representing the running sidecar.
 #' @noRd
 .rx_start_sidecar <- function(sidecar_path = NULL) {
-  # Allow override for tests (e.g., pointing to source tree).
-  if (!is.null(sidecar_path) && file.exists(file.path(sidecar_path, "dist", "index.js"))) {
-    sidecar_dir <- sidecar_path
-  } else {
-    sidecar_dir <- system.file("node", package = "xtweetsR")
-    if (sidecar_dir == "" || !file.exists(file.path(sidecar_dir, "dist", "index.js"))) {
-      # Look relative to the running R session's working directory
-      # (useful during development before `R CMD INSTALL`).
-      pkg_root <- normalizePath(".", mustWork = FALSE)
-      dev_path <- file.path(pkg_root, "inst", "node")
-      if (file.exists(file.path(dev_path, "dist", "index.js"))) {
-        sidecar_dir <- dev_path
-      }
-    }
-  }
+  sidecar_dir <- .rx_resolve_sidecar_path(sidecar_path)
 
-  js_path <- file.path(sidecar_dir, "dist", "index.js")
-
-  if (!file.exists(js_path)) {
+  if (is.null(sidecar_dir)) {
     stop(
-      "xtweetsR sidecar not found at ", js_path,
-      ". Ensure the TypeScript sidecar is compiled (npm run build).",
+      "xtweetsR sidecar not found. Ensure the TypeScript sidecar is compiled (npm run build).",
       call. = FALSE
     )
   }
+
+  js_path <- file.path(sidecar_dir, "dist", "index.js")
 
   p <- processx::process$new(
     command = "node",
@@ -52,6 +67,7 @@ NULL
 
   # Wait for the startup message on stderr.
   # The sidecar writes a JSONL startup line before it accepts requests.
+  startup_ok <- FALSE
   tryCatch(
     {
       timeout <- 10 # seconds
@@ -71,6 +87,7 @@ NULL
                 error = function(e) NULL
               )
               if (!is.null(parsed) && parsed$type == "startup") {
+                startup_ok <- TRUE
                 return(p)
               }
             }
@@ -81,8 +98,14 @@ NULL
     },
     error = function(e) {
       # If reading the startup line fails, the process may still be alive.
+      # Store the error so we can surface it if startup also fails.
     }
   )
+
+  # Fallback: if we couldn't read the startup line, just check if alive.
+  if (!startup_ok && !p$is_alive()) {
+    stop("xtweetsR sidecar failed to start.", call. = FALSE)
+  }
 
   # Fallback: if we couldn't read the startup line, just check if alive.
   if (!p$is_alive()) {

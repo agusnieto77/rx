@@ -58,6 +58,35 @@ test_that("empty string argument falls through to env var then default", {
   )
 })
 
+test_that("whitespace-only argument falls through to env var then default", {
+  withr::with_envvar(
+    list(LPD_ENDPOINT = "ws://env:12345"),
+    {
+      # Whitespace-only string treated as missing — falls to env
+      result <- .rx_resolve_endpoint(endpoint = "   ")
+      expect_equal(result$endpoint, "ws://env:12345")
+      expect_equal(result$source, "env")
+    }
+  )
+})
+
+test_that("whitespace-only falls to default when no env var", {
+  withr::with_envvar(
+    list(LPD_ENDPOINT = "", LPD_TOKEN = ""),
+    {
+      result <- .rx_resolve_endpoint(endpoint = "\t\n")
+      expect_equal(result$endpoint, "http://127.0.0.1:21111")
+      expect_equal(result$source, "default")
+    }
+  )
+})
+
+test_that("endpoint argument is trimmed", {
+  result <- .rx_resolve_endpoint(endpoint = "  ws://trimmed:1234  ")
+  expect_equal(result$endpoint, "ws://trimmed:1234")
+  expect_equal(result$source, "argument")
+})
+
 # -- LPD_TOKEN ----------------------------------------------------------------
 
 test_that("token is NULL when LPD_TOKEN is not set", {

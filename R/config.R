@@ -37,9 +37,9 @@ NULL
 #' @noRd
 .rx_resolve_endpoint <- function(endpoint = NULL) {
   # 1. Explicit argument wins.
-  if (!is.null(endpoint) && nzchar(endpoint)) {
+  if (!is.null(endpoint) && nzchar(trimws(endpoint))) {
     return(list(
-      endpoint = endpoint,
+      endpoint = trimws(endpoint),
       token    = .rx_get_token(),
       source   = "argument"
     ))

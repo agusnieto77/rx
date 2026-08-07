@@ -31,37 +31,18 @@ interface CdpEvent {
 
 type CdpMessage = CdpResult | CdpEvent;
 
-export interface CdpConnection {
-  /** Whether the WebSocket is currently open. */
-  readonly isConnected: boolean;
+// ── DefaultCdpConnection implementation ──────────────────────────────
 
-  /** Connect to the given CDP endpoint URL. */
-  connect(endpointUrl: string): Promise<void>;
-
-  /** Send a CDP command and wait for its response. */
-  sendCommand(method: string, params?: Record<string, unknown>): Promise<Record<string, unknown>>;
-
-  /** Close the WebSocket and reject all pending commands. */
-  close(): void;
-}
-
-export interface CdpConnectionOptions {
-  /** Optional timeout in ms for each CDP command (default: 15000). */
-  commandTimeoutMs?: number;
-}
-
-// ── CdpConnection implementation ─────────────────────────────────────
-
-export class DefaultCdpConnection implements CdpConnection {
+export class DefaultCdpConnection {
   private ws: WebSocket | null = null;
   private nextId = 1;
   private pending = new Map<number, { resolve: (v: Record<string, unknown>) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private eventListeners = new Map<string, Set<(params: Record<string, unknown>) => void>>();
   private _isConnected = false;
-  private commandTimeoutMs: number;
+  private commandTimeoutMs = 15_000;
 
-  constructor(options: CdpConnectionOptions = {}) {
-    this.commandTimeoutMs = options.commandTimeoutMs ?? 15_000;
+  constructor() {
+    // No options parameter — the timeout is a fixed default.
   }
 
   get isConnected(): boolean {
@@ -167,19 +148,6 @@ export class DefaultCdpConnection implements CdpConnection {
     if (set) {
       set.delete(listener);
     }
-  }
-
-  /** Register a one-shot listener that is automatically removed after firing once. */
-  once(event: string, listener: (params: Record<string, unknown>) => void): void {
-    const wrapper = (params: Record<string, unknown>) => {
-      this.removeListener(event, wrapper);
-      try {
-        listener(params);
-      } catch {
-        // Listener errors should not propagate.
-      }
-    };
-    this.on(event, wrapper);
   }
 
   // -- close ------------------------------------------------------------

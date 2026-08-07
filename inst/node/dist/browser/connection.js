@@ -12,16 +12,16 @@
 // This module is intentionally minimal — no CDP helper abstractions,
 // just raw command dispatch and response correlation.
 import { WebSocket } from "ws";
-// ── CdpConnection implementation ─────────────────────────────────────
+// ── DefaultCdpConnection implementation ──────────────────────────────
 export class DefaultCdpConnection {
     ws = null;
     nextId = 1;
     pending = new Map();
     eventListeners = new Map();
     _isConnected = false;
-    commandTimeoutMs;
-    constructor(options = {}) {
-        this.commandTimeoutMs = options.commandTimeoutMs ?? 15_000;
+    commandTimeoutMs = 15_000;
+    constructor() {
+        // No options parameter — the timeout is a fixed default.
     }
     get isConnected() {
         return this._isConnected && this.ws !== null && this.ws.readyState === WebSocket.OPEN;
@@ -111,19 +111,6 @@ export class DefaultCdpConnection {
         if (set) {
             set.delete(listener);
         }
-    }
-    /** Register a one-shot listener that is automatically removed after firing once. */
-    once(event, listener) {
-        const wrapper = (params) => {
-            this.removeListener(event, wrapper);
-            try {
-                listener(params);
-            }
-            catch {
-                // Listener errors should not propagate.
-            }
-        };
-        this.on(event, wrapper);
     }
     // -- close ------------------------------------------------------------
     close() {

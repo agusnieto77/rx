@@ -41,21 +41,8 @@ NULL
 #' @seealso The sidecar client in \code{R/sidecar.R}
 #' @keywords internal
 .rx_new_backend <- function(sidecar_path = NULL) {
-  # Resolve sidecar path using the same logic as .rx_start_sidecar.
-  if (!is.null(sidecar_path) && file.exists(file.path(sidecar_path, "dist", "index.js"))) {
-    sc_dir <- sidecar_path
-  } else {
-    sc_dir <- system.file("node", package = "xtweetsR")
-    if (sc_dir == "" || !file.exists(file.path(sc_dir, "dist", "index.js"))) {
-      pkg_root <- normalizePath(".", mustWork = FALSE)
-      dev_path <- file.path(pkg_root, "inst", "node")
-      if (file.exists(file.path(dev_path, "dist", "index.js"))) {
-        sc_dir <- dev_path
-      } else {
-        sc_dir <- NULL
-      }
-    }
-  }
+  # Resolve sidecar path using the shared resolver.
+  sc_dir <- .rx_resolve_sidecar_path(sidecar_path)
 
   # The backend object — a mutable closure over the process handle.
   state <- list(
@@ -67,12 +54,12 @@ NULL
   backend <- list(
     connected = FALSE,
 
-    #' @description Connect to the sidecar and return the backend invisibly.
+    #' @description Connect to the sidecar.
     connect = function() {
       if (!is.null(state$.proc) && state$.proc$is_alive()) {
         state$connected <- TRUE
         backend$connected <- TRUE
-        return(invisible(backend))
+        return(invisible())
       }
 
       if (is.null(state$.sidecar)) {
@@ -86,7 +73,6 @@ NULL
       state$.proc <- proc
       state$connected <- TRUE
       backend$connected <- TRUE
-      invisible(backend)
     },
 
     #' @description Navigate to a URL. Returns a list with url and status.
