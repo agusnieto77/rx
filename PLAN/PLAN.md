@@ -46,7 +46,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 2: Initialize the R package skeleton
+### Task 2: Initialize the R package skeleton [DONE]
 
 **Goal:** Ensure the repository is a valid minimal R package.
 
