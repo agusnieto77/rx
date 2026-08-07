@@ -1,0 +1,127 @@
+# Internal: R-sidecar communication layer
+# Manages the TypeScript sidecar process and implements the JSONL
+# request/response protocol defined in inst/node/src/index.ts.
+#
+# Protocol shape:
+#   Request:  { "id": <any>, "method": string, "params": <any>? }
+#   Response: { "id": <same>, "result": <any> }
+#   Error:    { "id": <same>, "error": { "code": string, "message": string } }
+
+#' Start the TypeScript sidecar process.
+#'
+#' @return A `processx::process` object representing the running sidecar.
+#' @noRd
+.rx_start_sidecar <- function() {
+  sidecar_dir <- system.file("node", package = "xtweetsR")
+
+  # If not installed, look relative to package source.
+  if (sidecar_dir === "" || !file.exists(file.path(sidecar_dir, "dist", "index.js"))) {
+    sidecar_dir <- file.path(.libPaths()[1], "xtweetsR", "node")
+  }
+
+  js_path <- file.path(sidecar_dir, "dist", "index.js")
+
+  if (!file.exists(js_path)) {
+    stop(
+      "xtweetsR sidecar not found at ", js_path,
+      ". Ensure the TypeScript sidecar is compiled (npm run build).",
+      call. = FALSE
+    )
+  }
+
+  p <- processx::process$new(
+    command = "node",
+    args = shQuote(js_path),
+    stdout = "|",
+    stderr = "|",
+    stdin = "|"
+  )
+
+  # Wait for the startup message on stderr.
+  # The sidecar writes a JSONL startup line before it accepts requests.
+  tryCatch(
+    {
+      timeout <- 10 # seconds
+      start <- Sys.time()
+      while (Sys.time() - start < timeout) {
+        if (p$is_alive() && p$is_stdio_available(2)) {
+          line <- p$read_output_line()
+          if (nzchar(line)) {
+            parsed <- jsonlite::fromJSON(line, simplifyVector = FALSE)
+            if (parsed$type == "startup") {
+              return(p)
+            }
+          }
+        }
+        Sys.sleep(0.05)
+      }
+    },
+    error = function(e) {
+      # If reading the startup line fails, the process may still be alive.
+    }
+  )
+
+  # Fallback: if we couldn't read the startup line, just check if alive.
+  if (!p$is_alive()) {
+    stop("xtweetsR sidecar failed to start.", call. = FALSE)
+  }
+
+  p
+}
+
+#' Send a JSONL request to the sidecar and return the response.
+#'
+#' @param proc A `processx::process` object (the running sidecar).
+#' @param method Character string, the method name (e.g. `"ping"`).
+#' @param params Optional list, the request parameters.
+#' @param id Optional identifier echoed in the response. Defaults to `method`.
+#' @return A list with either `$result` (success) or `$error` (failure).
+#' @noRd
+.rx_send_request <- function(proc, method, params = NULL, id = method) {
+  if (!proc$is_alive()) {
+    stop("Sidecar process is not running.", call. = FALSE)
+  }
+
+  req <- list(id = id, method = method)
+  if (!is.null(params)) {
+    req$params <- params
+  }
+
+  json_req <- jsonlite::toJSON(req, auto_unbox = TRUE, pretty = FALSE)
+  proc$write_input(paste0(json_req, "\n"))
+
+  # Read the response line from stdout.
+  # Timeout after 30 seconds.
+  timeout <- 30
+  start <- Sys.time()
+  while (Sys.time() - start < timeout) {
+    if (!proc$is_alive()) {
+      stop("Sidecar process died while waiting for response.", call. = FALSE)
+    }
+    if (proc$is_stdio_available(1)) {
+      line <- tryCatch(
+        proc$read_output_line(),
+        error = function(e) NULL
+      )
+      if (!is.null(line) && nzchar(line)) {
+        return(jsonlite::fromJSON(line, simplifyVector = FALSE))
+      }
+    }
+    Sys.sleep(0.05)
+  }
+
+  stop("Sidecar did not respond within timeout.", call. = FALSE)
+}
+
+#' Stop the sidecar process cleanly.
+#'
+#' @param proc A `processx::process` object.
+#' @return Invisible `NULL`.
+#' @noRd
+.rx_stop_sidecar <- function(proc) {
+  if (is.null(proc)) return(invisible(NULL))
+  if (!proc$is_alive()) return(invisible(NULL))
+  tryCatch(proc$kill(), error = function(e) NULL)
+  tryCatch(proc$wait(timeout = 5000), error = function(e) NULL)
+  invisible(NULL)
+}

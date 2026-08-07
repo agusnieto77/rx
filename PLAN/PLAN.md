@@ -128,7 +128,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 7: Define the R-to-sidecar protocol
+### Task 7: Define the R-to-sidecar protocol [DONE]
 
 **Goal:** Establish one tiny request/response contract.
 

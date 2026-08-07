@@ -1,20 +1,57 @@
 // xtweetsR TypeScript sidecar — entry point
 // Reads JSONL requests from stdin, writes JSONL responses to stdout.
 // Logs go to stderr.
+//
+// Protocol shape (JSON Lines over stdin/stdout):
+//
+// Request:  { "id": <any>, "method": string, "params": <any>? }
+// Response: { "id": <same>, "result": <any> }
+// Error:    { "id": <same>, "error": { "code": string, "message": string } }
+// Log:      written to stderr, never to stdout.
 
 import { createInterface } from "readline";
 
 const VERSION = "0.1.0";
 
+// ── protocol types ───────────────────────────────────────────────────
+
+interface Request {
+  id: unknown;
+  method: string;
+  params?: unknown;
+}
+
+interface Response {
+  id: unknown;
+  result: unknown;
+}
+
+interface ErrorResponse {
+  id: unknown;
+  error: {
+    code: string;
+    message: string;
+  };
+}
+
+type Message = Response | ErrorResponse;
+
 // ── helpers ──────────────────────────────────────────────────────────
 
 function respond(id: unknown, result: unknown): void {
-  process.stdout.write(JSON.stringify({ id, result }) + "\n");
+  const msg: Response = { id, result };
+  process.stdout.write(JSON.stringify(msg) + "\n");
 }
 
-function error(id: unknown, code: string, message: string): void {
-  process.stdout.write(
-    JSON.stringify({ id, error: { code, message } }) + "\n"
+function respondError(id: unknown, code: string, message: string): void {
+  const msg: ErrorResponse = { id, error: { code, message } };
+  process.stdout.write(JSON.stringify(msg) + "\n");
+}
+
+function log(level: string, ...args: unknown[]): void {
+  process.stderr.write(
+    JSON.stringify({ type: level, ts: new Date().toISOString(), args }) +
+      "\n"
   );
 }
 
@@ -22,6 +59,7 @@ function error(id: unknown, code: string, message: string): void {
 
 function handlePing(id: unknown): void {
   respond(id, { pong: true, version: VERSION });
+  log("debug", "ping handled");
 }
 
 // ── main loop ────────────────────────────────────────────────────────
@@ -43,15 +81,14 @@ async function main(): Promise<void> {
       parsed = JSON.parse(trimmed);
     } catch {
       // Malformed JSON → structured error.
-      error(null, "PARSE_ERROR", "Invalid JSON input");
+      respondError(null, "PARSE_ERROR", "Invalid JSON input");
+      log("warn", "parse error on line:", trimmed.slice(0, 120));
       continue;
     }
 
-    if (
-      typeof parsed !== "object" ||
-      parsed === null
-    ) {
-      error(null, "INVALID_REQUEST", "Request must be a JSON object");
+    if (typeof parsed !== "object" || parsed === null) {
+      respondError(null, "INVALID_REQUEST", "Request must be a JSON object");
+      log("warn", "non-object input:", trimmed.slice(0, 120));
       continue;
     }
 
@@ -60,9 +97,11 @@ async function main(): Promise<void> {
     const method = req.method;
 
     if (typeof method !== "string") {
-      error(id, "INVALID_REQUEST", "Missing 'method' field");
+      respondError(id, "INVALID_REQUEST", "Missing 'method' field");
       continue;
     }
+
+    log("debug", "method=", method, "id=", id);
 
     // Route to the handler.
     switch (method) {
@@ -70,7 +109,7 @@ async function main(): Promise<void> {
         handlePing(id);
         break;
       default:
-        error(id, "UNKNOWN_METHOD", `Method "${method}" is not implemented`);
+        respondError(id, "UNKNOWN_METHOD", `Method "${method}" is not implemented`);
         break;
     }
   }
