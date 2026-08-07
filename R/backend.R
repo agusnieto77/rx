@@ -48,17 +48,16 @@ NULL
   state <- list(
     .proc     = NULL,
     .sidecar  = sc_dir,
-    connected = FALSE
+    connected = FALSE,
+    endpoint  = NULL
   )
 
   backend <- list(
     connected = FALSE,
 
-    #' @description Connect to the sidecar.
-    connect = function() {
-      if (!is.null(state$.proc) && state$.proc$is_alive()) {
-        state$connected <- TRUE
-        backend$connected <- TRUE
+    #' @description Connect to the sidecar and establish the CDP connection.
+    connect = function(endpoint = NULL) {
+      if (!is.null(state$.proc) && state$.proc$is_alive() && state$connected) {
         return(invisible())
       }
 
@@ -69,8 +68,22 @@ NULL
         )
       }
 
+      # Use provided endpoint, or fall back to stored endpoint, or let the
+      # sidecar use its default (LPD_ENDPOINT env var / ws://127.0.0.1:21111).
+      ep <- if (!is.null(endpoint)) endpoint else state$endpoint
+
       proc <- .rx_start_sidecar(sidecar_path = state$.sidecar)
       state$.proc <- proc
+
+      resp <- .rx_send_request(proc, "connect", list(endpoint = ep))
+      if (!is.null(resp$error)) {
+        .rx_stop_sidecar(proc)
+        stop(
+          paste0("CDP connection failed: ", resp$error$message),
+          call. = FALSE
+        )
+      }
+
       state$connected <- TRUE
       backend$connected <- TRUE
     },

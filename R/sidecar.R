@@ -102,12 +102,8 @@ NULL
     }
   )
 
-  # Fallback: if we couldn't read the startup line, just check if alive.
-  if (!startup_ok && !p$is_alive()) {
-    stop("xtweetsR sidecar failed to start.", call. = FALSE)
-  }
-
-  # Fallback: if we couldn't read the startup line, just check if alive.
+  # Fallback: if we couldn't read the startup line, just check if the
+  # process is still alive.
   if (!p$is_alive()) {
     stop("xtweetsR sidecar failed to start.", call. = FALSE)
   }
@@ -134,7 +130,10 @@ NULL
   }
 
   json_req <- jsonlite::toJSON(req, auto_unbox = TRUE, pretty = FALSE)
-  proc$write_input(paste0(json_req, "\n"))
+  n_written <- proc$write_input(paste0(json_req, "\n"))
+  if (is.numeric(n_written) && n_written <= 0) {
+    stop("Sidecar process is not accepting input (stdin pipe closed).", call. = FALSE)
+  }
 
   # Read the response line from stdout.
   # Timeout after 30 seconds.

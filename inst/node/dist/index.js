@@ -117,10 +117,15 @@ function handleNavigate(id, params) {
                 resolve({ loadEventFired: true });
             }
         };
-        // Also listen for frameStoppedLoading as a fallback.
+        // Also listen for frameStoppedLoading as a fallback settle signal.
         const onFrameStopped = () => {
-            // Do not settle here — loadEventFired is the stronger signal.
-            log("debug", "Page.frameStoppedLoading received for", url);
+            if (!settled) {
+                settled = true;
+                clearTimeout(timeout);
+                cdpConnection.removeListener("Page.loadEventFired", onLoad);
+                cdpConnection.removeListener("Page.frameStoppedLoading", onFrameStopped);
+                resolve({ frameStoppedLoading: true });
+            }
         };
         cdpConnection.on("Page.loadEventFired", onLoad);
         cdpConnection.on("Page.frameStoppedLoading", onFrameStopped);

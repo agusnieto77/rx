@@ -53,8 +53,9 @@ x_session <- function(endpoint = NULL, sidecar_path = NULL) {
   # Create the backend (this starts the sidecar internally when connect() is called).
   backend <- .rx_new_backend(sidecar_path = sidecar_path)
 
-  # Connect the backend.
-  backend$connect()
+  # Connect the backend, passing the resolved endpoint so the sidecar
+  # establishes a CDP connection to the correct Lightpanda instance.
+  backend$connect(endpoint = resolved$endpoint)
 
   # Build the session object.
   session <- list(
