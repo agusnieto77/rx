@@ -121,6 +121,16 @@ NULL
       )
     }
 
+    # Guard against malformed response lacking a $result field.
+    if (is.null(resp$result)) {
+      .rx_stop_sidecar(proc)
+      state$.proc <- NULL
+      state$connected <- FALSE
+      state$endpoint <- NULL
+      backend$connected <- FALSE
+      stop("Malformed connect response from sidecar (missing result field)", call. = FALSE)
+    }
+
     state$connected <- TRUE
     state$endpoint <- ep
     backend$connected <- TRUE
