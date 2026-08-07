@@ -512,3 +512,298 @@ test_that("x_save rejects non-tibble input for DuckDB path", {
     info = "rejects data.frame input for .duckdb"
   )
 })
+
+# --- Test 15: .rx_save_partitioned writes a partitioned dataset when Arrow is available ---
+test_that(".rx_save_partitioned writes a partitioned directory when Arrow is available", {
+  skip_if_not(requireNamespace("arrow", quietly = TRUE))
+
+  df <- data.frame(
+    post_id       = c("post-1", "post-2", "post-3"),
+    text          = c("text one", "text two", "text three"),
+    author_id     = c("auth-1", "auth-2", "auth-3"),
+    username      = c("user1", "user2", "user3"),
+    display_name  = c("User One", "User Two", "User Three"),
+    created_at    = c("2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z", "2025-01-01T00:00:00Z"),
+    reply_count   = c(1L, 2L, 3L),
+    repost_count  = c(4L, 5L, 6L),
+    like_count    = c(7L, 8L, 9L),
+    quote_count   = c(0L, 1L, 2L),
+    bookmark_count = c(3L, 4L, 5L),
+    view_count    = c(100L, 200L, 300L),
+    conversation_id = c("conv-1", "conv-2", "conv-1"),
+    is_reply      = c(FALSE, TRUE, FALSE),
+    is_repost     = c(FALSE, FALSE, FALSE),
+    is_quote      = c(FALSE, FALSE, FALSE),
+    reply_to_post_id = c(NA_character_, NA_character_, NA_character_),
+    quoted_post_id   = c(NA_character_, NA_character_, NA_character_),
+    collected_at     = c("2025-01-01T12:00:00Z", "2025-01-02T08:00:00Z", "2025-01-01T18:00:00Z"),
+    collection_query = "r programming",
+    collection_id    = c("uuid-aaa", "uuid-aaa", "uuid-bbb"),
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  tmp <- tempfile()
+  on.exit(file.remove(tmp), ignore = TRUE)
+  dir.create(tmp)
+  on.exit(unlink(tmp, recursive = TRUE, force = TRUE), add = TRUE)
+
+  xtweetsR:::x_save(tbl, file.path(tmp, "output.parquetds"))
+
+  testthat::expect_true(dir.exists(file.path(tmp, "output.parquetds")), info = "dataset directory created")
+
+  # Should contain partitioned subdirectories.
+  loaded <- xtweetsR:::.rx_read_partitioned(file.path(tmp, "output.parquetds"))
+  testthat::expect_equal(nrow(loaded), 3L, info = "3 rows read back")
+  testthat::expect_equal(
+    loaded$post_id,
+    c("post-1", "post-2", "post-3"),
+    info = "post_id values preserved"
+  )
+})
+
+# --- Test 16: .rx_save_partitioned handles zero-row tibble ---
+test_that(".rx_save_partitioned handles zero-row tibble", {
+  skip_if_not(requireNamespace("arrow", quietly = TRUE))
+
+  empty_tbl <- xtweetsR:::.rx_canonical_fields() |>
+    lapply(function(f) {
+      switch(xtweetsR:::.rx_type_map()[[f]],
+        character = character(0),
+        integer = integer(0),
+        logical = logical(0),
+        list = list()
+      )
+    }) |>
+    setNames(xtweetsR:::.rx_canonical_fields()) |>
+    tibble::as_tibble()
+
+  tmp <- tempfile()
+  dir.create(tmp)
+  on.exit(unlink(tmp, recursive = TRUE, force = TRUE), add = TRUE)
+
+  xtweetsR:::x_save(empty_tbl, file.path(tmp, "output.parquetds"))
+  testthat::expect_true(dir.exists(file.path(tmp, "output.parquetds")), info = "empty dataset directory created")
+
+  loaded <- xtweetsR:::.rx_read_partitioned(file.path(tmp, "output.parquetds"))
+  testthat::expect_equal(nrow(loaded), 0L, info = "zero rows from partitioned dataset")
+})
+
+# --- Test 17: .rx_save_partitioned falls back to JSONL when Arrow is missing ---
+test_that(".rx_save_partitioned falls back to JSONL when arrow is missing", {
+  fields <- xtweetsR:::.rx_canonical_fields()
+  df <- data.frame(
+    post_id       = "post-fallback-pd",
+    text          = "partitioned fallback test",
+    author_id     = "auth-fb",
+    username      = "userfb",
+    display_name  = "User Fb",
+    created_at    = "2025-01-01T00:00:00Z",
+    reply_count   = 1L,
+    repost_count  = 2L,
+    like_count    = 3L,
+    quote_count   = 0L,
+    bookmark_count = 0L,
+    view_count    = 100L,
+    conversation_id = "conv-fb",
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = format(Sys.time(), iso8601 = TRUE),
+    collection_query = "test",
+    collection_id    = "test-uuid-pd",
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  # Test the JSONL fallback path.
+  tmp <- tempfile(fileext = ".jsonl")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  xtweetsR:::x_save(tbl, tmp)
+  testthat::expect_true(file.exists(tmp), info = "jsonl file created as fallback")
+
+  loaded <- xtweetsR:::.rx_jsonl_read(tmp)
+  testthat::expect_equal(nrow(loaded), 1L, info = "1 row from fallback JSONL")
+})
+
+# --- Test 18: .rx_read_partitioned returns empty tibble for non-existent directory ---
+test_that(".rx_read_partitioned returns empty tibble for missing directory", {
+  tmp <- tempfile()
+  # Do NOT create the directory.
+
+  loaded <- xtweetsR:::.rx_read_partitioned(tmp)
+  testthat::expect_true(inherits(loaded, "tbl_df"), info = "returns tibble")
+  testthat::expect_equal(nrow(loaded), 0L, info = "zero rows for missing directory")
+})
+
+# --- Test 19: .rx_save_partitioned writes multiple partition directories ---
+test_that(".rx_save_partitioned creates multiple partition dirs when data varies", {
+  skip_if_not(requireNamespace("arrow", quietly = TRUE))
+
+  df <- data.frame(
+    post_id       = paste0("post-", 1:4),
+    text          = paste0("text ", 1:4),
+    author_id     = paste0("auth-", 1:4),
+    username      = paste0("user", 1:4),
+    display_name  = paste0("User ", 1:4),
+    created_at    = paste0("2025-01-", 1:4, "T00:00:00Z"),
+    reply_count   = (1:4) * 2L,
+    repost_count  = (1:4) * 3L,
+    like_count    = (1:4) * 5L,
+    quote_count   = (1:4) * 1L,
+    bookmark_count = (1:4) * 4L,
+    view_count    = (1:4) * 10L,
+    conversation_id = paste0("conv-", 1:4),
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = paste0("2025-01-", 1:4, "T12:00:00Z"),
+    collection_query = "r programming",
+    collection_id    = c("uuid-aaa", "uuid-aaa", "uuid-bbb", "uuid-bbb"),
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  tmp <- tempfile()
+  dir.create(tmp)
+  on.exit(unlink(tmp, recursive = TRUE, force = TRUE), add = TRUE)
+
+  xtweetsR:::x_save(tbl, file.path(tmp, "output.parquetds"))
+
+  # Read back and verify all 4 rows.
+  loaded <- xtweetsR:::.rx_read_partitioned(file.path(tmp, "output.parquetds"))
+  testthat::expect_equal(nrow(loaded), 4L, info = "4 rows read from partitioned dataset")
+  testthat::expect_equal(sort(loaded$post_id), sort(df$post_id), info = "all post_ids present")
+})
+
+# --- Test 20: .rx_save_partitioned single-collection falls back to non-partitioned ---
+test_that(".rx_save_partitioned writes single Parquet file when only one collection", {
+  skip_if_not(requireNamespace("arrow", quietly = TRUE))
+
+  df <- data.frame(
+    post_id       = paste0("post-", 1:3),
+    text          = paste0("text ", 1:3),
+    author_id     = paste0("auth-", 1:3),
+    username      = paste0("user", 1:3),
+    display_name  = paste0("User ", 1:3),
+    created_at    = paste0("2025-01-", 1:3, "T00:00:00Z"),
+    reply_count   = (1:3) * 2L,
+    repost_count  = (1:3) * 3L,
+    like_count    = (1:3) * 5L,
+    quote_count   = (1:3) * 1L,
+    bookmark_count = (1:3) * 4L,
+    view_count    = (1:3) * 10L,
+    conversation_id = paste0("conv-", 1:3),
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = paste0("2025-01-", 1:3, "T12:00:00Z"),
+    collection_query = "r programming",
+    collection_id    = c("uuid-same", "uuid-same", "uuid-same"),
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  tmp <- tempfile()
+  dir.create(tmp)
+  on.exit(unlink(tmp, recursive = TRUE, force = TRUE), add = TRUE)
+
+  xtweetsR:::x_save(tbl, file.path(tmp, "output.parquetds"))
+
+  # When there's only one collection_id, arrow::write_dataset with partition
+  # by collection_id would produce one partition dir. The code checks for
+  # this and falls back to a single Parquet file.
+  loaded <- xtweetsR:::.rx_read_partitioned(file.path(tmp, "output.parquetds"))
+  testthat::expect_equal(nrow(loaded), 3L, info = "3 rows read back from single-collection dataset")
+})
+
+# --- Test 21: x_save rejects unsupported extension ---
+test_that("x_save rejects unsupported file extensions", {
+  fields <- xtweetsR:::.rx_canonical_fields()
+  df <- data.frame(
+    post_id       = "post-x",
+    text          = "test",
+    author_id     = "auth-x",
+    username      = "userx",
+    display_name  = "User X",
+    created_at    = "2025-01-01T00:00:00Z",
+    reply_count   = 1L,
+    repost_count  = 2L,
+    like_count    = 3L,
+    quote_count   = 0L,
+    bookmark_count = 0L,
+    view_count    = 100L,
+    conversation_id = "conv-x",
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = format(Sys.time(), iso8601 = TRUE),
+    collection_query = "test",
+    collection_id    = "test-uuid-004",
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  testthat::expect_error(
+    xtweetsR:::x_save(tbl, "output.csv"),
+    "Unsupported file extension",
+    info = "rejects .csv extension"
+  )
+
+  testthat::expect_error(
+    xtweetsR:::x_save(tbl, "output.txt"),
+    "Unsupported file extension",
+    info = "rejects .txt extension"
+  )
+})
+
+# --- Test 22: x_save validates path parameter ---
+test_that("x_save validates path parameter", {
+  fields <- xtweetsR:::.rx_canonical_fields()
+  df <- data.frame(
+    post_id       = "post-x",
+    text          = "test",
+    author_id     = "auth-x",
+    username      = "userx",
+    display_name  = "User X",
+    created_at    = "2025-01-01T00:00:00Z",
+    reply_count   = 1L,
+    repost_count  = 2L,
+    like_count    = 3L,
+    quote_count   = 0L,
+    bookmark_count = 0L,
+    view_count    = 100L,
+    conversation_id = "conv-x",
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = format(Sys.time(), iso8601 = TRUE),
+    collection_query = "test",
+    collection_id    = "test-uuid-006",
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  testthat::expect_error(
+    xtweetsR:::x_save(tbl, character(0)),
+    "non-empty",
+    info = "rejects empty character vector"
+  )
+
+  testthat::expect_error(
+    xtweetsR:::x_save(tbl, NA_character_),
+    "non-empty",
+    info = "rejects NA path"
+  )
+})

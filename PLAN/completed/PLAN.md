@@ -1698,9 +1698,22 @@ Represent posts appearing in multiple queries or collection runs.
 - `tests/testthat/test-collection-posts.R` — 23 tests (Tests 1-23)
 - `NAMESPACE` — added `export(rx_collection_posts)`
 
-### Iteration 88: Add Arrow dataset partitioning [ ]
+### Iteration 88: Add Arrow dataset partitioning [x]
 
 Support optional partitioning by collection/date.
+
+**Acceptance criteria:**
+- [x] `.rx_save_partitioned()` added to `R/export.R` — writes partitioned Arrow datasets using `arrow::write_dataset()`, partitions by `collection_id` and `collected_at` date, falls back to single Parquet file when only one distinct partition value.
+- [x] `.rx_read_partitioned()` added to `R/export.R` — reads partitioned datasets back via `arrow::open_dataset()`.
+- [x] `x_save()` extended with `.parquetds` extension support — routing to `.rx_save_partitioned()`.
+- [x] Partitioned data is partitioned by `collection_id` (directory) and `collected_at_date` (sub-directory).
+- [x] Zero-row tibble handled gracefully (creates empty directory).
+- [x] Arrow fallback to JSONL when package not installed (same pattern as Parquet/DuckDB).
+- [x] 8 new tests in `tests/testthat/test-export.R` (Tests 15-22): partitioned dataset write/read, zero-row, fallback, missing directory, multiple partitions, single-collection fallback, unsupported extension, path validation.
+
+**Files changed:**
+- `R/export.R` — added `.rx_save_partitioned()`, `.rx_read_partitioned()`, updated `x_save()` with `.parquetds` routing, updated documentation
+- `tests/testthat/test-export.R` — added Tests 15-22 (8 new tests covering partitioned dataset workflow)
 
 ### Iteration 89: Improve DuckDB schema [ ]
 

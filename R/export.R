@@ -25,6 +25,9 @@ NULL
 #' The file format is inferred from the file extension:
 #'
 #' - `.parquet` — writes using the Arrow package (if available).
+#' - `.parquetds` — writes a partitioned Arrow dataset of Parquet
+#'   files (if Arrow is available).  Data is partitioned by
+#'   `collection_id` and the date extracted from `collected_at`.
 #' - `.duckdb` — writes using the DuckDB package (if available).
 #' - `.jsonl` — writes using jsonlite (always available, same as
 #'   [`.rx_jsonl_write()`]).
@@ -73,6 +76,8 @@ x_save <- function(posts, path) {
 
   if (ext == "parquet") {
     .rx_save_parquet(posts, path)
+  } else if (ext == "parquetds") {
+    .rx_save_partitioned(posts, path)
   } else if (ext == "duckdb") {
     .rx_save_duckdb(posts, path)
   } else if (ext == "jsonl") {
@@ -80,7 +85,7 @@ x_save <- function(posts, path) {
   } else {
     stop(
       "Unsupported file extension '", ext, "'. ",
-      "Use '.parquet', '.duckdb', or '.jsonl'.",
+      "Use '.parquet', '.parquetds', '.duckdb', or '.jsonl'.",
       call. = FALSE
     )
   }
@@ -206,6 +211,135 @@ x_save <- function(posts, path) {
   )
 
   invisible(NULL)
+}
+
+#' Save a tibble as a partitioned Arrow dataset.
+#'
+#' Writes a post tibble to a directory of Parquet files using Arrow's
+#' partitioned dataset writer.  Data is partitioned by \code{collection_id}
+#' and the date extracted from \code{collected_at}.  This creates a
+#' directory structure such as:
+#' \preformatted{
+#'   collection_id=<id>/collected_at_date=2025-01-01/part-0.parquet
+#'   collection_id=<id>/collected_at_date=2025-01-02/part-0.parquet
+#' }
+#'
+#' The resulting directory can be read back with
+#' \code{arrow::open_dataset()}.
+#'
+#' # Optional dependency
+#' If the \code{arrow} package is not installed, this function falls back
+#' to writing JSONL with a \code{.jsonl} extension instead.  A warning is
+#' issued to inform the user that Arrow is missing.
+#'
+#' @param posts A tibble with the canonical post schema.
+#' @param path Character string with the output directory path.
+#'   The directory is created if it does not exist.
+#'
+#' @return Invisible NULL.
+#'
+#' @noRd
+.rx_save_partitioned <- function(posts, path) {
+  if (!requireNamespace("arrow", quietly = TRUE)) {
+    warning(
+      "The 'arrow' package is not installed. ",
+      "Falling back to JSONL at '",
+      path, ".jsonl",
+      "'. Install arrow for partitioned dataset support.",
+      call. = FALSE
+    )
+    .rx_jsonl_write(paste0(path, ".jsonl"), posts, append = FALSE)
+    return(invisible(NULL))
+  }
+
+  # Guard: zero-row tibble — write nothing (an empty directory).
+  if (nrow(posts) == 0L) {
+    dir.create(path, recursive = TRUE, showWarnings = FALSE)
+    return(invisible(NULL))
+  }
+
+  # Extract collected_at date for partitioning.
+  # collected_at is in ISO 8601 format "YYYY-MM-DDTHH:MM:SSZ".
+  # We extract the YYYY-MM-DD portion for the date partition column.
+  collected_at_dates <- tryCatch(
+    substr(posts$collected_at, 1L, 10L),
+    error = function(e) rep(NA_character_, nrow(posts))
+  )
+
+  # Build a data frame that arrow::write_dataset can work with.
+  # Partition columns must be present in the table.
+  df <- posts
+  df$collected_at_date <- collected_at_dates
+
+  # Determine partition columns: use collection_id and the extracted date.
+  # Only partition by columns that have more than one distinct non-NA value.
+  partition_cols <- c("collection_id", "collected_at_date")
+  partition_cols <- Filter(function(col) {
+    vals <- unique(df[[col]])
+    length(vals[!is.na(vals)]) > 1L
+  }, partition_cols)
+
+  if (length(partition_cols) == 0L) {
+    # If there's only one distinct value (or all NA), fall back to a single
+    # Parquet file (non-partitioned) for simplicity.
+    arrow::write_parquet(df, file.path(path, "posts.parquet"))
+    return(invisible(NULL))
+  }
+
+  # Ensure the target directory exists.
+  dir.create(path, recursive = TRUE, showWarnings = FALSE)
+
+  # Write partitioned dataset.
+  # partition = TRUE uses the column names as directory names.
+  arrow::write_dataset(
+    arrow::as_arrow_table(df),
+    path = path,
+    partition = partition_cols
+  )
+
+  invisible(NULL)
+}
+
+#' Read a partitioned Arrow dataset back into a tibble.
+#'
+#' Opens a directory of partitioned Parquet files (as written by
+#' [.rx_save_partitioned()]) and returns the combined result as a tibble.
+#'
+#' @param path Character string with the directory containing the partitioned
+#'   Parquet files.
+#' @return A tibble with columns matching the canonical post schema.
+#'
+#' @noRd
+.rx_read_partitioned <- function(path) {
+  if (!requireNamespace("arrow", quietly = TRUE)) {
+    return(.rx_jsonl_empty_tibble())
+  }
+
+  if (!dir.exists(path)) {
+    return(.rx_jsonl_empty_tibble())
+  }
+
+  ds <- tryCatch(
+    arrow::open_dataset(path),
+    error = function(e) NULL
+  )
+
+  if (is.null(ds)) {
+    return(.rx_jsonl_empty_tibble())
+  }
+
+  on.exit(arrow::dataset_close(ds), add = TRUE)
+
+  result <- tryCatch(
+    arrow::collect(ds),
+    error = function(e) NULL
+  )
+
+  if (is.null(result) || !is.data.frame(result)) {
+    return(.rx_jsonl_empty_tibble())
+  }
+
+  tibble::as_tibble(result)
 }
 
 #' Read a DuckDB database back into a tibble.
