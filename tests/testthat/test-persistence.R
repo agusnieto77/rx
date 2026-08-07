@@ -268,3 +268,129 @@ test_that("integer and logical column types are preserved", {
     info = "logical type preserved for is_repost"
   )
 })
+
+# --- Test 8: .rx_checkpoint_from_state creates a valid checkpoint ---
+test_that(".rx_checkpoint_from_state creates a valid checkpoint from scroll state", {
+  fields <- xtweetsR:::.rx_canonical_fields()
+  type_map <- xtweetsR:::.rx_type_map()
+  cols <- lapply(fields, function(f) {
+    switch(type_map[[f]],
+      character = character(0),
+      integer = integer(0),
+      logical = logical(0)
+    )
+  })
+  names(cols) <- fields
+  empty_tbl <- tibble::as_tibble(cols)
+
+  # Create a scroll state and add posts.
+  state <- xtweetsR:::.rx_scroll_state_new()
+  state$add_posts(list(post_id = c("post-1", "post-2", "post-3")))
+
+  checkpoint <- xtweetsR:::.rx_checkpoint_from_state(
+    state = state,
+    collection_id = "test-col-uuid",
+    query = "r programming"
+  )
+
+  testthat::expect_s3_class(checkpoint, "rx_checkpoint", info = "has rx_checkpoint class")
+  testthat::expect_equal(checkpoint$collection_id, "test-col-uuid")
+  testthat::expect_equal(checkpoint$query, "r programming")
+  testthat::expect_equal(checkpoint$seen_post_ids, c("post-1", "post-2", "post-3"))
+  testthat::expect_equal(checkpoint$records_collected, 3L)
+  testthat::expect_equal(checkpoint$last_cursor, "")
+  testthat::expect_equal(checkpoint$last_post_id, "post-1")
+})
+
+# --- Test 9: Checkpoint write and read round-trip ---
+test_that("checkpoint write and read round-trip preserves all fields", {
+  # Create a scroll state with populated fields.
+  state <- xtweetsR:::.rx_scroll_state_new()
+  state$add_posts(list(post_id = c("post-a", "post-b")))
+  state$advance_scroll(4000)
+
+  checkpoint <- xtweetsR:::.rx_checkpoint_from_state(
+    state = state,
+    collection_id = "roundtrip-uuid-001",
+    query = "test query"
+  )
+
+  tmp <- tempfile(fileext = ".json")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  xtweetsR:::.rx_checkpoint_write(tmp, checkpoint)
+
+  loaded <- xtweetsR:::.rx_checkpoint_read(tmp)
+
+  testthat::expect_s3_class(loaded, "rx_checkpoint", info = "returns rx_checkpoint")
+  testthat::expect_equal(loaded$collection_id, "roundtrip-uuid-001")
+  testthat::expect_equal(loaded$query, "test query")
+  testthat::expect_equal(loaded$seen_post_ids, c("post-a", "post-b"))
+  testthat::expect_equal(loaded$records_collected, 2L)
+  testthat::expect_equal(loaded$last_post_id, "post-a")
+})
+
+# --- Test 10: Checkpoint write with NULL is a no-op ---
+test_that("writing NULL checkpoint does not crash", {
+  tmp <- tempfile(fileext = ".json")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  result <- xtweetsR:::.rx_checkpoint_write(tmp, NULL)
+  testthat::expect_null(result)
+})
+
+# --- Test 11: Reading a non-existent checkpoint returns NULL ---
+test_that("reading a non-existent checkpoint file returns NULL", {
+  tmp <- tempfile(fileext = ".json")
+  # Do NOT create the file.
+
+  result <- xtweetsR:::.rx_checkpoint_read(tmp)
+  testthat::expect_null(result, info = "returns NULL for missing file")
+})
+
+# --- Test 12: Checkpoint with empty seen_post_ids ---
+test_that("checkpoint handles empty seen_post_ids", {
+  state <- xtweetsR:::.rx_scroll_state_new()
+  # Don't add any posts.
+
+  checkpoint <- xtweetsR:::.rx_checkpoint_from_state(
+    state = state,
+    collection_id = "empty-seen-uuid",
+    query = "empty test"
+  )
+
+  testthat::expect_equal(checkpoint$seen_post_ids, character(0))
+  testthat::expect_equal(checkpoint$records_collected, 0L)
+
+  tmp <- tempfile(fileext = ".json")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  xtweetsR:::.rx_checkpoint_write(tmp, checkpoint)
+  loaded <- xtweetsR:::.rx_checkpoint_read(tmp)
+
+  testthat::expect_equal(loaded$seen_post_ids, character(0))
+  testthat::expect_equal(loaded$records_collected, 0L)
+  testthat::expect_equal(loaded$collection_id, "empty-seen-uuid")
+})
+
+# --- Test 13: Checkpoint preserves last_cursor ---
+test_that("checkpoint preserves last_cursor value", {
+  state <- xtweetsR:::.rx_scroll_state_new()
+  state$add_posts(list(post_id = c("post-1")))
+
+  checkpoint <- xtweetsR:::.rx_checkpoint_from_state(
+    state = state,
+    collection_id = "cursor-uuid",
+    query = "cursor test"
+  )
+  # Manually set a cursor.
+  checkpoint$last_cursor <- "MTkzNjE2NzE4NDQxMjIzMTQ1NHx8fA=="
+
+  tmp <- tempfile(fileext = ".json")
+  on.exit(file.remove(tmp), ignore = TRUE)
+
+  xtweetsR:::.rx_checkpoint_write(tmp, checkpoint)
+  loaded <- xtweetsR:::.rx_checkpoint_read(tmp)
+
+  testthat::expect_equal(loaded$last_cursor, "MTkzNjE2NzE4NDQxMjIzMTQ1NHx8fA==")
+})

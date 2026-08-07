@@ -861,22 +861,24 @@ Add:
 
 ---
 
-### Task 48: Add checkpoint state persistence [ ]
+### Task 48: Add checkpoint state persistence [x]
 
 **Goal:** Save collection state separately from post data.
 
 **Actions:**
-Persist:
-- collection_id
-- query
-- seen_post_ids
-- last_cursor
-- last_post_id
-- records_collected
+- [x] Implement `.rx_checkpoint_from_state()` — converts scroll state to serializable checkpoint.
+- [x] Implement `.rx_checkpoint_write()` — writes checkpoint as JSON file (overwrite mode).
+- [x] Implement `.rx_checkpoint_read()` — reads checkpoint from JSON file, returns NULL if missing.
+- [x] Checkpoint fields: collection_id, query, seen_post_ids, last_cursor, last_post_id, records_collected.
 
 **Acceptance criteria:**
-- State can be written and read.
-- Round-trip test passes.
+- [x] State can be written and read (Tests 9, 12, 13).
+- [x] Round-trip test passes (Test 9: all 6 fields preserved through JSON round-trip).
+- [x] Edge cases covered: NULL write (Test 10), missing file read (Test 11), empty seen_post_ids (Test 12), cursor preservation (Test 13).
+
+**Files changed:**
+- `R/persistence.R` — added `.rx_checkpoint_from_state()`, `.rx_checkpoint_write()`, `.rx_checkpoint_read()` (100 lines)
+- `tests/testthat/test-persistence.R` — added Tests 8-13 (6 new tests covering checkpoint creation, round-trip, NULL handling, missing file, empty state, cursor preservation)
 
 ---
 

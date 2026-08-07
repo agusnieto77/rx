@@ -181,3 +181,143 @@ NULL
   names(cols) <- fields
   tibble::as_tibble(cols)
 }
+
+# ---------------------------------------------------------------------------
+# Checkpoint state persistence (Task 48)
+# ---------------------------------------------------------------------------
+
+#' Create a checkpoint state object from a scroll state.
+#'
+#' Converts an `rx_scroll_state` object (from the search pipeline) into
+#' a serializable checkpoint list containing only the fields needed to
+#' resume a collection run.
+#'
+#' Fields:
+#'   - `collection_id`: UUID string identifying this collection.
+#'   - `query`: The search query string.
+#'   - `seen_post_ids`: Character vector of unique post IDs collected so far.
+#'   - `last_cursor`: Cursor from the last network response.
+#'   - `last_post_id`: post_id of the first post in the latest batch.
+#'   - `records_collected`: Integer count of unique records collected.
+#'
+#' @param state An `rx_scroll_state` object (from the search pipeline).
+#' @param collection_id Character string with the collection UUID.
+#' @param query Character string with the search query.
+#' @return A list of class `rx_checkpoint`.
+#' @noRd
+.rx_checkpoint_from_state <- function(state, collection_id, query) {
+  structure(
+    list(
+      collection_id   = as.character(collection_id),
+      query           = as.character(query),
+      seen_post_ids   = as.character(state$seen_post_ids),
+      last_cursor     = as.character(state$last_cursor),
+      last_post_id    = as.character(state$last_post_id),
+      records_collected = as.integer(state$current_count)
+    ),
+    class = "rx_checkpoint"
+  )
+}
+
+#' Write a checkpoint state to disk as JSON.
+#'
+#' Serializes a checkpoint object to a single JSON file.  The file
+#' is always overwritten (not appended) since a checkpoint represents
+#' the latest state.
+#'
+#' @param path Character string with the file path.
+#' @param checkpoint An `rx_checkpoint` object from `.rx_checkpoint_from_state()`.
+#'
+#' @return Invisible NULL, invisibly.
+#'
+#' @noRd
+.rx_checkpoint_write <- function(path, checkpoint) {
+  if (is.null(checkpoint) || !inherits(checkpoint, "rx_checkpoint")) {
+    return(invisible(NULL))
+  }
+
+  # Convert to a plain list with the required fields.
+  data <- list(
+    collection_id   = checkpoint$collection_id,
+    query           = checkpoint$query,
+    seen_post_ids   = checkpoint$seen_post_ids,
+    last_cursor     = checkpoint$last_cursor,
+    last_post_id    = checkpoint$last_post_id,
+    records_collected = checkpoint$records_collected
+  )
+
+  con <- file(path, open = "w")
+  on.exit(close(con), ignore = TRUE)
+
+  tryCatch(
+    writeLines(jsonlite::toJSON(data, auto_unbox = TRUE, pretty = TRUE), con),
+    error = function(e) {
+      stop("Failed to write checkpoint to '", path, "': ", e$message, call. = FALSE)
+    }
+  )
+
+  invisible(NULL)
+}
+
+#' Read a checkpoint state from disk.
+#'
+#' Parses a JSON checkpoint file and returns an `rx_checkpoint` object.
+#' If the file does not exist, returns NULL.
+#'
+#' @param path Character string with the checkpoint file path.
+#' @return An `rx_checkpoint` object, or NULL when the file does not exist.
+#'
+#' @noRd
+.rx_checkpoint_read <- function(path) {
+  if (!file.exists(path)) {
+    return(NULL)
+  }
+
+  content <- tryCatch(
+    readLines(path, warn = FALSE),
+    error = function(e) {
+      warning("Failed to read checkpoint file '", path, "': ", e$message)
+      return(character(0))
+    }
+  )
+
+  content <- content[nzchar(trimws(content))]
+
+  if (length(content) == 0L) {
+    return(NULL)
+  }
+
+  parsed <- tryCatch(
+    jsonlite::fromJSON(content, simplifyVector = FALSE),
+    error = function(e) {
+      warning("Failed to parse checkpoint file '", path, "': ", e$message)
+      return(NULL)
+    }
+  )
+
+  if (is.null(parsed) || !is.list(parsed)) {
+    return(NULL)
+  }
+
+  # Validate required fields are present.
+  required_fields <- c("collection_id", "query", "seen_post_ids",
+                       "last_cursor", "last_post_id", "records_collected")
+  if (!all(required_fields %in% names(parsed))) {
+    missing <- setdiff(required_fields, names(parsed))
+    warning("Checkpoint file '", path, "' is missing fields: ",
+            paste(missing, collapse = ", "))
+    return(NULL)
+  }
+
+  structure(
+    list(
+      collection_id   = as.character(parsed$collection_id),
+      query           = as.character(parsed$query),
+      seen_post_ids   = as.character(parsed$seen_post_ids),
+      last_cursor     = as.character(parsed$last_cursor),
+      last_post_id    = as.character(parsed$last_post_id),
+      records_collected = as.integer(parsed$records_collected)
+    ),
+    class = "rx_checkpoint"
+  )
+}
