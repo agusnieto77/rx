@@ -67,3 +67,15 @@ Started: 2026-08-07
 
 - Created `tests/testthat/test-smoke.R` with a trivial smoke test (`requireNamespace("xtweetsR")`).
 - `testthat::test_local()` executes and passes successfully.
+
+## Task 6: Create the TypeScript sidecar skeleton - COMPLETED
+
+- Created `inst/node/package.json` — minimal package with TypeScript devDependencies only.
+- Created `inst/node/tsconfig.json` — strict mode, ES2022 target, Node16 module resolution.
+- Created `inst/node/src/index.ts` — JSONL stdin/stdout protocol with ping handler and error routing.
+- `npm install` completes with 0 vulnerabilities.
+- `npx tsc` compiles without errors.
+- Sidecar startup message on stderr: `{"type":"startup","version":"0.1.0"}`.
+- Ping request returns `{"pong":true,"version":"0.1.0"}` on stdout.
+- Unknown methods return structured error on stdout.
+- Malformed JSON returns structured PARSE_ERROR on stdout.

@@ -1,4 +1,5 @@
 .env
+inst/node/node_modules/
 .ralphex/
 inst/secrets.env
 *.rds

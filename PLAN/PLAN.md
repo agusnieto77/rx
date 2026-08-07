@@ -110,7 +110,7 @@ The final goal is an R package that controls Lightpanda and can collect structur
 
 ---
 
-### Task 6: Create the TypeScript sidecar skeleton
+### Task 6: Create the TypeScript sidecar skeleton [DONE]
 
 **Goal:** Create the minimal Node/TypeScript component without browser logic.
 
