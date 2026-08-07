@@ -7,11 +7,14 @@
 #
 # Backend contract:
 #   A backend is an R environment with these elements:
-#     $connected  - logical, whether a browser session is active
-#     $connect()  - establish connection, return self (invisibly)
-#     $navigate(url)     - navigate to URL, return list(url, status)
-#     $evaluate(expr)    - evaluate JavaScript, return list(result, error)
-#     $close()           - release browser resources, return invisible NULL
+#     $connected           - logical, whether a browser session is active
+#     $connect()           - establish connection, return self (invisibly)
+#     $navigate(url)       - navigate to URL, return list(url, status)
+#     $evaluate(expr)      - evaluate JavaScript, return list(result, error)
+#     $networkCaptureEnable() - enable CDP network event capture
+#     $networkCaptureGet()   - retrieve captured network events, clear buffer
+#     $networkCaptureClear() - clear captured network events
+#     $close()             - release browser resources, return invisible NULL
 #
 #   An environment is used instead of a list so that $<- mutations (e.g.
 #   $connected <- TRUE) propagate to the caller-visible reference.
@@ -166,6 +169,75 @@ NULL
     } else {
       list(result = resp$result, error = NULL)
     }
+  }
+
+  #' Enable CDP Network domain event capture.
+  #'
+  #' Tells the sidecar to start listening for network events
+  #' (requests, responses) over CDP. Events are stored in the
+  #' sidecar and can be retrieved with `$networkCaptureGet()`.
+  #'
+  #' @return Invisible `TRUE` on success.
+  #' @noRd
+  backend$networkCaptureEnable <- function() {
+    if (!state$connected) {
+      stop("Backend not connected. Call connect() first.", call. = FALSE)
+    }
+    resp <- tryCatch(
+      .rx_send_request(state$.proc, "networkCaptureEnable", list(), reqId = state$.reqId),
+      error = function(e) list(error = list(code = "SEND_REQUEST_ERROR", message = e$message))
+    )
+    if (!is.null(resp$error)) {
+      stop(
+        paste0("Network capture enable failed: ", resp$error$message),
+        call. = FALSE
+      )
+    }
+    invisible(TRUE)
+  }
+
+  #' Get captured network events and clear the buffer.
+  #'
+  #' Returns all network events captured since the last call,
+  #' then clears the internal buffer so subsequent calls only
+  #' return events captured after this point.
+  #'
+  #' @return A list of network event records, each with
+  #'   `requestId`, `url`, `method`, `resourceType`, `status`, etc.
+  #' @noRd
+  backend$networkCaptureGet <- function() {
+    if (!state$connected) {
+      stop("Backend not connected. Call connect() first.", call. = FALSE)
+    }
+    resp <- tryCatch(
+      .rx_send_request(state$.proc, "networkCaptureGet", list(), reqId = state$.reqId),
+      error = function(e) list(error = list(code = "SEND_REQUEST_ERROR", message = e$message))
+    )
+    if (!is.null(resp$error)) {
+      stop(
+        paste0("Network capture get failed: ", resp$error$message),
+        call. = FALSE
+      )
+    }
+    if (is.null(resp$result$events)) {
+      return(list())
+    }
+    resp$result$events
+  }
+
+  #' Clear captured network events (internal housekeeping).
+  #'
+  #' @return Invisible `TRUE`.
+  #' @noRd
+  backend$networkCaptureClear <- function() {
+    if (!state$connected) {
+      return(invisible(TRUE))
+    }
+    resp <- tryCatch(
+      .rx_send_request(state$.proc, "networkCaptureClear", list(), reqId = state$.reqId),
+      error = function(e) list(error = list(code = "SEND_REQUEST_ERROR", message = e$message))
+    )
+    invisible(TRUE)
   }
 
   #' Close the browser session and stop the sidecar.

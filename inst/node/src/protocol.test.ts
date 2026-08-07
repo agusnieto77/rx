@@ -14,6 +14,9 @@ const __dirname = dirname(__filename);
 
 const SIDECAR_PATH = join(__dirname, "..", "dist", "index.js");
 
+// Incrementing counter for per-request IDs in tests.
+let testId = 0;
+
 function startSidecar(): Promise<{
   proc: ReturnType<typeof spawn>;
   stderrBuf: string;

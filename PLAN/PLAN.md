@@ -353,7 +353,7 @@ Check only:
 
 ---
 
-### Task 21: Add CDP network event capture [ ]
+### Task 21: Add CDP network event capture [x]
 
 **Goal:** Observe page network traffic.
 

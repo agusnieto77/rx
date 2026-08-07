@@ -66,6 +66,98 @@ let connectGen = 0;
 // Guard to prevent concurrent connect attempts that would leak connections.
 let connecting = false;
 
+// ── network capture state ────────────────────────────────────────────
+
+interface NetworkEvent {
+  requestId: string;
+  url: string;
+  method?: string;
+  resourceType?: string;
+  status?: number;
+  fromDiskCache?: boolean;
+  fromServiceWorker?: boolean;
+  fromPrefetchCache?: boolean;
+  timedOut?: boolean;
+  protocol?: string;
+}
+
+let networkEvents: NetworkEvent[] = [];
+// Module-level references to the current handler closures, so that
+// handleNetworkCaptureClear() can remove them without casting.
+let _captureOnRequest: ((params: Record<string, unknown>) => void) | null = null;
+let _captureOnResponse: ((params: Record<string, unknown>) => void) | null = null;
+
+function handleNetworkCaptureEnable(id: unknown): void {
+  if (cdpConnection === null || !cdpConnection.isConnected) {
+    respondError(id, "CDP_ERROR", "Cannot enable network capture — CDP connection not active");
+    return;
+  }
+  const conn = cdpConnection;
+  networkEvents = [];
+
+  const onRequest = (params: Record<string, unknown>): void => {
+    const request = params.request as Record<string, unknown> | undefined;
+    networkEvents.push({
+      requestId: String(params.requestId ?? ""),
+      url: String((request?.url ?? params.url ?? "") as string),
+      method: request?.method as string | undefined,
+      resourceType: String(params.type ?? ""),
+    });
+  };
+
+  const onResponse = (params: Record<string, unknown>): void => {
+    const rid = String(params.requestId ?? "");
+    const response = params.response as Record<string, unknown> | undefined;
+    for (const ev of networkEvents) {
+      if (ev.requestId === rid) {
+        ev.status = typeof (response?.status as number | undefined) === "number" ? response!.status as number : undefined;
+        ev.protocol = String((response?.protocol as string | undefined) ?? "");
+        ev.fromDiskCache = Boolean(response?.fromDiskCache);
+        ev.fromServiceWorker = Boolean(response?.fromServiceWorker);
+        ev.fromPrefetchCache = Boolean(response?.fromPrefetchCache);
+        ev.timedOut = Boolean(response?.timedOut);
+        break;
+      }
+    }
+  };
+
+  conn.sendCommand("Network.enable").catch((err: Error) => {
+    log("warn", "Network.enable failed", err.message);
+  });
+
+  // Store references before registering listeners so the clear handler can remove them.
+  _captureOnRequest = onRequest;
+  _captureOnResponse = onResponse;
+
+  conn.on("Network.request", onRequest as (params: Record<string, unknown>) => void);
+  conn.on("Network.requestWillBeSent", onRequest as (params: Record<string, unknown>) => void);
+  conn.on("Network.responseReceived", onResponse as (params: Record<string, unknown>) => void);
+
+  log("info", "network capture enabled");
+  respond(id, { enabled: true, eventsCaptured: networkEvents.length });
+}
+
+function handleNetworkCaptureGet(id: unknown): void {
+  const events = networkEvents.slice();
+  networkEvents = [];
+  respond(id, { events });
+}
+
+function handleNetworkCaptureClear(id: unknown): void {
+  networkEvents = [];
+  // Remove event listeners from the connection.
+  if (cdpConnection !== null && _captureOnRequest !== null) {
+    cdpConnection.removeListener("Network.request", _captureOnRequest);
+    cdpConnection.removeListener("Network.requestWillBeSent", _captureOnRequest);
+  }
+  if (cdpConnection !== null && _captureOnResponse !== null) {
+    cdpConnection.removeListener("Network.responseReceived", _captureOnResponse);
+  }
+  _captureOnRequest = null;
+  _captureOnResponse = null;
+  respond(id, { cleared: true });
+}
+
 // ── close handler ────────────────────────────────────────────────────
 
 function handleClose(id: unknown): void {
@@ -534,6 +626,15 @@ async function main(): Promise<void> {
         break;
       case "evaluate":
         await handleEvaluate(id, req.params);
+        break;
+      case "networkCaptureEnable":
+        handleNetworkCaptureEnable(id);
+        break;
+      case "networkCaptureGet":
+        handleNetworkCaptureGet(id);
+        break;
+      case "networkCaptureClear":
+        handleNetworkCaptureClear(id);
         break;
       default:
         respondError(id, "UNKNOWN_METHOD", `Method "${method}" is not implemented`);
