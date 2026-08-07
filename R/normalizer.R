@@ -4,8 +4,13 @@
 # `.rx_parse_posts`) into one stable canonical schema.  The parser and
 # normalizer are deliberately separate:
 #
-#   parser  -> list of 18 named character/integer/logical vectors
-#   normalizer -> validated, type-coerced, consistently-represented output
+#   parser  -> list-of-vectors with post-level fields (+ cursors)
+#   normalizer -> validates, coerces, and pads to the 21-field canonical schema
+#   dedup   -> removes duplicate posts by post_id, first-seen order
+#
+#   Note: observation-level provenance fields (collected_at, collection_query,
+#   collection_id) are injected by the search pipeline before normalization
+#   (Task 46). The normalizer handles them as regular character fields.
 #   dedup   -> removes duplicate posts by post_id, first-seen order
 #
 # Every output row (column in the list) has the same columns.
@@ -49,8 +54,11 @@ NULL
 #'   - is_quote — logical
 #'   - reply_to_post_id — character
 #'   - quoted_post_id — character
+#'   - collected_at — character (ISO-8601 timestamp, Task 46)
+#'   - collection_query — character (search query string, Task 46)
+#'   - collection_id — character (UUID, Task 46)
 #'
-#' @return A character vector of 18 field names in canonical order.
+#' @return A character vector of 21 field names in canonical order.
 #' @keywords internal
 .rx_canonical_fields <- function() {
   c(
@@ -61,7 +69,9 @@ NULL
     "bookmark_count", "view_count",
     "conversation_id",
     "is_reply", "is_repost", "is_quote",
-    "reply_to_post_id", "quoted_post_id"
+    "reply_to_post_id", "quoted_post_id",
+    # Observation-level provenance (Task 46)
+    "collected_at", "collection_query", "collection_id"
   )
 }
 
@@ -82,7 +92,9 @@ NULL
     bookmark_count = "integer", view_count = "integer",
     conversation_id = "character",
     is_reply = "logical", is_repost = "logical", is_quote = "logical",
-    reply_to_post_id = "character", quoted_post_id = "character"
+    reply_to_post_id = "character", quoted_post_id = "character",
+    # Observation-level provenance (Task 46)
+    collected_at = "character", collection_query = "character", collection_id = "character"
   )
 }
 
@@ -103,7 +115,9 @@ NULL
     bookmark_count = 0L, view_count = 0L,
     conversation_id = NA_character_,
     is_reply = FALSE, is_repost = FALSE, is_quote = FALSE,
-    reply_to_post_id = NA_character_, quoted_post_id = NA_character_
+    reply_to_post_id = NA_character_, quoted_post_id = NA_character_,
+    # Observation-level provenance (Task 46)
+    collected_at = NA_character_, collection_query = NA_character_, collection_id = NA_character_
   )
 }
 
@@ -119,7 +133,7 @@ NULL
 # output expected by downstream code (Task 37).
 #'
 #' @param parsed A list as returned by `.rx_parse_posts()`.
-#' @return A list with the same 18 fields in canonical order, each coerced
+#' @return A list with the same 21 fields in canonical order, each coerced
 #'   to the expected type and padded to the longest length with NA defaults.
 #'   Returns an empty normalized list (zero-length vectors) when `parsed`
 #'   is NULL, empty, or contains no `post_id` field.
@@ -231,7 +245,7 @@ NULL
 #' that Task 37 introduces.
 #'
 #' @param normalized A list as returned by `.rx_normalize_posts()`.
-#' @return A `tibble` with 18 columns matching the canonical schema.
+#' @return A `tibble` with 21 columns matching the canonical schema.
 #'   Zero rows when `normalized` is empty.
 #'
 #' @examples

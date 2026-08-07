@@ -819,7 +819,7 @@ Track:
 
 ---
 
-### Task 46: Add `collected_at` and query metadata [ ]
+### Task 46: Add `collected_at` and query metadata [x]
 
 **Goal:** Add observation-level provenance.
 

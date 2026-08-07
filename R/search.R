@@ -18,6 +18,11 @@
 #   (limit hit, max_scrolls exceeded, no-new-data stall) without relying
 #   on implicit loop variables.
 #
+# Observation-level provenance (Task 46):
+#   Each post row includes `collected_at`, `collection_query`, and
+#   `collection_id` — allowing per-row traceability to the collection
+#   that produced it. These are injected before normalization.
+#
 # Collection provenance (Task 45):
 #   Each search result carries collection metadata as an attribute
 #   (`rx_collection_provenance`). The metadata is a list with:
@@ -234,8 +239,9 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 
   backend <- session$backend
 
-  # 1b. Capture collection start time for provenance (Task 45).
+  # 1b. Capture collection start time and generate collection_id for provenance (Tasks 45, 46).
   collection_started_at <- Sys.time()
+  collection_id <- .rx_generate_uuid()
   backend_label <- "unknown"
   if (inherits(session$backend, "rx_lightpanda_backend")) {
     backend_label <- "lightpanda"
@@ -262,6 +268,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     warning("Navigation failed (", error_info, "). No posts returned.")
     empty <- .rx_search_empty_tibble()
     provenance <- .rx_collection_metadata(
+      collection_id = collection_id,
       started_at = collection_started_at,
       query = query,
       backend = backend_label,
@@ -405,6 +412,13 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     )
   }
 
+  # 7b. Observation-level provenance (Task 46).
+  # Populate collected_at, collection_query, collection_id for every row.
+  n_merged <- if (length(merged_posts$post_id) > 0L) length(merged_posts$post_id) else 0L
+  merged_posts$collected_at     <- rep(format(Sys.time(), iso8601 = TRUE), n_merged)
+  merged_posts$collection_query <- rep(query, n_merged)
+  merged_posts$collection_id    <- rep(collection_id, n_merged)
+
   # 8. Normalize, convert to tibble, deduplicate.
   normalized <- .rx_normalize_posts(merged_posts)
   tibble_posts <- .rx_normalized_to_tibble(normalized)
@@ -418,8 +432,9 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   # 10. Clean up network capture.
   .rx_search_cleanup(backend)
 
-  # 11. Attach collection provenance metadata (Task 45).
+  # 11. Attach collection provenance metadata (Tasks 45, 46).
   provenance <- .rx_collection_metadata(
+    collection_id = collection_id,
     started_at = collection_started_at,
     query = query,
     backend = backend_label,
@@ -435,7 +450,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 #' Used to maintain consistent field structure when a scroll iteration
 #' produces zero posts (no-new-data cycle).
 #'
-#' @return A list with 18 canonical fields, all empty vectors.
+#' @return A list with 21 canonical fields, all empty vectors.
 #' @noRd
 .rx_search_empty_batch <- function() {
   list(
@@ -456,7 +471,11 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     is_repost      = logical(0),
     is_quote       = logical(0),
     reply_to_post_id = character(0),
-    quoted_post_id   = character(0)
+    quoted_post_id   = character(0),
+    # Observation-level provenance (Task 46)
+    collected_at     = character(0),
+    collection_query = character(0),
+    collection_id    = character(0)
   )
 }
 
@@ -470,7 +489,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 
 #' Create an empty tibble with zero rows and the canonical schema.
 #'
-#' @return A tibble with 18 columns matching the canonical schema,
+#' @return A tibble with 21 columns matching the canonical schema,
 #'   zero rows.
 #' @noRd
 .rx_search_empty_tibble <- function() {
@@ -507,7 +526,12 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     bookmark_count = integer(0), view_count = integer(0),
     conversation_id = character(0),
     is_reply = logical(0), is_repost = logical(0), is_quote = logical(0),
-    reply_to_post_id = character(0), quoted_post_id = character(0)
+    reply_to_post_id = character(0), quoted_post_id = character(0),
+    # Observation-level provenance (Task 46) — placeholders;
+    # populated later from search context.
+    collected_at = character(0),
+    collection_query = character(0),
+    collection_id = character(0)
   )
 
   # Collect candidate event IDs: X domain + JSON content type.
@@ -575,6 +599,10 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     all_parsed$is_quote     <- c(all_parsed$is_quote,     parsed$is_quote)
     all_parsed$reply_to_post_id <- c(all_parsed$reply_to_post_id, parsed$reply_to_post_id)
     all_parsed$quoted_post_id   <- c(all_parsed$quoted_post_id,   parsed$quoted_post_id)
+    # Observation-level provenance (Task 46) — placeholder, filled later.
+    all_parsed$collected_at     <- c(all_parsed$collected_at,     character(0))
+    all_parsed$collection_query <- c(all_parsed$collection_query, character(0))
+    all_parsed$collection_id    <- c(all_parsed$collection_id,    character(0))
   }
 
   all_parsed

@@ -4,11 +4,11 @@
 # (list-of-vectors from .rx_parse_posts) into a stable canonical schema
 # with consistent types, column order, and NA representation.
 
-# --- Test 1: Canonical fields returns 18 fields in correct order ---
-test_that(".rx_canonical_fields returns 18 fields in the expected order", {
+# --- Test 1: Canonical fields returns 21 fields in correct order ---
+test_that(".rx_canonical_fields returns 21 fields in the expected order", {
   fields <- xtweetsR:::.rx_canonical_fields()
 
-  testthat::expect_length(fields, 18L, info = "18 canonical fields")
+  testthat::expect_length(fields, 21L, info = "21 canonical fields")
   testthat::expect_equal(
     fields,
     c(
@@ -19,7 +19,9 @@ test_that(".rx_canonical_fields returns 18 fields in the expected order", {
       "bookmark_count", "view_count",
       "conversation_id",
       "is_reply", "is_repost", "is_quote",
-      "reply_to_post_id", "quoted_post_id"
+      "reply_to_post_id", "quoted_post_id",
+      # Observation-level provenance (Task 46)
+      "collected_at", "collection_query", "collection_id"
     ),
     info = "field order matches canonical definition"
   )
@@ -168,8 +170,8 @@ test_that("normalizer output has all 18 canonical fields", {
   normalized <- xtweetsR:::.rx_normalize_posts(raw)
 
   fields <- xtweetsR:::.rx_canonical_fields()
-  testthat::expect_setequal(names(normalized), fields, info = "all 18 fields present")
-  testthat::expect_length(names(normalized), 18L, info = "exactly 18 fields")
+  testthat::expect_setequal(names(normalized), fields, info = "all 21 fields present")
+  testthat::expect_length(names(normalized), 21L, info = "exactly 21 fields")
 })
 
 # --- Test 9: Normalizer output column lengths are all equal ---
@@ -471,7 +473,7 @@ test_that("tibble has 18 columns and 4 rows from fixture", {
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
 
-  testthat::expect_equal(ncol(tbl), 18L, info = "18 canonical columns")
+  testthat::expect_equal(ncol(tbl), 21L, info = "21 canonical columns")
   testthat::expect_equal(nrow(tbl), 4L, info = "4 posts from fixture")
 })
 
@@ -669,4 +671,65 @@ test_that("deduplication preserves column types", {
       )
     }
   }
+})
+
+# --- Test 30: Canonical fields returns 21 fields (Task 46) ---
+test_that(".rx_canonical_fields returns 21 fields including observation provenance", {
+  fields <- xtweetsR:::.rx_canonical_fields()
+
+  testthat::expect_length(fields, 21L, info = "21 canonical fields")
+  testthat::expect_equal(
+    fields[19:21],
+    c("collected_at", "collection_query", "collection_id"),
+    info = "observation provenance fields are at the end"
+  )
+})
+
+# --- Test 31: Type map covers observation provenance fields (Task 46) ---
+test_that("observation provenance fields are character in type map", {
+  type_map <- xtweetsR:::.rx_type_map()
+
+  testthat::expect_equal(type_map["collected_at"], "character", info = "collected_at is character")
+  testthat::expect_equal(type_map["collection_query"], "character", info = "collection_query is character")
+  testthat::expect_equal(type_map["collection_id"], "character", info = "collection_id is character")
+})
+
+# --- Test 32: NA defaults cover observation provenance fields (Task 46) ---
+test_that("observation provenance fields default to NA_character_", {
+  na_defs <- xtweetsR:::.rx_na_defaults()
+
+  testthat::expect_true(
+    is.na(na_defs[["collected_at"]]),
+    info = "collected_at default is NA"
+  )
+  testthat::expect_true(
+    is.na(na_defs[["collection_query"]]),
+    info = "collection_query default is NA"
+  )
+  testthat::expect_true(
+    is.na(na_defs[["collection_id"]]),
+    info = "collection_id default is NA"
+  )
+})
+
+# --- Test 33: Tibble has 21 columns (Task 46) ---
+test_that("tibble has 21 columns from fixture", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  normalized <- xtweetsR:::.rx_normalize_posts(parsed)
+  tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
+
+  testthat::expect_equal(ncol(tbl), 21L, info = "21 canonical columns")
+  testthat::expect_equal(nrow(tbl), 4L, info = "4 posts from fixture")
+  testthat::expect_equal(
+    names(tbl)[19:21],
+    c("collected_at", "collection_query", "collection_id"),
+    info = "provenance columns are last"
+  )
 })

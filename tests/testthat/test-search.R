@@ -76,11 +76,11 @@ test_that("is_candidate returns TRUE for internal.alg.com URLs", {
 })
 
 # --- Test 9: .rx_search_empty_tibble has canonical schema ---
-test_that("empty tibble has all 18 canonical columns", {
+test_that("empty tibble has all 21 canonical columns (Task 46)", {
   tbl <- .rx_search_empty_tibble()
   expect_true(inherits(tbl, "tbl_df"))
   fields <- .rx_canonical_fields()
-  expect_equal(ncol(tbl), 18L)
+  expect_equal(ncol(tbl), 21L)
   expect_equal(sort(names(tbl)), sort(fields))
   expect_equal(nrow(tbl), 0L)
 })
@@ -1271,4 +1271,74 @@ test_that("navigation failure result carries provenance with zero records", {
   expect_true(is.list(provenance))
   expect_equal(provenance$query, "failed query")
   expect_equal(provenance$records, 0L)
+})
+
+# --- Test 48: Observation-level provenance fields are populated (Task 46) ---
+test_that("x_search populates collected_at, collection_query, collection_id on post rows", {
+  fixture_path <- file.path(
+    testthat::test_path("..", ".."),
+    "inst", "tests", "fixtures", "x-search-response.json"
+  )
+  content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
+  parsed_fixture <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list(
+    list(requestId = "req-1", url = "https://x.com/graphql/test", contentType = "application/json")
+  )
+  mock_session$backend$networkCaptureGetBody <- function(requestId) {
+    list(requestId = requestId, body = parsed_fixture, contentType = "application/json", error = NULL)
+  }
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  result <- x_search(mock_session, "r language")
+
+  expect_true(inherits(result, "tbl_df"))
+  expect_true(nrow(result) >= 1)
+
+  # The three observation-level provenance columns must exist.
+  expect_true("collected_at" %in% names(result))
+  expect_true("collection_query" %in% names(result))
+  expect_true("collection_id" %in% names(result))
+
+  # All rows must have the same query and collection_id.
+  expect_true(all(result$collection_query == "r language"))
+  expect_true(all(result$collection_id == result$collection_id[1L]))
+  expect_true(nzchar(result$collection_id[1L]))
+
+  # collection_id must match the provenance attribute.
+  provenance <- attr(result, "rx_collection_provenance")
+  expect_equal(provenance$collection_id, result$collection_id[1L])
+
+  # collected_at must be non-empty character on every row.
+  expect_true(all(nzchar(result$collected_at)))
+})
+
+# --- Test 49: Observation-level provenance on empty result (Task 46) ---
+test_that("empty result has observation provenance columns", {
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) {
+    list(status = "error", error = list(code = "NAV_FAIL"))
+  }
+
+  expect_warning(
+    result <- x_search(mock_session, "failed query"),
+    "Navigation failed"
+  )
+
+  # Empty tibble should still have the observation provenance columns.
+  expect_true("collected_at" %in% names(result))
+  expect_true("collection_query" %in% names(result))
+  expect_true("collection_id" %in% names(result))
+  expect_equal(nrow(result), 0L)
 })
