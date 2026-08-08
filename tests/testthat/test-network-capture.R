@@ -83,7 +83,7 @@ test_that("network events are captured when navigating to the local fixture", {
     if (ready) break
     Sys.sleep(0.1)
   }
-  testthat::expect_true(ready, info = "test server is ready")
+  testthat::expect_true(ready)
 
   # Per-test request ID counter.
   test_req_id <- 0L
@@ -105,13 +105,13 @@ test_that("network events are captured when navigating to the local fixture", {
   # Enable network capture.
   enable_resp <- xtweetsR:::.rx_send_request(proc, "networkCaptureEnable", list(), reqId = make_test_req_id)
   testthat::expect_false(is.null(enable_resp$result$enabled))
-  testthat::expect_true(isTRUE(enable_resp$result$enabled), info = "network capture enabled")
+  testthat::expect_true(isTRUE(enable_resp$result$enabled))
 
   # Navigate to the local fixture.
   url <- paste0("http://127.0.0.1:", port, "/dynamic-page.html")
   nav_resp <- xtweetsR:::.rx_send_request(proc, "navigate", list(url = url), reqId = make_test_req_id)
   testthat::expect_false(is.null(nav_resp$result$navigated))
-  testthat::expect_true(isTRUE(nav_resp$result$navigated), info = "navigation succeeded")
+  testthat::expect_true(isTRUE(nav_resp$result$navigated))
 
   # Wait for network events to be captured (give the page time to load resources).
   Sys.sleep(1)
@@ -125,31 +125,30 @@ test_that("network events are captured when navigating to the local fixture", {
     error = function(e) list()
   )
 
-  testthat::expect_true(is.list(events), info = "captured events is a list")
+  testthat::expect_true(is.list(events))
 
   # Events should not be empty — at minimum we should see the HTML page request.
   testthat::expect_true(
-    length(events) >= 1,
-    info = paste0("at least one network event captured (got ", length(events), ")")
-  )
+    length(events) >= 1
+    )
 
   # Each event must have a requestId.
   for (ev in events) {
-    testthat::expect_true("requestId" %in% names(ev), info = "event has requestId")
-    testthat::expect_true(nzchar(ev$requestId), info = "requestId is non-empty")
+    testthat::expect_true("requestId" %in% names(ev))
+    testthat::expect_true(nzchar(ev$requestId))
   }
 
   # At least one event should have a URL.
   has_url <- any(vapply(events, function(e) !is.null(e$url) && nzchar(e$url), logical(1)))
-  testthat::expect_true(has_url, info = "at least one event has a URL")
+  testthat::expect_true(has_url)
 
   # At least one event should have a method.
   has_method <- any(vapply(events, function(e) !is.null(e$method) && nzchar(e$method), logical(1)))
-  testthat::expect_true(has_method, info = "at least one event has a method")
+  testthat::expect_true(has_method)
 
   # At least one event should have a resourceType.
   has_type <- any(vapply(events, function(e) !is.null(e$resourceType) && nzchar(e$resourceType), logical(1)))
-  testthat::expect_true(has_type, info = "at least one event has a resourceType")
+  testthat::expect_true(has_type)
 })
 
 # --- Test 4: networkCaptureClear resets events ---
@@ -184,7 +183,7 @@ test_that("networkCaptureClear resets the captured events buffer", {
   )
 
   testthat::expect_false(is.null(clear_resp$result$cleared))
-  testthat::expect_true(isTRUE(clear_resp$result$cleared), info = "clear returned cleared=TRUE")
+  testthat::expect_true(isTRUE(clear_resp$result$cleared))
 })
 
 # --- Test 5: networkCaptureGetBody method exists on the backend ---
@@ -256,7 +255,7 @@ test_that("response body is captured for JSON network requests", {
     Sys.sleep(0.1)
   }
 
-  testthat::expect_true(ready, info = "test server is ready")
+  testthat::expect_true(ready)
 
   # Per-test request ID counter.
   test_req_id <- 0L
@@ -277,12 +276,12 @@ test_that("response body is captured for JSON network requests", {
 
   # Enable network capture before navigation.
   enable_resp <- xtweetsR:::.rx_send_request(proc, "networkCaptureEnable", list(), reqId = make_test_req_id)
-  testthat::expect_true(isTRUE(enable_resp$result$enabled), info = "network capture enabled before navigation")
+  testthat::expect_true(isTRUE(enable_resp$result$enabled))
 
   # Navigate to the dynamic page (it fetches fake-post.json via fetch()).
   url <- paste0("http://127.0.0.1:", port, "/dynamic-page.html")
   nav_resp <- xtweetsR:::.rx_send_request(proc, "navigate", list(url = url), reqId = make_test_req_id)
-  testthat::expect_true(isTRUE(nav_resp$result$navigated), info = "navigation succeeded")
+  testthat::expect_true(isTRUE(nav_resp$result$navigated))
 
   # Wait for JS to run (setTimeout 50ms + fetch).
   Sys.sleep(2)
@@ -302,16 +301,15 @@ test_that("response body is captured for JSON network requests", {
   }, events)
 
   testthat::expect_true(
-    length(json_events) > 0,
-    info = "at least one event for fake-post.json exists"
-  )
+    length(json_events) > 0
+    )
 
   if (length(json_events) == 0) {
     testthat::skip("no fake-post.json event found, skipping body capture test")
   }
 
   json_req_id <- json_events[[1]]$requestId
-  testthat::expect_true(nzchar(json_req_id), info = "fake-post.json event has a requestId")
+  testthat::expect_true(nzchar(json_req_id))
 
   # Get the response body using the requestId.
   body_resp <- tryCatch(
@@ -326,41 +324,35 @@ test_that("response body is captured for JSON network requests", {
     error = function(e) NULL
   )
 
-  testthat::expect_false(is.null(body_resp), info = "networkCaptureGetBody returns a response")
+  testthat::expect_false(is.null(body_resp))
 
   # The body should be parsed JSON (jsonlite returns a list).
   testthat::expect_false(
-    is.null(body_resp$result$body),
-    info = "response body is not null"
-  )
+    is.null(body_resp$result$body)
+    )
 
   testthat::expect_true(
-    is.list(body_resp$result$body),
-    info = "parsed JSON body is an R list (not raw string)"
-  )
+    is.list(body_resp$result$body)
+    )
 
   # The parsed body should contain the 'entries' field.
   body <- body_resp$result$body
   testthat::expect_true(
-    "entries" %in% names(body),
-    info = "parsed body contains 'entries' field"
-  )
+    "entries" %in% names(body)
+    )
 
   # The parsed body should have at least one post entry.
   testthat::expect_true(
-    isTRUE(nrow(body$entries) >= 1),
-    info = "parsed body entries has at least one post"
-  )
+    isTRUE(nrow(body$entries) >= 1)
+    )
 
   # Content type should be application/json.
   testthat::expect_true(
-    identical(body_resp$result$contentType, "application/json"),
-    info = "contentType is application/json"
-  )
+    identical(body_resp$result$contentType, "application/json")
+    )
 
   # Error should be null.
   testthat::expect_true(
-    is.null(body_resp$result$error),
-    info = "error is null on success"
-  )
+    is.null(body_resp$result$error)
+    )
 })

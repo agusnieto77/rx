@@ -70,8 +70,8 @@ test_that("x_thread normalizes bare post ID to canonical URL", {
 
   x_thread(mock_session, "1234567890123456789")
 
-  expect_true(grepl("^https://x.com/status/1234567890123456789$", captured_url),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("^https://x.com/status/1234567890123456789$", captured_url)
+              )
 })
 
 # --- Test 6: x_thread normalizes x.com full URL ---
@@ -91,8 +91,8 @@ test_that("x_thread normalizes x.com URL to canonical form", {
 
   x_thread(mock_session, "https://x.com/rstudio/status/1234567890123456789")
 
-  expect_true(grepl("^https://x.com/status/1234567890123456789$", captured_url),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("^https://x.com/status/1234567890123456789$", captured_url)
+              )
 })
 
 # --- Test 7: x_thread normalizes twitter.com URL ---
@@ -112,8 +112,8 @@ test_that("x_thread normalizes twitter.com URL to x.com", {
 
   x_thread(mock_session, "https://twitter.com/rstudio/status/9876543210987654321")
 
-  expect_true(grepl("^https://x.com/status/9876543210987654321$", captured_url),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("^https://x.com/status/9876543210987654321$", captured_url)
+              )
 })
 
 # --- x_thread() navigation failure tests ---
@@ -125,6 +125,7 @@ test_that("x_thread navigation failure returns empty tibble with warning", {
   mock_session$backend <- new.env(parent = emptyenv())
   class(mock_session) <- "xtweetsR_session"
   mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
   mock_session$backend$networkCaptureGet <- function() list()
   mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
   mock_session$backend$navigate <- function(url) list(status = "error", error = list(code = "NAV_FAIL"))
@@ -169,7 +170,7 @@ test_that("x_thread extracts multiple posts from thread fixture", {
   result <- x_thread(mock_session, "1900000000000000100")
 
   expect_true(inherits(result, "tbl_df"))
-  expect_equal(nrow(result), 4L, info = "thread fixture has 4 tweets (1 parent + 3 replies)")
+  expect_equal(nrow(result), 4L)
   expect_true("post_id" %in% names(result))
   expect_true("text" %in% names(result))
   expect_true("is_reply" %in% names(result))
@@ -202,8 +203,8 @@ test_that("x_thread posts in the same thread share conversation_id", {
   result <- x_thread(mock_session, "1900000000000000100")
 
   # All 4 posts should share the same conversation_id
-  expect_equal(length(unique(result$conversation_id)), 1L,
-              info = "all thread posts should share the same conversation_id")
+  expect_equal(length(unique(result$conversation_id)), 1L
+              )
   expect_equal(unique(result$conversation_id), "1900000000000000100")
 })
 
@@ -285,6 +286,7 @@ test_that("x_thread returns empty tibble when no events captured", {
   mock_session$backend <- new.env(parent = emptyenv())
   class(mock_session) <- "xtweetsR_session"
   mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
   mock_session$backend$networkCaptureGet <- function() list()
   mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
 
@@ -330,6 +332,7 @@ test_that("x_thread attaches provenance with zero-row result on no-events", {
   mock_session$backend <- new.env(parent = emptyenv())
   class(mock_session) <- "xtweetsR_session"
   mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
   mock_session$backend$networkCaptureGet <- function() list()
   mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
 
@@ -380,8 +383,8 @@ test_that("x_thread deduplicates identical posts in thread", {
   result <- x_thread(mock_session, "1900000000000000100")
 
   # Should have 4 unique posts, not 8
-  expect_equal(nrow(result), 4L,
-              info = "duplicates should be deduplicated, 4 unique posts expected")
+  expect_equal(nrow(result), 4L
+              )
 })
 
 # --- x_thread() provenance tests ---

@@ -71,10 +71,10 @@ test_that("x_quotes constructs URL with post URL", {
 
   x_quotes(mock_session, "1234567890123456789")
 
-  expect_true(grepl("x\\.com/status/1234567890123456789", captured_url),
-              info = paste("captured URL:", captured_url))
-  expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("x\\.com/status/1234567890123456789", captured_url)
+              )
+  expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE)
+              )
 })
 
 # --- Test 6: x_quotes URL-encodes the post URL in search query ---
@@ -95,10 +95,10 @@ test_that("x_quotes URL-encodes the post URL", {
   x_quotes(mock_session, "https://x.com/rstudio/status/1234567890123456789")
 
   # The URL should be URL-encoded in the search query
-  expect_true(grepl("q=", captured_url),
-              info = paste("captured URL:", captured_url))
-  expect_true(grepl("x\\.com", captured_url),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("q=", captured_url)
+              )
+  expect_true(grepl("x\\.com", captured_url)
+              )
 })
 
 # --- x_quotes() navigation failure tests ---
@@ -110,6 +110,7 @@ test_that("x_quotes navigation failure returns empty tibble with warning", {
   mock_session$backend <- new.env(parent = emptyenv())
   class(mock_session) <- "xtweetsR_session"
   mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
   mock_session$backend$networkCaptureGet <- function() list()
   mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
   mock_session$backend$navigate <- function(url) list(status = "error", error = list(code = "NAV_FAIL"))
@@ -155,7 +156,7 @@ test_that("x_quotes extracts quote tweets from fixture", {
 
   expect_true(inherits(result, "tbl_df"))
   # Fixture has 3 quote tweets (300, 302, 304) and 2 non-quotes (301, 303)
-  expect_equal(nrow(result), 3L, info = "3 quote tweets should be extracted from fixture")
+  expect_equal(nrow(result), 3L)
   expect_true("post_id" %in% names(result))
   expect_true("is_quote" %in% names(result))
 })
@@ -185,8 +186,8 @@ test_that("x_quotes returns only posts with is_quote TRUE", {
 
   result <- x_quotes(mock_session, "1900000000000000100")
 
-  expect_true(all(result$is_quote == TRUE),
-              info = "all returned posts should have is_quote == TRUE")
+  expect_true(all(result$is_quote == TRUE)
+              )
 })
 
 # --- Test 10: All returned posts have the correct quoted_post_id ---
@@ -214,8 +215,8 @@ test_that("x_quotes filters by quoted_post_id match", {
 
   result <- x_quotes(mock_session, "1900000000000000100")
 
-  expect_true(all(result$quoted_post_id == "1900000000000000100"),
-              info = "all returned posts should quote the target post")
+  expect_true(all(result$quoted_post_id == "1900000000000000100")
+              )
 })
 
 # --- Test 11: Non-quote posts are excluded ---
@@ -261,6 +262,7 @@ test_that("x_quotes returns empty tibble when no events captured", {
   mock_session$backend <- new.env(parent = emptyenv())
   class(mock_session) <- "xtweetsR_session"
   mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
   mock_session$backend$networkCaptureGet <- function() list()
   mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
 
@@ -306,6 +308,7 @@ test_that("x_quotes attaches provenance with zero-row result on no-events", {
   mock_session$backend <- new.env(parent = emptyenv())
   class(mock_session) <- "xtweetsR_session"
   mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
   mock_session$backend$networkCaptureGet <- function() list()
   mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
 
@@ -428,8 +431,8 @@ test_that("x_quotes respects limit parameter", {
 
   result <- x_quotes(mock_session, "1900000000000000100", limit = 2L)
 
-  expect_equal(nrow(result), 2L,
-              info = "limit=2 should return at most 2 quote tweets")
+  expect_equal(nrow(result), 2L
+              )
 })
 
 # --- Test 20: x_quotes with canonical URL post_id normalizes correctly ---
@@ -463,8 +466,8 @@ test_that("x_quotes normalizes x.com full URL to search query", {
 
   expect_true(inherits(result, "tbl_df"))
   # Should navigate to a search URL containing the post URL
-  expect_true(grepl("x\\.com/status/1900000000000000100", captured_url),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("x\\.com/status/1900000000000000100", captured_url)
+              )
   # Should return quote tweets that quote 1900000000000000100
   expect_true(all(result$quoted_post_id == "1900000000000000100"))
 })
@@ -488,8 +491,8 @@ test_that("x_quotes mode='latest' produces f=live in URL", {
 
   x_quotes(mock_session, "1234567890123456789", mode = "latest")
 
-  expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE)
+              )
 })
 
 # --- Test 22: x_quotes mode='top' produces f=top in URL ---
@@ -509,8 +512,8 @@ test_that("x_quotes mode='top' produces f=top in URL", {
 
   x_quotes(mock_session, "1234567890123456789", mode = "top")
 
-  expect_true(grepl("f%3Dtop", captured_url, ignore.case = TRUE),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("f%3Dtop", captured_url, ignore.case = TRUE)
+              )
 })
 
 # --- Test 23: x_quotes mode is case-insensitive ---
@@ -530,8 +533,8 @@ test_that("x_quotes mode is case-insensitive", {
 
   x_quotes(mock_session, "1234567890123456789", mode = "TOP")
 
-  expect_true(grepl("f%3Dtop", captured_url, ignore.case = TRUE),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("f%3Dtop", captured_url, ignore.case = TRUE)
+              )
 })
 
 # --- Test 24: x_quotes rejects invalid mode ---

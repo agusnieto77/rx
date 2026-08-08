@@ -1,7 +1,7 @@
 ## Workflow: R package checks for xtweetsR
 ## Phase 1: Smoke test — package loads, compiles, basic test
 ## Phase 2: Full build — R CMD build verifies package structure
-## Phase 3: R CMD check — full check with test suite (warns, doesn't block)
+## Phase 3: R CMD check — full check with test suite (fails on ERROR)
 ## No live X/Twitter access — all tests use local fixtures and mocks.
 
 name: R-CMD-check
@@ -100,5 +100,13 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
 
-      - name: R CMD check (notes-only)
-        run: R CMD check . --no-manual --no-vignettes 2>&1 | tee check.log; exit 0
+      - name: R CMD check (fail on error)
+        shell: Rscript {0}
+        run: |
+          options(crayon.enabled = FALSE)
+          rcmdcheck::rcmdcheck(
+            ".",
+            args = c("--no-manual", "--no-vignettes"),
+            error_on = "error",
+            check_dir = "check"
+          )

@@ -110,7 +110,7 @@ test_that("x_user_posts processes fixture data through mock backend", {
   result <- x_user_posts(mock_session, "hadleywickham")
 
   expect_true(inherits(result, "tbl_df"))
-  expect_true(nrow(result) >= 1, info = "fixture has posts, should get at least one")
+  expect_true(nrow(result) >= 1)
   expect_true("post_id" %in% names(result))
   expect_true("text" %in% names(result))
 
@@ -143,8 +143,8 @@ test_that("x_user_posts with path navigates to the correct URL", {
 
   x_user_posts(mock_session, "hadleywickham", path = "media")
 
-  expect_true(grepl("hadleywickham/media$", captured_url),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("hadleywickham/media$", captured_url)
+              )
 })
 
 # --- Test 9: username with @ is handled correctly ---
@@ -155,8 +155,8 @@ test_that("x_user_posts strips @ from username in provenance", {
   class(mock_session) <- "xtweetsR_session"
   mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
   mock_session$backend$navigate <- function(url) {
-    expect_true(grepl("^https://x.com/hadleywickham$", url),
-                info = paste("URL should strip @:", url))
+    expect_true(grepl("^https://x.com/hadleywickham$", url)
+                )
     list(status = "ok")
   }
   mock_session$backend$networkCaptureGet <- function() list()
@@ -183,7 +183,7 @@ test_that("x_user_posts with scroll=FALSE skips scrolling", {
   }
 
   x_user_posts(mock_session, "testuser", scroll = FALSE)
-  expect_false(scroll_called, info = "scroll should NOT be triggered when scroll=FALSE")
+  expect_false(scroll_called)
 })
 
 # --- Test 11: Observation-level provenance columns exist ---
@@ -243,7 +243,7 @@ test_that("x_user_posts limit parameter truncates results", {
   result <- x_user_posts(mock_session, "hadleywickham", limit = 2L)
 
   expect_true(inherits(result, "tbl_df"))
-  expect_lte(nrow(result), 2L, info = "should not exceed limit")
+  expect_lte(nrow(result), 2L)
 })
 
 # --- Test 13: User timeline fixture extracts all posts ---
@@ -257,11 +257,11 @@ test_that("x_user_posts extracts all posts from user timeline fixture", {
 
   # The parser should find all 5 posts from the user timeline fixture.
   posts <- xtweetsR:::.rx_parse_posts(parsed_fixture)
-  expect_equal(length(posts$post_id), 5L, info = "fixture has 5 tweets")
+  expect_equal(length(posts$post_id), 5L)
 
   # All posts should be from the @rstudio account.
-  expect_true(all(posts$username == "rstudio"),
-              info = "all posts should be from @rstudio")
+  expect_true(all(posts$username == "rstudio")
+              )
 })
 
 # --- Test 14: User timeline post fields match canonical schema ---
@@ -303,7 +303,7 @@ test_that("user timeline post IDs are unique characters", {
 
   expect_true(all(inherits(deduped$post_id, "character")))
   expect_equal(length(unique(deduped$post_id)), nrow(deduped))
-  expect_equal(nrow(deduped), 5L, info = "all 5 posts should be unique")
+  expect_equal(nrow(deduped), 5L)
 })
 
 # --- Test 16: User timeline engagement metrics are correct ---
@@ -383,7 +383,7 @@ test_that("x_user_posts full pipeline with user timeline fixture returns canonic
   result <- x_user_posts(mock_session, "rstudio")
 
   expect_true(inherits(result, "tbl_df"))
-  expect_equal(nrow(result), 5L, info = "should return all 5 posts from fixture")
+  expect_equal(nrow(result), 5L)
   expect_true("post_id" %in% names(result))
   expect_true("text" %in% names(result))
   expect_true("author_id" %in% names(result))
@@ -498,7 +498,7 @@ test_that("x_user_posts scroll=FALSE captures only initial data", {
 
   result <- x_user_posts(mock_session, "rstudio", scroll = FALSE)
 
-  expect_equal(evaluate_calls, 0L, info = "no evaluate calls when scroll=FALSE")
+  expect_equal(evaluate_calls, 0L)
   expect_equal(nrow(result), 5L)
 })
 
@@ -528,6 +528,6 @@ test_that("x_user_posts limit truncates user timeline results", {
   result <- x_user_posts(mock_session, "rstudio", limit = 3L)
 
   expect_true(inherits(result, "tbl_df"))
-  expect_lte(nrow(result), 3L, info = "should not exceed limit of 3")
+  expect_lte(nrow(result), 3L)
   expect_true(all(result$username == "rstudio"))
 })

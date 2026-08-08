@@ -62,25 +62,20 @@ test_that("valid ping request returns expected response", {
   resp <- xtweetsR:::.rx_send_request(proc, "ping", reqId = reqId)
 
   testthat::expect_true(
-    is.list(resp),
-    info = "response is a list"
-  )
+    is.list(resp)
+    )
   testthat::expect_true(
-    !is.null(resp$result),
-    info = "response has a result field"
-  )
+    !is.null(resp$result)
+    )
   testthat::expect_true(
-    resp$result$pong == TRUE,
-    info = "result.pong is TRUE"
-  )
+    resp$result$pong == TRUE
+    )
   testthat::expect_true(
-    is.character(resp$result$version),
-    info = "result.version is a character string"
-  )
+    is.character(resp$result$version)
+    )
   testthat::expect_equal(
-    resp$id, 1L,
-    info = "id is echoed back"
-  )
+    resp$id, 1L
+    )
 })
 
 # --- Test 2: unknown method returns structured error ---
@@ -93,25 +88,20 @@ test_that("unknown method returns structured error", {
   resp <- xtweetsR:::.rx_send_request(proc, "nonexistent_method", reqId = reqId)
 
   testthat::expect_true(
-    is.list(resp),
-    info = "response is a list"
-  )
+    is.list(resp)
+    )
   testthat::expect_true(
-    !is.null(resp$error),
-    info = "response has an error field"
-  )
+    !is.null(resp$error)
+    )
   testthat::expect_equal(
-    resp$error$code, "UNKNOWN_METHOD",
-    info = "error code is UNKNOWN_METHOD"
-  )
+    resp$error$code, "UNKNOWN_METHOD"
+    )
   testthat::expect_true(
-    is.character(resp$error$message),
-    info = "error message is a string"
-  )
+    is.character(resp$error$message)
+    )
   testthat::expect_true(
-    nchar(resp$error$message) > 0,
-    info = "error message is non-empty"
-  )
+    nchar(resp$error$message) > 0
+    )
 })
 
 # --- Test 3: malformed JSON produces structured error ---
@@ -152,9 +142,8 @@ test_that("malformed JSON produces a parse error on stderr", {
   xtweetsR:::.rx_stop_sidecar(proc)
 
   testthat::expect_true(
-    found_error,
-    info = "malformed JSON produces PARSE_ERROR response"
-  )
+    found_error
+    )
 })
 
 # --- Test 4: process shutdown leaves no orphan ---
@@ -163,17 +152,15 @@ test_that("stop sidecar cleanly terminates the process", {
   testthat::skip_if(is.null(proc), "sidecar process cannot start")
 
   testthat::expect_true(
-    proc$is_alive(),
-    info = "sidecar is alive after start"
-  )
+    proc$is_alive()
+    )
   xtweetsR:::.rx_stop_sidecar(proc)
 
   # Give a moment for the process to actually terminate.
   Sys.sleep(0.2)
   testthat::expect_false(
-    proc$is_alive(),
-    info = "sidecar is dead after stop"
-  )
+    proc$is_alive()
+    )
 })
 
 # --- Test 5: browser close when not connected ---
@@ -185,17 +172,14 @@ test_that("close_browser when not connected returns not_connected", {
   resp <- xtweetsR:::.rx_close_browser(proc)
 
   testthat::expect_true(
-    is.list(resp),
-    info = "close_browser returns a list"
-  )
+    is.list(resp)
+    )
   testthat::expect_equal(
-    resp$closed, FALSE,
-    info = "closed is FALSE when not connected"
-  )
+    resp$closed, FALSE
+    )
   testthat::expect_equal(
-    resp$reason, "not_connected",
-    info = "reason is not_connected"
-  )
+    resp$reason, "not_connected"
+    )
 })
 
 # --- Test 6: browser close twice is safe ---
@@ -207,18 +191,17 @@ test_that("close_browser twice does not crash the sidecar", {
 
   # First close.
   r1 <- xtweetsR:::.rx_close_browser(proc)
-  testthat::expect_false(r1$closed, info = "first close returns closed=FALSE")
+  testthat::expect_false(r1$closed)
 
   # Second close.
   r2 <- xtweetsR:::.rx_close_browser(proc)
-  testthat::expect_false(r2$closed, info = "second close returns closed=FALSE")
+  testthat::expect_false(r2$closed)
 
   # Sidecar is still alive and responsive.
   ping_resp <- xtweetsR:::.rx_send_request(proc, "ping", reqId = reqId)
   testthat::expect_true(
-    ping_resp$result$pong == TRUE,
-    info = "sidecar is still responsive after two closes"
-  )
+    ping_resp$result$pong == TRUE
+    )
 })
 
 # --- Test 7: browser close after failed connect ---
@@ -233,19 +216,16 @@ test_that("close_browser after failed connect is safe", {
   conn_resp <- xtweetsR:::.rx_send_request(proc, "connect", list(endpoint = "ws://127.0.0.1:1"), reqId = reqId)
 
   testthat::expect_true(
-    !is.null(conn_resp$error),
-    info = "connect returns error for unreachable endpoint"
-  )
+    !is.null(conn_resp$error)
+    )
   testthat::expect_equal(
-    conn_resp$error$code, "LPD_CONNECTION_ERROR",
-    info = "error code is LPD_CONNECTION_ERROR"
-  )
+    conn_resp$error$code, "LPD_CONNECTION_ERROR"
+    )
 
   # Close after failed connect — should be safe.
   close_resp <- xtweetsR:::.rx_close_browser(proc)
 
   testthat::expect_false(
-    close_resp$closed,
-    info = "close returns closed=FALSE after failed connect"
-  )
+    close_resp$closed
+    )
 })

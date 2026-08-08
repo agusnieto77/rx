@@ -100,7 +100,7 @@ test_that("empty tibble preserves correct column types", {
       list = "list",
       "unknown"
     )
-    expect_equal(actual_type, typeof(col), info = paste("field:", field))
+    expect_equal(actual_type, typeof(col))
   }
 })
 
@@ -201,7 +201,7 @@ test_that("search pipeline processes fixture data through events", {
   result <- x_search(mock_session, "test")
 
   expect_true(inherits(result, "tbl_df"))
-  expect_true(nrow(result) >= 1, info = "fixture has posts, should get at least one")
+  expect_true(nrow(result) >= 1)
   expect_true("post_id" %in% names(result))
   expect_true("text" %in% names(result))
 })
@@ -269,7 +269,7 @@ test_that("duplicate posts are deduplicated by search", {
   expect_true(inherits(result, "tbl_df"))
   unique_ids <- unique(result$post_id)
   expect_true(length(unique_ids) >= 1)
-  expect_true(length(unique_ids) == nrow(result), info = "no duplicates should remain")
+  expect_true(length(unique_ids) == nrow(result))
 })
 
 # --- Test 20: Scroll helper expression is valid JavaScript ---
@@ -295,7 +295,7 @@ test_that(".rx_scroll_page executes a valid scroll expression", {
   }
 
   x_search(mock_session, "test", scroll = TRUE)
-  expect_true(scroll_called, info = "scroll should be triggered when scroll=TRUE")
+  expect_true(scroll_called)
 })
 
 # --- Test 21: Scroll with scroll=FALSE does not call evaluate ---
@@ -316,7 +316,7 @@ test_that("x_search with scroll=FALSE skips the scroll step", {
   }
 
   x_search(mock_session, "test", scroll = FALSE)
-  expect_false(scroll_called, info = "scroll should NOT be triggered when scroll=FALSE")
+  expect_false(scroll_called)
 })
 
 # --- Test 22: Scroll batch with new posts merges correctly ---
@@ -470,11 +470,11 @@ test_that("scroll batch with new posts is merged and deduplicated", {
   result <- x_search(mock_session, "test", scroll = TRUE)
 
   expect_true(inherits(result, "tbl_df"))
-  expect_true(nrow(result) >= 4, info = "initial batch has 4+ posts")
-  expect_true(nrow(result) >= 6, info = "merged result should have initial + scroll posts (8 unique)")
+  expect_true(nrow(result) >= 4)
+  expect_true(nrow(result) >= 6)
   expect_true("post_id" %in% names(result))
   # Verify that posts from both batches exist
-  expect_true(any(grepl("998|999", result$post_id)), info = "scroll batch posts should be present")
+  expect_true(any(grepl("998|999", result$post_id)))
 })
 
 # --- Test 23: Scroll failure is non-fatal ---
@@ -522,7 +522,7 @@ test_that("scroll state constructor initializes all fields", {
   expect_equal(state$last_post_id, "")
   expect_type(state$last_cursor, "character")
   expect_equal(state$last_cursor, "")
-  expect_true(inherits(state$started_at, "POSIXct", "POSIXt"))
+  expect_true(inherits(state$started_at, "POSIXct"))
   expect_type(state$elapsed_time, "double")
   expect_equal(state$elapsed_time, 0)
 })
@@ -552,7 +552,7 @@ test_that("add_posts deduplicates and increments stall counter", {
 
   # Second batch: all duplicates.
   state$add_posts(list(post_id = c("1", "2")))
-  expect_equal(state$current_count, 3L, info = "count should not grow on duplicates")
+  expect_equal(state$current_count, 3L)
   expect_equal(state$no_new_data_cycles, 1L)
 
   # Third batch: all duplicates again.
@@ -569,7 +569,7 @@ test_that("add_posts resets no_new_data_cycles when new IDs appear", {
   state$add_posts(list(post_id = c("1", "3")))  # one new
 
   expect_equal(state$current_count, 3L)
-  expect_equal(state$no_new_data_cycles, 0L, info = "stall counter should reset on new data")
+  expect_equal(state$no_new_data_cycles, 0L)
   expect_true("3" %in% state$seen_post_ids)
 })
 
@@ -661,8 +661,8 @@ test_that("elapsed_time increases after add_posts", {
 
   state$add_posts(list(post_id = c("1")))
 
-  expect_true(state$elapsed_time > 0, info = paste("elapsed_time:", state$elapsed_time))
-  expect_true(state$elapsed_time < 5, info = "elapsed_time should be reasonable")
+  expect_true(state$elapsed_time > 0)
+  expect_true(state$elapsed_time < 5)
 })
 
 # ===================================================================
@@ -850,7 +850,7 @@ test_that("scroll loop terminates after consecutive no-new-data cycles", {
   # (batch 1 = initial with 3 posts, batches 2-3 = scroll with duplicates
   #  -> no_new_data_cycles reaches 2 -> break).
   expect_true(inherits(result, "tbl_df"))
-  expect_equal(nrow(result), 3L, info = "initial 3 posts, all subsequent are duplicates")
+  expect_equal(nrow(result), 3L)
   expect_true(all(result$post_id %in% c("100", "101", "102")))
 })
 
@@ -947,7 +947,7 @@ test_that("scroll loop respects max_scrolls parameter", {
 
   # Initial batch (1 post) + 3 scroll iterations (3 posts) = 4 total.
   expect_true(inherits(result, "tbl_df"))
-  expect_equal(nrow(result), 4L, info = "1 initial + 3 scroll = 4 unique posts")
+  expect_equal(nrow(result), 4L)
 })
 
 # --- Test 37: limit is enforced during the scroll loop ---
@@ -1042,7 +1042,7 @@ test_that("scroll loop stops when limit is reached", {
 
   # Should stop after reaching limit of 2 posts, even though more are available.
   expect_true(inherits(result, "tbl_df"))
-  expect_lte(nrow(result), 2L, info = "should not exceed the specified limit")
+  expect_lte(nrow(result), 2L)
 })
 
 # --- Test 38: max_scrolls validation ---
@@ -1077,7 +1077,7 @@ test_that("x_search with scroll=FALSE performs no scroll iterations", {
   }
 
   x_search(mock_session, "test", scroll = FALSE, max_scrolls = 10L)
-  expect_equal(evaluate_count, 0L, info = "evaluate should never be called when scroll=FALSE")
+  expect_equal(evaluate_count, 0L)
 })
 
 # ===================================================================
@@ -1110,7 +1110,7 @@ test_that("limit=1 returns exactly one post", {
   result <- x_search(mock_session, "test", limit = 1L)
 
   expect_true(inherits(result, "tbl_df"))
-  expect_equal(nrow(result), 1L, info = "limit=1 must return exactly one post")
+  expect_equal(nrow(result), 1L)
 })
 
 # --- Test 41: limit larger than available returns all posts ---
@@ -1140,7 +1140,7 @@ test_that("limit larger than available fixture results returns all posts", {
 
   expect_true(inherits(result, "tbl_df"))
   # The fixture has 4 unique posts; limit=100 should not cap them.
-  expect_equal(nrow(result), 4L, info = "limit larger than available should return all 4 posts")
+  expect_equal(nrow(result), 4L)
 })
 
 # ===================================================================
@@ -1187,7 +1187,7 @@ test_that(".rx_collection_metadata uses sensible defaults", {
   meta <- .rx_collection_metadata()
 
   expect_true(nzchar(meta$collection_id))
-  expect_true(inherits(meta$started_at, "POSIXct", "POSIXt"))
+  expect_true(inherits(meta$started_at, "POSIXct"))
   expect_equal(meta$query, "")
   expect_true(nzchar(meta$package_version))
   expect_equal(meta$backend, "unknown")
@@ -1246,7 +1246,7 @@ test_that("x_search attaches provenance to the returned tibble", {
   expect_true(is.null(class(provenance)) || !"rx_collection_provenance" %in% c("NULL", ""))
 
   expect_equal(provenance$query, "r package")
-  expect_true(inherits(provenance$started_at, "POSIXct", "POSIXt"))
+  expect_true(inherits(provenance$started_at, "POSIXct"))
   expect_true(nzchar(provenance$collection_id))
   expect_true(nzchar(provenance$package_version))
   expect_true(nzchar(provenance$parser_version))
@@ -1422,10 +1422,10 @@ test_that("x_search with resume=TRUE and no checkpoint behaves normally", {
                      checkpoint_path = checkpoint_file, jsonl_path = jsonl_file)
 
   expect_true(inherits(result, "tbl_df"))
-  expect_true(nrow(result) >= 1, info = "should get posts from fixture")
+  expect_true(nrow(result) >= 1)
 
   # Checkpoint should be created.
-  expect_true(file.exists(checkpoint_file), info = "checkpoint should be written when resume=TRUE")
+  expect_true(file.exists(checkpoint_file))
   cp <- .rx_checkpoint_read(checkpoint_file)
   expect_true(is.list(cp))
   expect_equal(cp$query, "test query")
@@ -1618,7 +1618,7 @@ test_that("x_search with resume=FALSE does not write checkpoint file", {
   result <- x_search(mock_session, "test query", resume = FALSE,
                      checkpoint_path = checkpoint_file, jsonl_path = jsonl_file)
 
-  expect_false(file.exists(checkpoint_file), info = "checkpoint should NOT be written when resume=FALSE")
+  expect_false(file.exists(checkpoint_file))
   expect_true(inherits(result, "tbl_df"))
   expect_true(nrow(result) >= 1)
 })
@@ -1668,7 +1668,7 @@ test_that("rx_mock_batch with include_duplicates adds 2 extra entries", {
                           include_duplicates = TRUE)
 
   entries <- batch$TimelineResult$result$timeline_instructions[[1L]]$entries
-  expect_equal(length(entries), 5L, info = "3 base + 2 duplicates")
+  expect_equal(length(entries), 5L)
 
   post_ids <- vapply(entries, function(e) {
     e$content$itemContent$tweet_results$result$tweet$rest_id
@@ -1707,7 +1707,7 @@ test_that("multi-batch mock: deduplication across batches is correct", {
   result <- x_search(session, "dedup test", max_scrolls = 5L, scroll = TRUE)
 
   expect_true(inherits(result, "tbl_df"))
-  expect_equal(nrow(result), 4L, info = "3 from batch1 + 1 new from batch2 = 4 unique")
+  expect_equal(nrow(result), 4L)
   expect_true(all(c("a-1", "a-2", "a-3", "a-4") %in% result$post_id))
 })
 
@@ -1727,7 +1727,7 @@ test_that("multi-batch mock: scroll loop terminates on no-new-data", {
   result <- x_search(session, "termination test", max_scrolls = 10L, scroll = TRUE)
 
   expect_true(inherits(result, "tbl_df"))
-  expect_equal(nrow(result), 5L, info = "3 + 2 unique posts, no more after batch 2")
+  expect_equal(nrow(result), 5L)
   # The scroll loop should terminate because batches 3 and 4 are empty,
   # triggering stall detection (no_new_data_cycles >= 2).
 })
@@ -1739,11 +1739,11 @@ test_that("rx_mock_realistic_scenario: exercises full collection pipeline", {
   result <- x_search(session, "realistic test", max_scrolls = 10L, scroll = TRUE, quiet = TRUE)
 
   expect_true(inherits(result, "tbl_df"))
-  expect_true(nrow(result) >= 1, info = "should have posts from batch 1")
+  expect_true(nrow(result) >= 1)
   # The realistic scenario has 5 + 4 + 3 = 12 unique posts across batches.
   # Check deduplication worked: no duplicate post_ids.
-  expect_equal(length(unique(result$post_id)), nrow(result),
-                info = "no duplicate post_ids should remain after dedup")
+  expect_equal(length(unique(result$post_id)), nrow(result)
+                )
 })
 
 # ===================================================================
@@ -1777,15 +1777,15 @@ test_that("mock cursors change across batches", {
   cursor2 <- .rx_extract_cursors(bodies[[2L]]$body)
   cursor3 <- .rx_extract_cursors(bodies[[3L]]$body)
 
-  expect_true(length(cursor1) > 0L, info = "batch 1 should have a cursor")
-  expect_true(length(cursor2) > 0L, info = "batch 2 should have a cursor")
-  expect_true(length(cursor3) > 0L, info = "batch 3 should have a cursor")
+  expect_true(length(cursor1) > 0L)
+  expect_true(length(cursor2) > 0L)
+  expect_true(length(cursor3) > 0L)
 
   # Cursors must be different per batch.
-  expect_true(cursor1["Bottom"] != cursor2["Bottom"],
-              info = "batch 1 and batch 2 cursors must differ")
-  expect_true(cursor2["Bottom"] != cursor3["Bottom"],
-              info = "batch 2 and batch 3 cursors must differ")
+  expect_true(cursor1["Bottom"] != cursor2["Bottom"]
+              )
+  expect_true(cursor2["Bottom"] != cursor3["Bottom"]
+              )
 
   # Cursor values follow the expected pattern.
   expect_equal(as.character(cursor1["Bottom"]), "cursor-batch-1")
@@ -1807,7 +1807,7 @@ test_that("mock returns no cursors when include_cursor=FALSE", {
   body <- session$backend$networkCaptureGetBody(evt$requestId)
 
   cursors <- .rx_extract_cursors(body$body)
-  expect_equal(length(cursors), 0L, info = "no cursors when include_cursor=FALSE")
+  expect_equal(length(cursors), 0L)
 })
 
 # --- Test 68: Final batch (empty) has no cursor — terminal state ---
@@ -1826,14 +1826,14 @@ test_that("empty final batch signals end of cursors", {
   evt1 <- session$backend$networkCaptureGet()
   body1 <- session$backend$networkCaptureGetBody(evt1$requestId)
   cursor1 <- .rx_extract_cursors(body1$body)
-  expect_true(length(cursor1) > 0L, info = "batch 1 should have a cursor")
+  expect_true(length(cursor1) > 0L)
 
   # Batch 2: empty response, no cursor (terminal state).
   evt2 <- session$backend$networkCaptureGet()
   body2 <- session$backend$networkCaptureGetBody(evt2$requestId)
   cursor2 <- .rx_extract_cursors(body2$body)
-  expect_equal(length(cursor2), 0L,
-               info = "empty final batch should have no cursor — terminal state")
+  expect_equal(length(cursor2), 0L
+               )
 })
 
 # --- Test 69: Scroll state tracks cursors across batches ---
@@ -1853,7 +1853,7 @@ test_that("scroll state captures cursor after parsing", {
   # Scroll state should have captured a cursor from the last batch.
   provenance <- attr(result, "rx_collection_provenance")
   expect_true(inherits(result, "tbl_df"))
-  expect_true(nrow(result) >= 1, info = "should have posts from both batches")
+  expect_true(nrow(result) >= 1)
 
   # The scroll state's last_cursor should be set after the final batch.
   # We verify this indirectly: the state is created inside x_search(),
@@ -1873,13 +1873,13 @@ test_that("rx_mock_realistic_scenario with cursors: extraction works end-to-end"
                      max_scrolls = 10L, scroll = TRUE, quiet = TRUE)
 
   expect_true(inherits(result, "tbl_df"))
-  expect_true(nrow(result) >= 1, info = "should extract posts from scenario")
+  expect_true(nrow(result) >= 1)
   # No duplicate post_ids.
-  expect_equal(length(unique(result$post_id)), nrow(result),
-               info = "deduplication should handle cursor-aware batches")
+  expect_equal(length(unique(result$post_id)), nrow(result)
+               )
 
   # The last batch is empty (end of results), so scroll termination
   # should trigger naturally via stall detection.
   provenance <- attr(result, "rx_collection_provenance")
-  expect_true(is.list(provenance), info = "provenance should be attached")
+  expect_true(is.list(provenance))
 })

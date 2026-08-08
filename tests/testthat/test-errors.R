@@ -98,8 +98,8 @@ test_that("all error types can be caught as rx_error", {
                   .rx_error_parser, .rx_error_timeout,
                   .rx_error_no_new_data)) {
     err <- tryCatch(fn("test"), error = function(e) e)
-    expect_s3_class(err, "rx_error",
-                    info = paste0("failed for ", deparse(substitute(fn))))
+    expect_s3_class(err, "rx_error"
+                    )
   }
 })
 
@@ -137,9 +137,8 @@ test_that("catching rx_error catches all structured errors", {
       fn("fail"),
       error = function(e) inherits(e, "rx_error")
     )
-    expect_true(caught,
-                info = paste0("rx_error catch failed for ",
-                              deparse(substitute(fn))))
+    expect_true(caught
+                )
   }
 })
 
@@ -163,9 +162,8 @@ test_that("backend connect failure throws rx_error_lpd_connection", {
       inherits(result, "rx_lpd_connection_error") ||
         inherits(result, "rx_error") ||
         grepl("connection", result$message, ignore.case = TRUE) ||
-        grepl("failed", result$message, ignore.case = TRUE),
-      info = paste("Error message:", result$message)
-    )
+        grepl("failed", result$message, ignore.case = TRUE)
+      )
   }
 })
 

@@ -225,7 +225,7 @@ test_that("x_debug_network captures events from navigation", {
     if (ready) break
     Sys.sleep(0.1)
   }
-  expect_true(ready, info = "test server is ready")
+  expect_true(ready)
 
   # Per-test request ID counter.
   test_req_id <- 0L
@@ -359,7 +359,7 @@ test_that("x_debug_network captures events from navigation", {
 
   # If events were captured, at least one should have a non-empty URL.
   if (nrow(df) > 0L) {
-    expect_true(any(nzchar(df$url)), info = paste0("captured ", nrow(df), " events"))
+    expect_true(any(nzchar(df$url)))
   }
 })
 
@@ -414,7 +414,7 @@ test_that("x_debug_network clears buffer (only new events on subsequent call)", 
     if (ready) break
     Sys.sleep(0.1)
   }
-  expect_true(ready, info = "test server is ready")
+  expect_true(ready)
 
   # Per-test request ID counter.
   test_req_id <- 0L

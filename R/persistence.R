@@ -150,9 +150,9 @@ NULL
   # jsonlite::rbind.fill.data.frame handles rows with different columns.
   tryCatch(
     {
-      df <- do.call(rbind, lapply(parsed, as.data.frame.stringsAsFactors = FALSE))
+      df <- do.call(rbind, lapply(parsed, as.data.frame))
       # Preserve column order and types.
-      as_tibble(df)
+      tibble::as_tibble(df)
     },
     error = function(e) {
       warning("Failed to parse JSONL file '", path, "': ", e$message)

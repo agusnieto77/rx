@@ -118,7 +118,7 @@ NULL
 #' @return A named list of default values.
 #' @noRd
 .rx_na_defaults <- function() {
-  c(
+  list(
     post_id = NA_character_, text = NA_character_,
     author_id = NA_character_, username = NA_character_,
     display_name = NA_character_, created_at = NA_character_,

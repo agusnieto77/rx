@@ -12,23 +12,19 @@ test_that("dynamic-page.html fixture exists under inst/tests/fixtures/", {
   )
 
   testthat::expect_true(
-    file.exists(fixture_path),
-    info = "fixture file exists"
-  )
+    file.exists(fixture_path)
+    )
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   testthat::expect_true(
-    grepl("<!DOCTYPE html>", content, ignore.case = TRUE),
-    info = "fixture is a valid HTML document"
-  )
+    grepl("<!DOCTYPE html>", content, ignore.case = TRUE)
+    )
   testthat::expect_true(
-    grepl("dynamic-content", content),
-    info = "fixture contains dynamic-content container"
-  )
+    grepl("dynamic-content", content)
+    )
   testthat::expect_true(
-    grepl("setTimeout", content),
-    info = "fixture modifies DOM after load via setTimeout"
-  )
+    grepl("setTimeout", content)
+    )
 })
 
 # --- Test 2: test server file exists and compiles ---
@@ -39,9 +35,8 @@ test_that("Node.js test server file exists and compiles", {
   )
 
   testthat::expect_true(
-    file.exists(server_path),
-    info = "server.ts exists"
-  )
+    file.exists(server_path)
+    )
 
   # Verify the compiled JS is present (means tsc succeeded).
   compiled_path <- file.path(
@@ -50,9 +45,8 @@ test_that("Node.js test server file exists and compiles", {
   )
 
   testthat::expect_true(
-    file.exists(compiled_path),
-    info = "server.js is compiled by TypeScript"
-  )
+    file.exists(compiled_path)
+    )
 })
 
 # --- Test 3: server can serve the fixture and returns HTML ---
@@ -73,13 +67,11 @@ test_that("test server serves the dynamic fixture with 200", {
   )
 
   testthat::expect_true(
-    file.exists(server_script),
-    info = "server.js exists"
-  )
+    file.exists(server_script)
+    )
   testthat::expect_true(
-    file.exists(fixture_dir),
-    info = "fixture directory exists"
-  )
+    file.exists(fixture_dir)
+    )
 
   # Start the server on a random high port to avoid collisions.
   port <- sample(20000:65535, 1)
@@ -108,9 +100,8 @@ test_that("test server serves the dynamic fixture with 200", {
   }
 
   testthat::expect_true(
-    ready,
-    info = "server started and reported listening"
-  )
+    ready
+    )
 
   on.exit({
     tryCatch(proc$kill(), error = function(e) NULL)
@@ -132,17 +123,14 @@ test_that("test server serves the dynamic fixture with 200", {
   }
 
   testthat::expect_true(
-    grepl("<title>Dynamic Test Page</title>", html),
-    info = "served page contains expected title"
-  )
+    grepl("<title>Dynamic Test Page</title>", html)
+    )
   testthat::expect_true(
-    grepl("static-text", html),
-    info = "served page contains static content"
-  )
+    grepl("static-text", html)
+    )
   testthat::expect_true(
-    grepl("dynamic-content", html),
-    info = "served page contains dynamic-content container"
-  )
+    grepl("dynamic-content", html)
+    )
 })
 
 # --- Test 4: dynamically inserted content is visible via JS evaluation ---
@@ -200,7 +188,7 @@ test_that("dynamically inserted DOM content is observable after load", {
     Sys.sleep(0.1)
   }
 
-  testthat::expect_true(ready, info = "test server is ready")
+  testthat::expect_true(ready)
 
   # Per-test request ID counter to avoid ID collisions across multiple requests.
   test_req_id <- 0L
@@ -235,21 +223,18 @@ test_that("dynamically inserted DOM content is observable after load", {
   ), reqId = make_test_req_id)
 
   testthat::expect_true(
-    is.list(eval_result) && !is.null(eval_result$result),
-    info = "evaluate returns a result"
-  )
+    is.list(eval_result) && !is.null(eval_result$result)
+    )
 
   # The expression should return 3 (three posts were injected).
   # CDP Runtime.evaluate with returnByValue: true wraps the value in {value, type}.
   post_count_val <- eval_result$result$value
   testthat::expect_true(
-    is.numeric(post_count_val) || is.integer(post_count_val),
-    info = "post count is numeric"
-  )
+    is.numeric(post_count_val) || is.integer(post_count_val)
+    )
   testthat::expect_true(
-    post_count_val >= 1,
-    info = "at least one dynamically inserted post is observed"
-  )
+    post_count_val >= 1
+    )
 })
 
 # --- Test 5: fake-post.json fixture exists and is valid JSON ---
@@ -260,26 +245,22 @@ test_that("fake-post.json fixture exists and parses as valid JSON", {
   )
 
   testthat::expect_true(
-    file.exists(fixture_path),
-    info = "fake-post.json fixture exists under inst/tests/fixtures/"
-  )
+    file.exists(fixture_path)
+    )
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   testthat::expect_true(
-    nzchar(content),
-    info = "fake-post.json is non-empty"
-  )
+    nzchar(content)
+    )
 
   # Parse as JSON — should not throw.
   json <- jsonlite::fromJSON(content)
   testthat::expect_true(
-    "entries" %in% names(json),
-    info = "JSON has an 'entries' array"
-  )
+    "entries" %in% names(json)
+    )
   testthat::expect_true(
-    isTRUE(nrow(json$entries) >= 1),
-    info = "entries array has at least one post"
-  )
+    isTRUE(nrow(json$entries) >= 1)
+    )
 })
 
 # --- Test 6: fake-post.json is served correctly by the test server ---
@@ -299,13 +280,11 @@ test_that("test server serves fake-post.json with application/json content type"
   )
 
   testthat::expect_true(
-    file.exists(server_script),
-    info = "server.js exists"
-  )
+    file.exists(server_script)
+    )
   testthat::expect_true(
-    file.exists(fixture_dir),
-    info = "fixture directory exists"
-  )
+    file.exists(fixture_dir)
+    )
 
   port <- sample(20000:65535, 1)
   proc <- processx::process$new(
@@ -332,9 +311,8 @@ test_that("test server serves fake-post.json with application/json content type"
   }
 
   testthat::expect_true(
-    ready,
-    info = "test server started and reported listening"
-  )
+    ready
+    )
 
   on.exit({
     tryCatch(proc$kill(), error = function(e) NULL)
@@ -353,19 +331,16 @@ test_that("test server serves fake-post.json with application/json content type"
   }
 
   testthat::expect_true(
-    nzchar(raw),
-    info = "fake-post.json response is non-empty"
-  )
+    nzchar(raw)
+    )
 
   parsed <- jsonlite::fromJSON(raw)
   testthat::expect_true(
-    "entries" %in% names(parsed),
-    info = "served JSON has 'entries' field"
-  )
+    "entries" %in% names(parsed)
+    )
   testthat::expect_true(
-    isTRUE(nrow(parsed$entries) >= 1),
-    info = "entries array has at least one entry"
-  )
+    isTRUE(nrow(parsed$entries) >= 1)
+    )
 })
 
 # --- Test 7: fake-post.json fetch is captured in network events ---
@@ -420,7 +395,7 @@ test_that("network capture observes fake-post.json fetch request", {
     Sys.sleep(0.1)
   }
 
-  testthat::expect_true(ready, info = "test server is ready")
+  testthat::expect_true(ready)
 
   test_req_id <- 0L
   make_test_req_id <- function() {
@@ -440,12 +415,12 @@ test_that("network capture observes fake-post.json fetch request", {
 
   # Enable network capture before navigation.
   enable_resp <- xtweetsR:::.rx_send_request(proc, "networkCaptureEnable", list(), reqId = make_test_req_id)
-  testthat::expect_true(isTRUE(enable_resp$result$enabled), info = "network capture enabled before navigation")
+  testthat::expect_true(isTRUE(enable_resp$result$enabled))
 
   # Navigate to the dynamic page.
   url <- paste0("http://127.0.0.1:", port, "/dynamic-page.html")
   nav_resp <- xtweetsR:::.rx_send_request(proc, "navigate", list(url = url), reqId = make_test_req_id)
-  testthat::expect_true(isTRUE(nav_resp$result$navigated), info = "navigation succeeded")
+  testthat::expect_true(isTRUE(nav_resp$result$navigated))
 
   # Wait for JS to run (setTimeout 50ms + fetch).
   Sys.sleep(2)
@@ -459,13 +434,12 @@ test_that("network capture observes fake-post.json fetch request", {
     error = function(e) list()
   )
 
-  testthat::expect_true(is.list(events), info = "captured events is a list")
+  testthat::expect_true(is.list(events))
 
   # There should be at least 2 events: HTML page request + JSON fetch.
   testthat::expect_true(
-    length(events) >= 2,
-    info = paste0("at least 2 network events captured (HTML + JSON fetch), got ", length(events))
-  )
+    length(events) >= 2
+    )
 
   # At least one event URL should contain fake-post.json.
   has_json_event <- any(vapply(events, function(e) {
@@ -473,16 +447,14 @@ test_that("network capture observes fake-post.json fetch request", {
   }, logical(1)))
 
   testthat::expect_true(
-    has_json_event,
-    info = "at least one captured event URL contains fake-post.json"
-  )
+    has_json_event
+    )
 
   # That event should have method == GET.
   json_events <- Filter(function(e) !is.null(e$url) && grepl("fake-post\\.json", e$url, ignore.case = TRUE), events)
   if (length(json_events) > 0) {
     testthat::expect_true(
-      !is.null(json_events[[1]]$method),
-      info = "fake-post.json event has a method field"
-    )
+      !is.null(json_events[[1]]$method)
+      )
   }
 })

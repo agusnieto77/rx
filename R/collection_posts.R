@@ -62,7 +62,7 @@ NULL
   fields <- .rx_collection_posts_fields()
 
   # Handle NULL / empty / unexpected input.
-  if (!is.list(parsed) || !is.list(parsed$post_id) || length(parsed$post_id) == 0L) {
+  if (!is.list(parsed) || is.null(parsed$post_id) || length(parsed$post_id) == 0L) {
     result <- vector("list", length(fields))
     names(result) <- fields
     for (field in fields) {

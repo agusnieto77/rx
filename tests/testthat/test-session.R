@@ -33,13 +33,11 @@ if (tolower(Sys.getenv("SKIP_PROTOCOL_TESTS", unset = "false")) == "true") {
 # --- Test 1: x_session() exists and is exported ---
 test_that("x_session is an exported function", {
   testthat::expect_true(
-    exists("x_session", envir = asNamespace("xtweetsR")),
-    info = "x_session exists in the package namespace"
-  )
+    exists("x_session", envir = asNamespace("xtweetsR"))
+    )
   testthat::expect_true(
-    "x_session" %in% getNamespaceExports("xtweetsR"),
-    info = "x_session is exported"
-  )
+    "x_session" %in% getNamespaceExports("xtweetsR")
+    )
 })
 
 # --- Test 2: x_session() returns a session object with correct structure ---
@@ -63,19 +61,16 @@ test_that("print.xtweetsR_session works without error", {
 
   # Capture output to verify it doesn't error and produces text.
   output <- capture.output(print(sess))
-  testthat::expect_true(length(output) > 0, info = "print produces output")
+  testthat::expect_true(length(output) > 0)
   testthat::expect_true(
-    any(grepl("xtweetsR_session", output)),
-    info = "output contains class name"
-  )
+    any(grepl("xtweetsR_session", output))
+    )
   testthat::expect_true(
-    any(grepl("endpoint", output, ignore.case = TRUE)),
-    info = "output contains endpoint info"
-  )
+    any(grepl("endpoint", output, ignore.case = TRUE))
+    )
   testthat::expect_true(
-    any(grepl("connected", output, ignore.case = TRUE)),
-    info = "output contains connection status"
-  )
+    any(grepl("connected", output, ignore.case = TRUE))
+    )
 })
 
 # --- Test 4: session$close() cleans up resources ---
@@ -123,13 +118,11 @@ test_that("x_session()$close() returns invisible NULL", {
 # --- Test 8: x_close is exported ---
 test_that("x_close is an exported function", {
   testthat::expect_true(
-    exists("x_close", envir = asNamespace("xtweetsR")),
-    info = "x_close exists in the package namespace"
-  )
+    exists("x_close", envir = asNamespace("xtweetsR"))
+    )
   testthat::expect_true(
-    "x_close" %in% getNamespaceExports("xtweetsR"),
-    info = "x_close is exported"
-  )
+    "x_close" %in% getNamespaceExports("xtweetsR")
+    )
 })
 
 # --- Test 9: x_close(NULL) does not error ---
@@ -177,9 +170,8 @@ test_that("x_close() terminates the sidecar process", {
   # Give the process a moment to terminate.
   Sys.sleep(0.2)
   testthat::expect_false(
-    proc$is_alive(),
-    info = "sidecar process should be dead after x_close()"
-  )
+    proc$is_alive()
+    )
 })
 
 # --- Test 13: x_close() on a session already closed via $close() ---

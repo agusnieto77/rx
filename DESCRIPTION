@@ -16,6 +16,7 @@ Imports:
 Suggests:
     arrow,
     curl,
+    DBI,
     duckdb,
     knitr,
     pkgload,

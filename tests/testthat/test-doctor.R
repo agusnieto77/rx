@@ -72,7 +72,7 @@ test_that("lightpanda_connection is n/a when sidecar is missing", {
     setwd(tmp)
     # Reload to pick up the new working directory.
     if (requireNamespace("pkgload", quietly = TRUE)) {
-      pkgload::load_all(quiet = TRUE, install = FALSE)
+      pkgload::load_all(quiet = TRUE)
     }
     out <- x_doctor()
     expect_equal(out$results[3], "missing")
@@ -80,7 +80,7 @@ test_that("lightpanda_connection is n/a when sidecar is missing", {
   }, finally = {
     setwd(old_wd)
     if (requireNamespace("pkgload", quietly = TRUE)) {
-      pkgload::load_all(quiet = TRUE, install = FALSE)
+      pkgload::load_all(quiet = TRUE)
     }
   })
 })

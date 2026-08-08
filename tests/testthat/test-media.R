@@ -7,32 +7,31 @@
 # --- Test 1: .rx_media_fields returns 4 fields in correct order ---
 test_that(".rx_media_fields returns 4 fields in canonical order", {
   fields <- xtweetsR:::.rx_media_fields()
-  testthat::expect_length(fields, 4L, info = "4 media fields")
+  testthat::expect_length(fields, 4L)
   testthat::expect_equal(
     fields,
-    c("media_id", "media_type", "media_url", "post_id"),
-    info = "field order matches canonical definition"
-  )
+    c("media_id", "media_type", "media_url", "post_id")
+    )
 })
 
 # --- Test 2: .rx_extract_media returns empty on NULL input ---
 test_that(".rx_extract_media returns empty vectors on NULL input", {
   result <- xtweetsR:::.rx_extract_media(NULL)
-  testthat::expect_type(result, "list", info = "returns a list")
-  testthat::expect_length(result, 4L, info = "4 fields")
-  testthat::expect_equal(length(result$media_id), 0L, info = "empty media_id")
-  testthat::expect_equal(length(result$media_type), 0L, info = "empty media_type")
-  testthat::expect_equal(length(result$media_url), 0L, info = "empty media_url")
-  testthat::expect_equal(length(result$post_id), 0L, info = "empty post_id")
+  testthat::expect_type(result, "list")
+  testthat::expect_length(result, 4L)
+  testthat::expect_equal(length(result$media_id), 0L)
+  testthat::expect_equal(length(result$media_type), 0L)
+  testthat::expect_equal(length(result$media_url), 0L)
+  testthat::expect_equal(length(result$post_id), 0L)
 })
 
 # --- Test 3: .rx_extract_media returns empty on empty parsed list ---
 test_that(".rx_extract_media returns empty vectors on empty parsed list", {
   result <- xtweetsR:::.rx_extract_media(list(post_id = character(0)))
-  testthat::expect_length(result$media_id, 0L, info = "empty media_id")
-  testthat::expect_length(result$media_type, 0L, info = "empty media_type")
-  testthat::expect_length(result$media_url, 0L, info = "empty media_url")
-  testthat::expect_length(result$post_id, 0L, info = "empty post_id")
+  testthat::expect_length(result$media_id, 0L)
+  testthat::expect_length(result$media_type, 0L)
+  testthat::expect_length(result$media_url, 0L)
+  testthat::expect_length(result$post_id, 0L)
 })
 
 # --- Test 4: .rx_extract_media skips posts with no media ---
@@ -44,7 +43,7 @@ test_that(".rx_extract_media skips posts without media", {
     media_urls = list(character(0), character(0))
   )
   result <- xtweetsR:::.rx_extract_media(parsed)
-  testthat::expect_length(result$media_id, 0L, info = "no media items extracted")
+  testthat::expect_length(result$media_id, 0L)
 })
 
 # --- Test 5: .rx_extract_media extracts single media item ---
@@ -56,10 +55,10 @@ test_that(".rx_extract_media extracts a single media item", {
     media_urls = list(c("https://pbs.twimg.com/media/abc.jpg"))
   )
   result <- xtweetsR:::.rx_extract_media(parsed)
-  testthat::expect_length(result$media_id, 1L, info = "1 media item extracted")
-  testthat::expect_equal(result$media_type[1L], "photo", info = "media_type preserved")
-  testthat::expect_equal(result$media_url[1L], "https://pbs.twimg.com/media/abc.jpg", info = "media_url preserved")
-  testthat::expect_equal(result$post_id[1L], "1", info = "post_id preserved")
+  testthat::expect_length(result$media_id, 1L)
+  testthat::expect_equal(result$media_type[1L], "photo")
+  testthat::expect_equal(result$media_url[1L], "https://pbs.twimg.com/media/abc.jpg")
+  testthat::expect_equal(result$post_id[1L], "1")
 })
 
 # --- Test 6: .rx_extract_media expands multiple media items ---
@@ -71,9 +70,9 @@ test_that(".rx_extract_media expands multiple media items per post", {
     media_urls = list(c("https://pbs.twimg.com/media/a.jpg", "https://pbs.twimg.com/media/b.jpg"))
   )
   result <- xtweetsR:::.rx_extract_media(parsed)
-  testthat::expect_length(result$media_id, 2L, info = "2 media items extracted from 1 post")
-  testthat::expect_equal(result$post_id, c("1", "1"), info = "same post_id for both")
-  testthat::expect_equal(result$media_type, c("photo", "photo"), info = "both types preserved")
+  testthat::expect_length(result$media_id, 2L)
+  testthat::expect_equal(result$post_id, c("1", "1"))
+  testthat::expect_equal(result$media_type, c("photo", "photo"))
 })
 
 # --- Test 7: .rx_extract_media handles mixed media types ---
@@ -85,8 +84,8 @@ test_that(".rx_extract_media handles mixed media types (photo + video)", {
     media_urls = list(c("https://pbs.twimg.com/media/a.jpg", "https://video.example.com/stream.mp4"))
   )
   result <- xtweetsR:::.rx_extract_media(parsed)
-  testthat::expect_length(result$media_id, 2L, info = "2 items from mixed types")
-  testthat::expect_equal(result$media_type, c("photo", "video"), info = "mixed types preserved")
+  testthat::expect_length(result$media_id, 2L)
+  testthat::expect_equal(result$media_type, c("photo", "video"))
 })
 
 # --- Test 8: .rx_extract_media mixes posts with and without media ---
@@ -98,8 +97,8 @@ test_that(".rx_extract_media mixes posts with and without media", {
     media_urls = list(c("https://pbs.twimg.com/media/a.jpg"), character(0), c("https://video.example.com/v.mp4"))
   )
   result <- xtweetsR:::.rx_extract_media(parsed)
-  testthat::expect_length(result$media_id, 2L, info = "2 media items from 3 posts")
-  testthat::expect_equal(result$post_id, c("1", "3"), info = "only posts with media")
+  testthat::expect_length(result$media_id, 2L)
+  testthat::expect_equal(result$post_id, c("1", "3"))
 })
 
 # --- Test 9: .rx_extract_media handles NA media_type ---
@@ -111,8 +110,8 @@ test_that(".rx_extract_media handles NA media_type", {
     media_urls = list(c("https://pbs.twimg.com/media/na.jpg"))
   )
   result <- xtweetsR:::.rx_extract_media(parsed)
-  testthat::expect_length(result$media_id, 1L, info = "still extracted despite NA type")
-  testthat::expect_true(is.na(result$media_type[1L]), info = "NA type preserved")
+  testthat::expect_length(result$media_id, 1L)
+  testthat::expect_true(is.na(result$media_type[1L]))
 })
 
 # --- Test 10: .rx_extract_media handles missing media_urls ---
@@ -124,17 +123,17 @@ test_that(".rx_extract_media handles missing media_urls with existing types", {
     media_urls = list(NULL)
   )
   result <- xtweetsR:::.rx_extract_media(parsed)
-  testthat::expect_length(result$media_id, 1L, info = "extracted despite no URL")
-  testthat::expect_true(is.na(result$media_url[1L]), info = "NA url for missing media_urls")
+  testthat::expect_length(result$media_id, 1L)
+  testthat::expect_true(is.na(result$media_url[1L]))
 })
 
 # --- Test 11: .rx_media_to_tibble returns empty tibble on empty input ---
 test_that(".rx_media_to_tibble returns empty tibble on empty input", {
   result <- xtweetsR:::.rx_media_to_tibble(list())
-  testthat::expect_s3_class(result, "tbl_df", info = "returns a tibble")
-  testthat::expect_equal(nrow(result), 0L, info = "zero rows")
-  testthat::expect_equal(ncol(result), 4L, info = "4 columns")
-  testthat::expect_equal(names(result), .rx_media_fields(), info = "column names match")
+  testthat::expect_s3_class(result, "tbl_df")
+  testthat::expect_equal(nrow(result), 0L)
+  testthat::expect_equal(ncol(result), 4L)
+  testthat::expect_equal(names(result), .rx_media_fields())
 })
 
 # --- Test 12: .rx_media_to_tibble converts correctly ---
@@ -146,10 +145,10 @@ test_that(".rx_media_to_tibble converts media list to tibble", {
     post_id = c("1", "1")
   )
   result <- xtweetsR:::.rx_media_to_tibble(media)
-  testthat::expect_s3_class(result, "tbl_df", info = "returns a tibble")
-  testthat::expect_equal(nrow(result), 2L, info = "2 rows")
-  testthat::expect_equal(result$media_type[1L], "photo", info = "first media_type")
-  testthat::expect_equal(result$post_id[2L], "1", info = "second post_id")
+  testthat::expect_s3_class(result, "tbl_df")
+  testthat::expect_equal(nrow(result), 2L)
+  testthat::expect_equal(result$media_type[1L], "photo")
+  testthat::expect_equal(result$post_id[2L], "1")
 })
 
 # --- Test 13: .rx_media_to_tibble handles NA values ---
@@ -161,22 +160,22 @@ test_that(".rx_media_to_tibble handles NA media_type", {
     post_id = c("1")
   )
   result <- xtweetsR:::.rx_media_to_tibble(media)
-  testthat::expect_s3_class(result, "tbl_df", info = "returns a tibble")
-  testthat::expect_true(is.na(result$media_type[1L]), info = "NA preserved")
+  testthat::expect_s3_class(result, "tbl_df")
+  testthat::expect_true(is.na(result$media_type[1L]))
 })
 
 # --- Test 14: .rx_media_to_tibble returns empty on malformed input ---
 test_that(".rx_media_to_tibble returns empty tibble on malformed input", {
   result <- xtweetsR:::.rx_media_to_tibble(list(foo = "bar"))
-  testthat::expect_s3_class(result, "tbl_df", info = "returns a tibble")
-  testthat::expect_equal(nrow(result), 0L, info = "zero rows for malformed input")
+  testthat::expect_s3_class(result, "tbl_df")
+  testthat::expect_equal(nrow(result), 0L)
 })
 
 # --- Test 15: .rx_media_to_tibble returns empty on NULL input ---
 test_that(".rx_media_to_tibble returns empty tibble on NULL input", {
   result <- xtweetsR:::.rx_media_to_tibble(NULL)
-  testthat::expect_s3_class(result, "tbl_df", info = "returns a tibble")
-  testthat::expect_equal(nrow(result), 0L, info = "zero rows on NULL input")
+  testthat::expect_s3_class(result, "tbl_df")
+  testthat::expect_equal(nrow(result), 0L)
 })
 
 # --- Test 16: Full pipeline — extract media from parsed search fixture ---
@@ -187,9 +186,9 @@ test_that("Full pipeline: extract media from a realistic parsed response", {
     parsed <- xtweetsR:::.rx_parse_posts(data)
     media <- xtweetsR:::.rx_extract_media(parsed)
     media_tbl <- xtweetsR:::.rx_media_to_tibble(media)
-    testthat::expect_s3_class(media_tbl, "tbl_df", info = "media is a tibble")
-    testthat::expect_true(nrow(media_tbl) >= 1L, info = "at least 1 media item from fixture")
-    testthat::expect_true(all(names(media_tbl) %in% .rx_media_fields()), info = "correct columns")
+    testthat::expect_s3_class(media_tbl, "tbl_df")
+    testthat::expect_true(nrow(media_tbl) >= 1L)
+    testthat::expect_true(all(names(media_tbl) %in% .rx_media_fields()))
   } else {
     testthat::skip("fixture not available")
   }
@@ -207,12 +206,12 @@ test_that(".rx_relational_result returns rx_relational with media attribute", {
     media_urls = list(c("https://pbs.twimg.com/media/a.jpg"), character(0))
   )
   result <- xtweetsR:::.rx_relational_result(posts, parsed)
-  testthat::expect_s3_class(result, "rx_relational", info = "rx_relational class")
-  testthat::expect_s3_class(result, "tbl_df", info = "also a tibble")
+  testthat::expect_s3_class(result, "rx_relational")
+  testthat::expect_s3_class(result, "tbl_df")
   media <- attr(result, "rx_media")
-  testthat::expect_true(!is.null(media), info = "rx_media attribute exists")
-  testthat::expect_s3_class(media, "tbl_df", info = "media is a tibble")
-  testthat::expect_equal(nrow(media), 1L, info = "1 media item (post 2 has none)")
+  testthat::expect_true(!is.null(media))
+  testthat::expect_s3_class(media, "tbl_df")
+  testthat::expect_equal(nrow(media), 1L)
 })
 
 # --- Test 18: .rx_relational_result with empty media ---
@@ -224,9 +223,9 @@ test_that(".rx_relational_result handles no media", {
     media_urls = list(character(0))
   )
   result <- xtweetsR:::.rx_relational_result(posts, parsed)
-  testthat::expect_s3_class(result, "rx_relational", info = "rx_relational class")
+  testthat::expect_s3_class(result, "rx_relational")
   media <- attr(result, "rx_media")
-  testthat::expect_equal(nrow(media), 0L, info = "zero media for no-media input")
+  testthat::expect_equal(nrow(media), 0L)
 })
 
 # --- Test 19: rx_media() accessor extracts media from relational result ---
@@ -242,15 +241,15 @@ test_that("rx_media() extracts media from rx_relational object", {
   )
   result <- xtweetsR:::.rx_relational_result(posts, parsed)
   media <- xtweetsR::rx_media(result)
-  testthat::expect_s3_class(media, "tbl_df", info = "returns a tibble")
-  testthat::expect_equal(nrow(media), 1L, info = "1 media item extracted")
-  testthat::expect_equal(media$media_type[1L], "photo", info = "media_type preserved")
+  testthat::expect_s3_class(media, "tbl_df")
+  testthat::expect_equal(nrow(media), 1L)
+  testthat::expect_equal(media$media_type[1L], "photo")
 })
 
 # --- Test 20: rx_media() returns empty tibble on non-relational input ---
 test_that("rx_media() returns empty tibble for non-relational objects", {
   posts <- tibble::tibble(post_id = c("1"), text = c("hello"))
   media <- xtweetsR::rx_media(posts)
-  testthat::expect_s3_class(media, "tbl_df", info = "returns a tibble")
-  testthat::expect_equal(nrow(media), 0L, info = "zero media for non-relational input")
+  testthat::expect_s3_class(media, "tbl_df")
+  testthat::expect_equal(nrow(media), 0L)
 })

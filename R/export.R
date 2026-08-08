@@ -231,20 +231,20 @@ x_save <- function(posts, path) {
   .rx_ensure_dir(parent_dir, path)
 
   con <- tryCatch(
-    duckdb::dbConnect(duckdb::DuckDB(), path),
+    DBI::dbConnect(duckdb::duckdb(), path),
     error = function(e) {
       stop(.rx_error(paste0("Failed to connect to DuckDB at '", path, "': ", e$message)))
     }
   )
-  on.exit(duckdb::dbDisconnect(con), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   # Guard: zero-row tibble — drop any existing tables and create with canonical schema.
   # Drop ALL tables unconditionally to prevent stale data from a previous
   # export that had collections/relations when the current tibble does not.
   if (nrow(posts) == 0L) {
-    duckdb::dbExecute(con, "DROP TABLE IF EXISTS posts")
-    duckdb::dbExecute(con, "DROP TABLE IF EXISTS collections")
-    duckdb::dbExecute(con, "DROP TABLE IF EXISTS post_collection_relations")
+    DBI::dbExecute(con, "DROP TABLE IF EXISTS posts")
+    DBI::dbExecute(con, "DROP TABLE IF EXISTS collections")
+    DBI::dbExecute(con, "DROP TABLE IF EXISTS post_collection_relations")
     fields <- .rx_canonical_fields()
     type_map <- .rx_type_map()
     col_defs <- paste(
@@ -261,7 +261,7 @@ x_save <- function(posts, path) {
       collapse = ", "
     )
     tryCatch(
-      duckdb::dbExecute(con, paste0("CREATE TABLE posts (", col_defs, ")")),
+      DBI::dbExecute(con, paste0("CREATE TABLE posts (", col_defs, ")")),
       error = function(e) {
         stop(.rx_error(paste0("Failed to create empty posts table: ", e$message)))
       }
@@ -282,7 +282,7 @@ x_save <- function(posts, path) {
         stringsAsFactors = FALSE
       )
       tryCatch(
-        duckdb::dbWriteTable(con, "collections", collections_df, row.names = FALSE, overwrite = TRUE),
+        DBI::dbWriteTable(con, "collections", collections_df, row.names = FALSE, overwrite = TRUE),
         error = function(e) {
           warning("Failed to write collections table: ", e$message)
         }
@@ -293,7 +293,7 @@ x_save <- function(posts, path) {
     rels_attr <- attr(posts, "rx_collection_posts")
     if (!is.null(rels_attr) && is.data.frame(rels_attr) && nrow(rels_attr) > 0L) {
       tryCatch(
-        duckdb::dbWriteTable(
+        DBI::dbWriteTable(
           con, "post_collection_relations",
           rels_attr, row.names = FALSE, overwrite = TRUE
         ),
@@ -310,11 +310,11 @@ x_save <- function(posts, path) {
   # Drop existing tables first to guarantee the canonical 26-column schema
   # regardless of what a previous export (possibly with fewer columns) left behind.
   # Drop ALL tables unconditionally to prevent stale collections/relations data.
-  duckdb::dbExecute(con, "DROP TABLE IF EXISTS posts")
-  duckdb::dbExecute(con, "DROP TABLE IF EXISTS collections")
-  duckdb::dbExecute(con, "DROP TABLE IF EXISTS post_collection_relations")
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS posts")
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS collections")
+  DBI::dbExecute(con, "DROP TABLE IF EXISTS post_collection_relations")
   tryCatch(
-    duckdb::dbWriteTable(con, "posts", posts, row.names = FALSE, overwrite = TRUE),
+    DBI::dbWriteTable(con, "posts", posts, row.names = FALSE, overwrite = TRUE),
     error = function(e) {
       stop(.rx_error(paste0("Failed to write posts table: ", e$message)))
     }
@@ -335,7 +335,7 @@ x_save <- function(posts, path) {
       stringsAsFactors = FALSE
     )
     tryCatch(
-      duckdb::dbWriteTable(con, "collections", collections_df, row.names = FALSE, overwrite = TRUE),
+      DBI::dbWriteTable(con, "collections", collections_df, row.names = FALSE, overwrite = TRUE),
       error = function(e) {
         warning("Failed to write collections table: ", e$message)
       }
@@ -346,7 +346,7 @@ x_save <- function(posts, path) {
   rels_attr <- attr(posts, "rx_collection_posts")
   if (!is.null(rels_attr) && is.data.frame(rels_attr) && nrow(rels_attr) > 0L) {
     tryCatch(
-      duckdb::dbWriteTable(
+      DBI::dbWriteTable(
         con, "post_collection_relations",
         rels_attr, row.names = FALSE, overwrite = TRUE
       ),
@@ -513,7 +513,7 @@ x_save <- function(posts, path) {
     return(.rx_jsonl_empty_tibble())
   }
 
-  on.exit(arrow::dataset_close(ds), add = TRUE)
+  # Arrow datasets are garbage-collected; no explicit close API exists.
 
   result <- tryCatch(
     arrow::collect(ds),
@@ -548,7 +548,7 @@ x_save <- function(posts, path) {
   }
 
   con <- tryCatch(
-    duckdb::dbConnect(duckdb::DuckDB(), path),
+    DBI::dbConnect(duckdb::duckdb(), path),
     error = function(e) {
       warning("Failed to connect to DuckDB at '", path, "': ", e$message)
       return(NULL)
@@ -559,10 +559,10 @@ x_save <- function(posts, path) {
     return(.rx_jsonl_empty_tibble())
   }
 
-  on.exit(duckdb::dbDisconnect(con), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   result <- tryCatch(
-    duckdb::dbGetQuery(con, "SELECT * FROM posts"),
+    DBI::dbGetQuery(con, "SELECT * FROM posts"),
     error = function(e) {
       warning("Failed to query DuckDB: ", e$message)
       return(NULL)
@@ -604,7 +604,7 @@ x_save <- function(posts, path) {
   }
 
   con <- tryCatch(
-    duckdb::dbConnect(duckdb::DuckDB(), path),
+    DBI::dbConnect(duckdb::duckdb(), path),
     error = function(e) {
       warning("Failed to connect to DuckDB at '", path, "': ", e$message)
       return(NULL)
@@ -615,11 +615,11 @@ x_save <- function(posts, path) {
     return(.rx_jsonl_empty_tibble())
   }
 
-  on.exit(duckdb::dbDisconnect(con), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   # Read posts table.
   posts <- tryCatch(
-    duckdb::dbGetQuery(con, "SELECT * FROM posts"),
+    DBI::dbGetQuery(con, "SELECT * FROM posts"),
     error = function(e) {
       warning("Failed to query DuckDB posts table: ", e$message)
       return(NULL)
@@ -634,7 +634,7 @@ x_save <- function(posts, path) {
 
   # Read collections table (if present).
   collections <- tryCatch({
-    collections_df <- duckdb::dbGetQuery(con, "SELECT * FROM collections")
+    collections_df <- DBI::dbGetQuery(con, "SELECT * FROM collections")
     if (is.data.frame(collections_df) && nrow(collections_df) > 0L) {
       collections_df <- collections_df[1L, ]
       structure(
@@ -673,7 +673,7 @@ x_save <- function(posts, path) {
 
   # Read post_collection_relations table (if present).
   relations <- tryCatch({
-    rels_df <- duckdb::dbGetQuery(con, "SELECT * FROM post_collection_relations")
+    rels_df <- DBI::dbGetQuery(con, "SELECT * FROM post_collection_relations")
     if (is.data.frame(rels_df) && nrow(rels_df) > 0L) {
       tibble::as_tibble(rels_df)
     } else {

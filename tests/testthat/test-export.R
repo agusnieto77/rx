@@ -37,20 +37,19 @@ test_that(".rx_save_parquet writes a tibble that can be read back", {
   tbl <- tibble::as_tibble(df)
 
   tmp <- tempfile(fileext = ".parquet")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   xtweetsR:::.rx_save_parquet(tmp, tbl)
 
-  testthat::expect_true(file.exists(tmp), info = "parquet file was created")
+  testthat::expect_true(file.exists(tmp))
 
   loaded <- arrow::read_parquet(tmp)
-  testthat::expect_equal(nrow(loaded), n, info = "row count matches")
-  testthat::expect_equal(ncol(loaded), 26L, info = "26 columns")
+  testthat::expect_equal(nrow(loaded), n)
+  testthat::expect_equal(ncol(loaded), 26L)
   testthat::expect_equal(
     loaded$post_id,
-    paste0("post-", 1:n),
-    info = "post_id values preserved"
-  )
+    paste0("post-", 1:n)
+    )
 })
 
 # --- Test 2: .rx_save_parquet falls back to JSONL when Arrow is NOT available ---
@@ -92,16 +91,16 @@ test_that(".rx_save_parquet falls back to JSONL when arrow is missing", {
 
   tmp_parquet <- tempfile(fileext = ".parquet")
   tmp_jsonl <- tempfile(fileext = ".jsonl")
-  on.exit(file.remove(c(tmp_parquet, tmp_jsonl)), ignore = TRUE)
+  on.exit(unlink(c(tmp_parquet, tmp_jsonl)))
 
   # When arrow IS available, .parquet works directly.
   # We verify the file exists after saving.
   xtweetsR:::x_save(tbl, tmp_parquet)
-  testthat::expect_true(file.exists(tmp_parquet), info = "parquet file created")
+  testthat::expect_true(file.exists(tmp_parquet))
 
   # Verify the fallback behavior: x_save on .jsonl always works.
   xtweetsR:::x_save(tbl, tmp_jsonl)
-  testthat::expect_true(file.exists(tmp_jsonl), info = "jsonl file created")
+  testthat::expect_true(file.exists(tmp_jsonl))
 })
 
 # --- Test 3: x_save on .jsonl works (always available) ---
@@ -134,37 +133,34 @@ test_that("x_save writes .jsonl files correctly", {
   tbl <- tibble::as_tibble(df)
 
   tmp <- tempfile(fileext = ".jsonl")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   xtweetsR:::x_save(tbl, tmp)
 
-  testthat::expect_true(file.exists(tmp), info = "jsonl file was created")
+  testthat::expect_true(file.exists(tmp))
 
   loaded <- xtweetsR:::.rx_jsonl_read(tmp)
-  testthat::expect_equal(nrow(loaded), 2L, info = "2 rows saved")
+  testthat::expect_equal(nrow(loaded), 2L)
   testthat::expect_equal(
     loaded$post_id,
-    c("post-a", "post-b"),
-    info = "post_id values preserved"
-  )
+    c("post-a", "post-b")
+    )
 })
 
 # --- Test 4: x_save rejects non-tibble input ---
 test_that("x_save rejects non-tibble input", {
   tmp <- tempfile(fileext = ".jsonl")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   testthat::expect_error(
     xtweetsR:::x_save(list(post_id = "1"), tmp),
-    "must be a tibble",
-    info = "rejects list input"
-  )
+    "must be a tibble"
+    )
 
   testthat::expect_error(
     xtweetsR:::x_save(data.frame(post_id = "1"), tmp),
-    "must be a tibble",
-    info = "rejects data.frame input"
-  )
+    "must be a tibble"
+    )
 })
 
 # --- Test 5: x_save rejects unsupported extension ---
@@ -198,15 +194,13 @@ test_that("x_save rejects unsupported file extensions", {
 
   testthat::expect_error(
     xtweetsR:::x_save(tbl, "output.csv"),
-    "Unsupported file extension",
-    info = "rejects .csv extension"
-  )
+    "Unsupported file extension"
+    )
 
   testthat::expect_error(
     xtweetsR:::x_save(tbl, "output.txt"),
-    "Unsupported file extension",
-    info = "rejects .txt extension"
-  )
+    "Unsupported file extension"
+    )
 })
 
 # --- Test 6: x_save handles zero-row tibble ---
@@ -225,19 +219,19 @@ test_that("x_save handles zero-row tibble", {
 
   tmp_jsonl <- tempfile(fileext = ".jsonl")
   tmp_parquet <- tempfile(fileext = ".parquet")
-  on.exit(file.remove(c(tmp_jsonl, tmp_parquet)), ignore = TRUE)
+  on.exit(unlink(c(tmp_jsonl, tmp_parquet)))
 
   # JSONL path: zero-row is a no-op.
   xtweetsR:::x_save(empty_tbl, tmp_jsonl)
   loaded_jsonl <- xtweetsR:::.rx_jsonl_read(tmp_jsonl)
-  testthat::expect_equal(nrow(loaded_jsonl), 0L, info = "zero rows from JSONL")
+  testthat::expect_equal(nrow(loaded_jsonl), 0L)
 
   # Parquet path: writes an empty Parquet file.
   if (requireNamespace("arrow", quietly = TRUE)) {
     xtweetsR:::x_save(empty_tbl, tmp_parquet)
-    testthat::expect_true(file.exists(tmp_parquet), info = "empty parquet file created")
+    testthat::expect_true(file.exists(tmp_parquet))
     loaded_parquet <- arrow::read_parquet(tmp_parquet)
-    testthat::expect_equal(nrow(loaded_parquet), 0L, info = "zero rows from Parquet")
+    testthat::expect_equal(nrow(loaded_parquet), 0L)
   }
 })
 
@@ -272,17 +266,17 @@ test_that("Parquet round-trip preserves integer and logical types", {
   tbl <- tibble::as_tibble(df)
 
   tmp <- tempfile(fileext = ".parquet")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   xtweetsR:::x_save(tbl, tmp)
 
   loaded <- arrow::read_parquet(tmp)
 
-  testthat::expect_equal(loaded$reply_count, 42L, info = "integer preserved")
-  testthat::expect_equal(loaded$like_count, 99L, info = "integer preserved")
-  testthat::expect_true(isTRUE(loaded$is_reply), info = "logical preserved")
-  testthat::expect_false(isFALSE(loaded$is_repost), info = "logical preserved")
-  testthat::expect_equal(loaded$post_id, "post-type", info = "character preserved")
+  testthat::expect_equal(loaded$reply_count, 42L)
+  testthat::expect_equal(loaded$like_count, 99L)
+  testthat::expect_true(isTRUE(loaded$is_reply))
+  testthat::expect_false(isFALSE(loaded$is_repost))
+  testthat::expect_equal(loaded$post_id, "post-type")
 })
 
 # --- Test 8: x_save validates path parameter ---
@@ -316,15 +310,13 @@ test_that("x_save validates path parameter", {
 
   testthat::expect_error(
     xtweetsR:::x_save(tbl, character(0)),
-    "non-empty",
-    info = "rejects empty character vector"
-  )
+    "non-empty"
+    )
 
   testthat::expect_error(
     xtweetsR:::x_save(tbl, NA_character_),
-    "non-empty",
-    info = "rejects NA path"
-  )
+    "non-empty"
+    )
 })
 
 # --- Test 9: .rx_save_duckdb writes and reads back a small tibble when DuckDB is available ---
@@ -360,20 +352,19 @@ test_that(".rx_save_duckdb writes a tibble that can be read back", {
   tbl <- tibble::as_tibble(df)
 
   tmp <- tempfile(fileext = ".duckdb")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   xtweetsR:::x_save(tbl, tmp)
 
-  testthat::expect_true(file.exists(tmp), info = "duckdb file was created")
+  testthat::expect_true(file.exists(tmp))
 
   loaded <- xtweetsR:::.rx_duckdb_read(tmp)
-  testthat::expect_equal(nrow(loaded), n, info = "row count matches")
-  testthat::expect_equal(ncol(loaded), 26L, info = "26 columns")
+  testthat::expect_equal(nrow(loaded), n)
+  testthat::expect_equal(ncol(loaded), 26L)
   testthat::expect_equal(
     loaded$post_id,
-    paste0("post-", 1:n),
-    info = "post_id values preserved"
-  )
+    paste0("post-", 1:n)
+    )
 })
 
 # --- Test 10: .rx_save_duckdb falls back to JSONL when DuckDB is NOT available ---
@@ -407,15 +398,15 @@ test_that(".rx_save_duckdb falls back to JSONL when duckdb is missing", {
 
   tmp_duckdb <- tempfile(fileext = ".duckdb")
   tmp_jsonl <- tempfile(fileext = ".jsonl")
-  on.exit(file.remove(c(tmp_duckdb, tmp_jsonl)), ignore = TRUE)
+  on.exit(unlink(c(tmp_duckdb, tmp_jsonl)))
 
   # When duckdb IS available, .duckdb works directly.
   xtweetsR:::x_save(tbl, tmp_duckdb)
-  testthat::expect_true(file.exists(tmp_duckdb), info = "duckdb file created")
+  testthat::expect_true(file.exists(tmp_duckdb))
 
   # Verify .jsonl also works.
   xtweetsR:::x_save(tbl, tmp_jsonl)
-  testthat::expect_true(file.exists(tmp_jsonl), info = "jsonl file created")
+  testthat::expect_true(file.exists(tmp_jsonl))
 })
 
 # --- Test 11: DuckDB round-trip preserves integer and logical types ---
@@ -449,14 +440,14 @@ test_that("DuckDB round-trip preserves integer and logical types", {
   tbl <- tibble::as_tibble(df)
 
   tmp <- tempfile(fileext = ".duckdb")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   xtweetsR:::x_save(tbl, tmp)
 
   loaded <- xtweetsR:::.rx_duckdb_read(tmp)
 
-  testthat::expect_equal(loaded$post_id, "post-type-db", info = "character preserved")
-  testthat::expect_equal(loaded$collection_query, "test", info = "character preserved")
+  testthat::expect_equal(loaded$post_id, "post-type-db")
+  testthat::expect_equal(loaded$collection_query, "test")
 })
 
 # --- Test 12: x_save handles zero-row tibble via DuckDB ---
@@ -476,13 +467,13 @@ test_that("x_save handles zero-row tibble via DuckDB", {
     tibble::as_tibble()
 
   tmp <- tempfile(fileext = ".duckdb")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   xtweetsR:::x_save(empty_tbl, tmp)
-  testthat::expect_true(file.exists(tmp), info = "empty duckdb file created")
+  testthat::expect_true(file.exists(tmp))
 
   loaded <- xtweetsR:::.rx_duckdb_read(tmp)
-  testthat::expect_equal(nrow(loaded), 0L, info = "zero rows from DuckDB")
+  testthat::expect_equal(nrow(loaded), 0L)
 })
 
 # --- Test 13: .rx_duckdb_read returns empty tibble for non-existent file ---
@@ -491,26 +482,24 @@ test_that(".rx_duckdb_read returns empty tibble for missing file", {
   # Do NOT create the file — just test the read path.
 
   loaded <- xtweetsR:::.rx_duckdb_read(tmp)
-  testthat::expect_true(inherits(loaded, "tbl_df"), info = "returns tibble")
-  testthat::expect_equal(nrow(loaded), 0L, info = "zero rows for missing file")
+  testthat::expect_true(inherits(loaded, "tbl_df"))
+  testthat::expect_equal(nrow(loaded), 0L)
 })
 
 # --- Test 14: x_save rejects .duckdb with non-tibble input ---
 test_that("x_save rejects non-tibble input for DuckDB path", {
   tmp <- tempfile(fileext = ".duckdb")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   testthat::expect_error(
     xtweetsR:::x_save(list(post_id = "1"), tmp),
-    "must be a tibble",
-    info = "rejects list input for .duckdb"
-  )
+    "must be a tibble"
+    )
 
   testthat::expect_error(
     xtweetsR:::x_save(data.frame(post_id = "1"), tmp),
-    "must be a tibble",
-    info = "rejects data.frame input for .duckdb"
-  )
+    "must be a tibble"
+    )
 })
 
 # --- Test 15: .rx_save_partitioned writes a partitioned dataset when Arrow is available ---
@@ -544,22 +533,21 @@ test_that(".rx_save_partitioned writes a partitioned directory when Arrow is ava
   tbl <- tibble::as_tibble(df)
 
   tmp <- tempfile()
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
   dir.create(tmp)
   on.exit(unlink(tmp, recursive = TRUE, force = TRUE), add = TRUE)
 
   xtweetsR:::x_save(tbl, file.path(tmp, "output.parquetds"))
 
-  testthat::expect_true(dir.exists(file.path(tmp, "output.parquetds")), info = "dataset directory created")
+  testthat::expect_true(dir.exists(file.path(tmp, "output.parquetds")))
 
   # Should contain partitioned subdirectories.
   loaded <- xtweetsR:::.rx_read_partitioned(file.path(tmp, "output.parquetds"))
-  testthat::expect_equal(nrow(loaded), 3L, info = "3 rows read back")
+  testthat::expect_equal(nrow(loaded), 3L)
   testthat::expect_equal(
     loaded$post_id,
-    c("post-1", "post-2", "post-3"),
-    info = "post_id values preserved"
-  )
+    c("post-1", "post-2", "post-3")
+    )
 })
 
 # --- Test 16: .rx_save_partitioned handles zero-row tibble ---
@@ -583,10 +571,10 @@ test_that(".rx_save_partitioned handles zero-row tibble", {
   on.exit(unlink(tmp, recursive = TRUE, force = TRUE), add = TRUE)
 
   xtweetsR:::x_save(empty_tbl, file.path(tmp, "output.parquetds"))
-  testthat::expect_true(dir.exists(file.path(tmp, "output.parquetds")), info = "empty dataset directory created")
+  testthat::expect_true(dir.exists(file.path(tmp, "output.parquetds")))
 
   loaded <- xtweetsR:::.rx_read_partitioned(file.path(tmp, "output.parquetds"))
-  testthat::expect_equal(nrow(loaded), 0L, info = "zero rows from partitioned dataset")
+  testthat::expect_equal(nrow(loaded), 0L)
 })
 
 # --- Test 17: .rx_save_partitioned falls back to JSONL when Arrow is missing ---
@@ -620,13 +608,13 @@ test_that(".rx_save_partitioned falls back to JSONL when arrow is missing", {
 
   # Test the JSONL fallback path.
   tmp <- tempfile(fileext = ".jsonl")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   xtweetsR:::x_save(tbl, tmp)
-  testthat::expect_true(file.exists(tmp), info = "jsonl file created as fallback")
+  testthat::expect_true(file.exists(tmp))
 
   loaded <- xtweetsR:::.rx_jsonl_read(tmp)
-  testthat::expect_equal(nrow(loaded), 1L, info = "1 row from fallback JSONL")
+  testthat::expect_equal(nrow(loaded), 1L)
 })
 
 # --- Test 18: .rx_read_partitioned returns empty tibble for non-existent directory ---
@@ -635,8 +623,8 @@ test_that(".rx_read_partitioned returns empty tibble for missing directory", {
   # Do NOT create the directory.
 
   loaded <- xtweetsR:::.rx_read_partitioned(tmp)
-  testthat::expect_true(inherits(loaded, "tbl_df"), info = "returns tibble")
-  testthat::expect_equal(nrow(loaded), 0L, info = "zero rows for missing directory")
+  testthat::expect_true(inherits(loaded, "tbl_df"))
+  testthat::expect_equal(nrow(loaded), 0L)
 })
 
 # --- Test 19: .rx_save_partitioned writes multiple partition directories ---
@@ -677,8 +665,8 @@ test_that(".rx_save_partitioned creates multiple partition dirs when data varies
 
   # Read back and verify all 4 rows.
   loaded <- xtweetsR:::.rx_read_partitioned(file.path(tmp, "output.parquetds"))
-  testthat::expect_equal(nrow(loaded), 4L, info = "4 rows read from partitioned dataset")
-  testthat::expect_equal(sort(loaded$post_id), sort(df$post_id), info = "all post_ids present")
+  testthat::expect_equal(nrow(loaded), 4L)
+  testthat::expect_equal(sort(loaded$post_id), sort(df$post_id))
 })
 
 # --- Test 20: .rx_save_partitioned single-collection falls back to non-partitioned ---
@@ -721,7 +709,7 @@ test_that(".rx_save_partitioned writes single Parquet file when only one collect
   # by collection_id would produce one partition dir. The code checks for
   # this and falls back to a single Parquet file.
   loaded <- xtweetsR:::.rx_read_partitioned(file.path(tmp, "output.parquetds"))
-  testthat::expect_equal(nrow(loaded), 3L, info = "3 rows read back from single-collection dataset")
+  testthat::expect_equal(nrow(loaded), 3L)
 })
 
 # --- Test 21: .rx_save_partitioned creates target directory for single-collection nested path ---
@@ -764,10 +752,10 @@ test_that(".rx_save_partitioned creates dataset directory when path is nested", 
   # Should create both the parent and target directories automatically.
   xtweetsR:::x_save(tbl, nested_output)
 
-  testthat::expect_true(dir.exists(nested_output), info = "nested dataset directory created")
+  testthat::expect_true(dir.exists(nested_output))
 
   loaded <- xtweetsR:::.rx_read_partitioned(nested_output)
-  testthat::expect_equal(nrow(loaded), 2L, info = "2 rows read from nested single-collection dataset")
+  testthat::expect_equal(nrow(loaded), 2L)
 })
 
 # --- Test 22: x_save rejects unsupported extension ---
@@ -801,15 +789,13 @@ test_that("x_save rejects unsupported file extensions", {
 
   testthat::expect_error(
     xtweetsR:::x_save(tbl, "output.csv"),
-    "Unsupported file extension",
-    info = "rejects .csv extension"
-  )
+    "Unsupported file extension"
+    )
 
   testthat::expect_error(
     xtweetsR:::x_save(tbl, "output.txt"),
-    "Unsupported file extension",
-    info = "rejects .txt extension"
-  )
+    "Unsupported file extension"
+    )
 })
 
 # --- Test 23: x_save validates path parameter ---
@@ -843,15 +829,13 @@ test_that("x_save validates path parameter", {
 
   testthat::expect_error(
     xtweetsR:::x_save(tbl, character(0)),
-    "non-empty",
-    info = "rejects empty character vector"
-  )
+    "non-empty"
+    )
 
   testthat::expect_error(
     xtweetsR:::x_save(tbl, NA_character_),
-    "non-empty",
-    info = "rejects NA path"
-  )
+    "non-empty"
+    )
 })
 
 # --- Test 24: .rx_save_duckdb writes collections table from provenance ---
@@ -903,7 +887,7 @@ test_that(".rx_save_duckdb writes a collections table from provenance attribute"
   attr(tbl, "rx_collection_provenance") <- provenance
 
   tmp <- tempfile(fileext = ".duckdb")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   xtweetsR:::x_save(tbl, tmp)
 
@@ -912,11 +896,11 @@ test_that(".rx_save_duckdb writes a collections table from provenance attribute"
   on.exit(duckdb::dbDisconnect(con), add = TRUE)
 
   collections <- duckdb::dbGetQuery(con, "SELECT * FROM collections")
-  testthat::expect_true(nrow(collections) >= 1L, info = "collections table has rows")
-  testthat::expect_equal(collections$collection_id, "test-uuid-coll", info = "collection_id matches")
-  testthat::expect_equal(collections$query, "r programming", info = "query matches")
-  testthat::expect_equal(collections$backend, "lightpanda", info = "backend matches")
-  testthat::expect_equal(as.integer(collections$records), 2L, info = "records count matches")
+  testthat::expect_true(nrow(collections) >= 1L)
+  testthat::expect_equal(collections$collection_id, "test-uuid-coll")
+  testthat::expect_equal(collections$query, "r programming")
+  testthat::expect_equal(collections$backend, "lightpanda")
+  testthat::expect_equal(as.integer(collections$records), 2L)
 })
 
 # --- Test 25: .rx_save_duckdb writes post_collection_relations table ---
@@ -961,7 +945,7 @@ test_that(".rx_save_duckdb writes post_collection_relations from attribute", {
   attr(tbl, "rx_collection_posts") <- relations
 
   tmp <- tempfile(fileext = ".duckdb")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   xtweetsR:::x_save(tbl, tmp)
 
@@ -970,8 +954,8 @@ test_that(".rx_save_duckdb writes post_collection_relations from attribute", {
   on.exit(duckdb::dbDisconnect(con), add = TRUE)
 
   rels <- duckdb::dbGetQuery(con, "SELECT * FROM post_collection_relations")
-  testthat::expect_equal(nrow(rels), 2L, info = "2 relation rows")
-  testthat::expect_equal(sort(rels$post_id), c("post-1", "post-2"), info = "post_ids match")
+  testthat::expect_equal(nrow(rels), 2L)
+  testthat::expect_equal(sort(rels$post_id), c("post-1", "post-2"))
 })
 
 # --- Test 26: .rx_save_duckdb without relational attributes (backward compat) ---
@@ -1007,15 +991,15 @@ test_that(".rx_save_duckdb works without relational attributes", {
   # No relational attributes attached.
 
   tmp <- tempfile(fileext = ".duckdb")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   # Should not error.
   xtweetsR:::x_save(tbl, tmp)
 
   # Posts table should exist and be readable.
   loaded <- xtweetsR:::.rx_duckdb_read(tmp)
-  testthat::expect_equal(nrow(loaded), 1L, info = "1 post row")
-  testthat::expect_equal(loaded$post_id, "post-noprov", info = "post_id matches")
+  testthat::expect_equal(nrow(loaded), 1L)
+  testthat::expect_equal(loaded$post_id, "post-noprov")
 })
 
 # --- Test 27: .rx_duckdb_tables reads all tables and reconstructs relational ---
@@ -1075,31 +1059,31 @@ test_that(".rx_duckdb_tables reconstructs relational result from all tables", {
   attr(tbl, "rx_collection_posts") <- relations
 
   tmp <- tempfile(fileext = ".duckdb")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   xtweetsR:::x_save(tbl, tmp)
 
   # Read back with .rx_duckdb_tables.
   result <- xtweetsR:::.rx_duckdb_tables(tmp)
 
-  testthat::expect_true(inherits(result, "rx_relational"), info = "returns rx_relational")
-  testthat::expect_true(inherits(result, "tbl_df"), info = "inherits tbl_df")
-  testthat::expect_equal(nrow(result), 2L, info = "2 post rows")
-  testthat::expect_equal(result$post_id[1L], "post-1", info = "post-1")
-  testthat::expect_equal(result$post_id[2L], "post-2", info = "post-2")
+  testthat::expect_true(inherits(result, "rx_relational"))
+  testthat::expect_true(inherits(result, "tbl_df"))
+  testthat::expect_equal(nrow(result), 2L)
+  testthat::expect_equal(result$post_id[1L], "post-1")
+  testthat::expect_equal(result$post_id[2L], "post-2")
 
   # Check provenance was restored.
   prov <- attr(result, "rx_collection_provenance")
-  testthat::expect_true(!is.null(prov), info = "provenance attribute present")
-  testthat::expect_equal(prov$collection_id, "test-uuid-all", info = "collection_id in provenance")
-  testthat::expect_equal(prov$query, "r programming", info = "query in provenance")
-  testthat::expect_true(inherits(prov, "rx_collection_provenance"), info = "provenance class")
+  testthat::expect_true(!is.null(prov))
+  testthat::expect_equal(prov$collection_id, "test-uuid-all")
+  testthat::expect_equal(prov$query, "r programming")
+  testthat::expect_true(inherits(prov, "rx_collection_provenance"))
 
   # Check relations were restored.
   rels <- attr(result, "rx_collection_posts")
-  testthat::expect_true(!is.null(rels), info = "relations attribute present")
-  testthat::expect_true(inherits(rels, "tbl_df"), info = "relations is tibble")
-  testthat::expect_equal(nrow(rels), 2L, info = "2 relation rows")
+  testthat::expect_true(!is.null(rels))
+  testthat::expect_true(inherits(rels, "tbl_df"))
+  testthat::expect_equal(nrow(rels), 2L)
 })
 
 # --- Test 28: .rx_duckdb_tables reads only posts when no relational tables ---
@@ -1135,15 +1119,15 @@ test_that(".rx_duckdb_tables returns posts-only when no collections/relations ta
   # No relational attributes.
 
   tmp <- tempfile(fileext = ".duckdb")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   xtweetsR:::x_save(tbl, tmp)
 
   result <- xtweetsR:::.rx_duckdb_tables(tmp)
 
-  testthat::expect_true(inherits(result, "rx_relational"), info = "still returns rx_relational")
-  testthat::expect_equal(nrow(result), 1L, info = "1 post row")
-  testthat::expect_equal(result$post_id, "post-simple", info = "post_id matches")
+  testthat::expect_true(inherits(result, "rx_relational"))
+  testthat::expect_equal(nrow(result), 1L)
+  testthat::expect_equal(result$post_id, "post-simple")
 })
 
 # --- Test 29: .rx_duckdb_tables returns empty for non-existent file ---
@@ -1152,8 +1136,8 @@ test_that(".rx_duckdb_tables returns empty tibble for missing file", {
   # Do NOT create the file.
 
   loaded <- xtweetsR:::.rx_duckdb_tables(tmp)
-  testthat::expect_true(inherits(loaded, "tbl_df"), info = "returns tibble")
-  testthat::expect_equal(nrow(loaded), 0L, info = "zero rows for missing file")
+  testthat::expect_true(inherits(loaded, "tbl_df"))
+  testthat::expect_equal(nrow(loaded), 0L)
 })
 
 # --- Test 30: .rx_save_duckdb zero-row with provenance writes collections table ---
@@ -1188,7 +1172,7 @@ test_that(".rx_save_duckdb zero-row writes collections table when provenance pre
   attr(empty_tbl, "rx_collection_provenance") <- provenance
 
   tmp <- tempfile(fileext = ".duckdb")
-  on.exit(file.remove(tmp), ignore = TRUE)
+  on.exit(unlink(tmp))
 
   xtweetsR:::x_save(empty_tbl, tmp)
 
@@ -1197,11 +1181,11 @@ test_that(".rx_save_duckdb zero-row writes collections table when provenance pre
   on.exit(duckdb::dbDisconnect(con), add = TRUE)
 
   collections <- duckdb::dbGetQuery(con, "SELECT * FROM collections")
-  testthat::expect_true(nrow(collections) >= 1L, info = "collections table has rows")
-  testthat::expect_equal(collections$collection_id, "test-uuid-empty", info = "collection_id matches")
+  testthat::expect_true(nrow(collections) >= 1L)
+  testthat::expect_equal(collections$collection_id, "test-uuid-empty")
 
   # Posts table should have zero rows.
   posts <- duckdb::dbGetQuery(con, "SELECT * FROM posts")
-  testthat::expect_equal(nrow(posts), 0L, info = "zero post rows")
+  testthat::expect_equal(nrow(posts), 0L)
 })
 

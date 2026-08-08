@@ -61,7 +61,7 @@ NULL
   fields <- .rx_media_fields()
 
   # Handle NULL / empty / unexpected input.
-  if (!is.list(parsed) || !is.list(parsed$post_id) || length(parsed$post_id) == 0L) {
+  if (!is.list(parsed) || is.null(parsed$post_id) || length(parsed$post_id) == 0L) {
     result <- vector("list", length(fields))
     names(result) <- fields
     for (field in fields) {
@@ -107,7 +107,7 @@ NULL
       if (is.na(mtype) || !nzchar(mtype)) {
         mtype <- NA_character_
       }
-      if (is.list(mu) && length(mu) >= j && !is.null(mu[[j]])) {
+      if (length(mu) >= j && !is.null(mu[[j]])) {
         murl <- as.character(mu[[j]])
       } else {
         murl <- NA_character_

@@ -47,16 +47,19 @@ NULL
 
 #' Emit a progress message to the user.
 #'
-#' Prints a timestamped message via `message()` when not in quiet mode.
+#' Prints a message via `message()` when not in quiet mode. Message
+#' fragments are concatenated with `paste0()`, so callers can mix literal
+#' strings and values freely.
 #'
-#' @param msg Character string, the progress message.
+#' @param ... Character fragments of the progress message, concatenated
+#'   with `paste0()`.
 #' @param quiet Logical, when `TRUE` the message is suppressed.
 #' @return Invisible `NULL`.
 #' @noRd
-.rx_progress <- function(msg, quiet = FALSE) {
+.rx_progress <- function(..., quiet = FALSE) {
   if (isTRUE(quiet)) return(invisible(NULL))
   tryCatch(
-    message("[xtweetsR] ", msg),
+    message("[xtweetsR] ", paste0(...)),
     error = function(e) NULL
   )
   invisible(NULL)

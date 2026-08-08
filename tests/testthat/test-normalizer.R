@@ -8,7 +8,7 @@
 test_that(".rx_canonical_fields returns 26 fields in the expected order", {
   fields <- xtweetsR:::.rx_canonical_fields()
 
-  testthat::expect_length(fields, 26L, info = "26 canonical fields")
+  testthat::expect_length(fields, 26L)
   testthat::expect_equal(
     fields,
     c(
@@ -26,9 +26,8 @@ test_that(".rx_canonical_fields returns 26 fields in the expected order", {
       "media_type", "media_urls",
       # Observation-level provenance (Task 46)
       "collected_at", "collection_query", "collection_id"
-    ),
-    info = "field order matches canonical definition"
-  )
+    )
+    )
 })
 
 # --- Test 2: Type map matches canonical fields ---
@@ -36,17 +35,16 @@ test_that(".rx_type_map has entries for all canonical fields", {
   fields <- xtweetsR:::.rx_canonical_fields()
   type_map <- xtweetsR:::.rx_type_map()
 
-  testthat::expect_setequal(names(type_map), fields, info = "type map covers all fields")
+  testthat::expect_setequal(names(type_map), fields)
   testthat::expect_true(
-    all(type_map %in% c("character", "integer", "logical", "list")),
-    info = "type map only contains valid types"
-  )
-  testthat::expect_equal(type_map["post_id"], "character", info = "post_id is character")
-  testthat::expect_equal(type_map["reply_count"], "integer", info = "reply_count is integer")
-  testthat::expect_equal(type_map["is_reply"], "logical", info = "is_reply is logical")
-  testthat::expect_equal(type_map["hashtags"], "list", info = "hashtags is list")
-  testthat::expect_equal(type_map["mentions"], "list", info = "mentions is list")
-  testthat::expect_equal(type_map["urls"], "list", info = "urls is list")
+    all(type_map %in% c("character", "integer", "logical", "list"))
+    )
+  testthat::expect_equal(type_map[["post_id"]], "character")
+  testthat::expect_equal(type_map[["reply_count"]], "integer")
+  testthat::expect_equal(type_map[["is_reply"]], "logical")
+  testthat::expect_equal(type_map[["hashtags"]], "list")
+  testthat::expect_equal(type_map[["mentions"]], "list")
+  testthat::expect_equal(type_map[["urls"]], "list")
 })
 
 # --- Test 3: NA defaults has entries for all canonical fields ---
@@ -54,7 +52,7 @@ test_that(".rx_na_defaults has entries for all canonical fields", {
   fields <- xtweetsR:::.rx_canonical_fields()
   na_defs <- xtweetsR:::.rx_na_defaults()
 
-  testthat::expect_setequal(names(na_defs), fields, info = "NA defaults covers all fields")
+  testthat::expect_setequal(names(na_defs), fields)
 
   # Check that character fields default to NA.
   char_fields <- names(xtweetsR:::.rx_type_map())[
@@ -62,9 +60,8 @@ test_that(".rx_na_defaults has entries for all canonical fields", {
   ]
   for (field in char_fields) {
     testthat::expect_true(
-      is.na(na_defs[[field]]),
-      info = paste(field, "NA default is NA")
-    )
+      is.na(na_defs[[field]])
+      )
   }
 
   # Check that integer fields default to 0L.
@@ -74,9 +71,8 @@ test_that(".rx_na_defaults has entries for all canonical fields", {
   for (field in int_fields) {
     testthat::expect_equal(
       na_defs[[field]],
-      0L,
-      info = paste(field, "NA default is 0L")
-    )
+      0L
+      )
   }
 
   # Check that logical fields default to FALSE.
@@ -85,9 +81,8 @@ test_that(".rx_na_defaults has entries for all canonical fields", {
   ]
   for (field in log_fields) {
     testthat::expect_false(
-      na_defs[[field]],
-      info = paste(field, "NA default is FALSE")
-    )
+      na_defs[[field]]
+      )
   }
 
   # Check that list fields default to list(NULL).
@@ -97,9 +92,8 @@ test_that(".rx_na_defaults has entries for all canonical fields", {
   for (field in list_fields) {
     testthat::expect_equal(
       na_defs[[field]],
-      list(NULL),
-      info = paste(field, "NA default is list(NULL)")
-    )
+      list(NULL)
+      )
   }
 })
 
@@ -108,15 +102,14 @@ test_that(".rx_normalize_posts(NULL) returns an empty normalized list", {
   result <- xtweetsR:::.rx_normalize_posts(NULL)
 
   fields <- xtweetsR:::.rx_canonical_fields()
-  testthat::expect_true(is.list(result), info = "result is a list")
-  testthat::expect_setequal(names(result), fields, info = "has all canonical fields")
+  testthat::expect_true(is.list(result))
+  testthat::expect_setequal(names(result), fields)
 
   for (field in fields) {
     testthat::expect_equal(
       length(result[[field]]),
-      0L,
-      info = paste(field, "is zero-length for NULL input")
-    )
+      0L
+      )
   }
 })
 
@@ -125,15 +118,14 @@ test_that(".rx_normalize_posts(list()) returns an empty normalized list", {
   result <- xtweetsR:::.rx_normalize_posts(list())
 
   fields <- xtweetsR:::.rx_canonical_fields()
-  testthat::expect_true(is.list(result), info = "result is a list")
-  testthat::expect_setequal(names(result), fields, info = "has all canonical fields")
+  testthat::expect_true(is.list(result))
+  testthat::expect_setequal(names(result), fields)
 
   for (field in fields) {
     testthat::expect_equal(
       length(result[[field]]),
-      0L,
-      info = paste(field, "is zero-length for empty list input")
-    )
+      0L
+      )
   }
 })
 
@@ -162,21 +154,19 @@ test_that(".rx_normalize_posts pads shorter vectors to post_id length", {
 
   normalized <- xtweetsR:::.rx_normalize_posts(coerced_parsed)
 
-  testthat::expect_equal(length(normalized$post_id), 2L, info = "two posts")
-  testthat::expect_equal(length(normalized$text), 2L, info = "text padded to 2")
+  testthat::expect_equal(length(normalized$post_id), 2L)
+  testthat::expect_equal(length(normalized$text), 2L)
   testthat::expect_true(
-    all(is.integer(normalized$reply_count)),
-    info = "reply_count coerced to integer"
-  )
-  testthat::expect_equal(normalized$reply_count, 42L, info = "reply_count value preserved after coercion")
+    all(is.integer(normalized$reply_count))
+    )
+  testthat::expect_equal(normalized$reply_count, c(42L, 0L))
   testthat::expect_true(
-    all(is.logical(normalized$is_reply)),
-    info = "is_reply coerced to logical"
-  )
-  testthat::expect_true(
+    all(is.logical(normalized$is_reply))
+    )
+  testthat::expect_equal(
     normalized$is_reply,
-    info = "is_reply TRUE preserved after coercion"
-  )
+    c(TRUE, FALSE)
+    )
 })
 
 # --- Test 7: Normalizer preserves exact values from fixture ---
@@ -188,14 +178,14 @@ test_that("normalizer preserves exact values from x-search-response.json", {
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
 
   testthat::expect_equal(
     normalized$post_id,
-    c("1900000000000000001", "1900000000000000002", "1900000000000000003", "1900000000000000004"),
-    info = "post_id values preserved from fixture"
-  )
+    c("1900000000000000001", "1900000000000000002", "1900000000000000003", "1900000000000000004")
+    )
   testthat::expect_equal(
     normalized$text,
     c(
@@ -203,14 +193,12 @@ test_that("normalizer preserves exact values from x-search-response.json", {
       "Using R to analyze climate data — here is a quick walkthrough of the pipeline.",
       "Quasiquotation in R is powerful once you understand it. Thread below on when to use !! vs {{",
       "Great thread on quasiquotation! Here is my take on the design trade-offs."
-    ),
-    info = "text values preserved from fixture"
-  )
+    )
+    )
   testthat::expect_equal(
     normalized$reply_count,
-    c(12L, 5L, 20L, 8L),
-    info = "reply_count values preserved from fixture"
-  )
+    c(12L, 5L, 20L, 8L)
+    )
 })
 
 # --- Test 8: Normalizer output has all canonical fields ---
@@ -222,12 +210,13 @@ test_that("normalizer output has all 26 canonical fields", {
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
 
   fields <- xtweetsR:::.rx_canonical_fields()
-  testthat::expect_setequal(names(normalized), fields, info = "all 26 fields present")
-  testthat::expect_length(names(normalized), 26L, info = "exactly 26 fields")
+  testthat::expect_setequal(names(normalized), fields)
+  testthat::expect_length(names(normalized), 26L)
 })
 
 # --- Test 9: Normalizer output field order matches canonical order ---
@@ -239,14 +228,14 @@ test_that("normalizer output is in canonical field order", {
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
 
   testthat::expect_equal(
     names(normalized),
-    .rx_canonical_fields(),
-    info = "output fields are in canonical order"
-  )
+    .rx_canonical_fields()
+    )
 })
 
 # --- Test 10: Type coercion works correctly ---
@@ -275,23 +264,20 @@ test_that("normalizer coerces types correctly", {
   normalized <- xtweetsR:::.rx_normalize_posts(coerced_parsed)
 
   testthat::expect_true(
-    all(is.character(normalized$post_id)),
-    info = "post_id coerced to character"
-  )
-  testthat::expect_equal(normalized$post_id, c("100", "200"), info = "post_id value preserved after coercion")
+    all(is.character(normalized$post_id))
+    )
+  testthat::expect_equal(normalized$post_id, c("100", "200"))
   testthat::expect_true(
-    all(is.integer(normalized$reply_count)),
-    info = "reply_count coerced to integer"
-  )
-  testthat::expect_equal(normalized$reply_count, c(42L, 84L), info = "reply_count value preserved after coercion")
+    all(is.integer(normalized$reply_count))
+    )
+  testthat::expect_equal(normalized$reply_count, c(42L, 84L))
   testthat::expect_true(
-    all(is.logical(normalized$is_reply)),
-    info = "is_reply coerced to logical"
-  )
-  testthat::expect_true(
+    all(is.logical(normalized$is_reply))
+    )
+  testthat::expect_equal(
     normalized$is_reply,
-    info = "is_reply TRUE preserved after coercion"
-  )
+    c(TRUE, FALSE)
+    )
 })
 
 # --- Test 11: Normalizer handles input with NA values in character fields ---
@@ -308,17 +294,14 @@ test_that("NA character values are preserved as NA_character_", {
   normalized <- xtweetsR:::.rx_normalize_posts(na_parsed)
 
   testthat::expect_true(
-    all(is.na(normalized$author_id)),
-    info = "NA author_id preserved"
-  )
+    all(is.na(normalized$author_id))
+    )
   testthat::expect_true(
-    all(is.na(normalized$username)),
-    info = "NA username preserved"
-  )
+    all(is.na(normalized$username))
+    )
   testthat::expect_true(
-    all(is.na(normalized$display_name)),
-    info = "NA display_name preserved"
-  )
+    all(is.na(normalized$display_name))
+    )
 })
 
 # --- Test 12: Normalizer coerces numeric post_id to character ---
@@ -347,10 +330,9 @@ test_that("numeric post_id values are coerced to character", {
   normalized <- xtweetsR:::.rx_normalize_posts(coerced_parsed)
 
   testthat::expect_true(
-    all(is.character(normalized$post_id)),
-    info = "all post_id values are character after coercion"
-  )
-  testthat::expect_equal(normalized$post_id, c("100", "200"), info = "values preserved after coercion")
+    all(is.character(normalized$post_id))
+    )
+  testthat::expect_equal(normalized$post_id, c("100", "200"))
 })
 
 # --- Test 13: Normalizer handles input with extra fields (ignores them) ---
@@ -381,10 +363,9 @@ test_that("normalizer ignores extra non-canonical fields in input", {
 
   testthat::expect_setequal(
     names(normalized),
-    .rx_canonical_fields(),
-    info = "output only contains canonical fields"
-  )
-  testthat::expect_equal(normalized$text, "Hello", info = "text value preserved")
+    .rx_canonical_fields()
+    )
+  testthat::expect_equal(normalized$text, "Hello")
 })
 
 # --- Test 14: Type map iteration checks types correctly ---
@@ -396,6 +377,7 @@ test_that("type map iteration validates all field types", {
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   type_map <- xtweetsR:::.rx_type_map()
@@ -406,24 +388,20 @@ test_that("type map iteration validates all field types", {
 
     if (expected_type == "character") {
       testthat::expect_true(
-        is.character(actual),
-        info = paste(field, "is character")
-      )
+        is.character(actual)
+        )
     } else if (expected_type == "integer") {
       testthat::expect_true(
-        is.integer(actual),
-        info = paste(field, "is integer")
-      )
+        is.integer(actual)
+        )
     } else if (expected_type == "logical") {
       testthat::expect_true(
-        is.logical(actual),
-        info = paste(field, "is logical")
-      )
+        is.logical(actual)
+        )
     } else if (expected_type == "list") {
       testthat::expect_true(
-        is.list(actual),
-        info = paste(field, "is list")
-      )
+        is.list(actual)
+        )
     }
   }
 })
@@ -456,9 +434,8 @@ test_that("normalizer ignores extra non-canonical fields in input", {
 
   testthat::expect_setequal(
     names(normalized),
-    .rx_canonical_fields(),
-    info = "output only contains canonical fields"
-  )
+    .rx_canonical_fields()
+    )
 })
 
 # --- Test 16: All canonical fields present after normalizing fixture ---
@@ -470,11 +447,12 @@ test_that("normalized fixture has all canonical fields with correct types", {
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   fields <- xtweetsR:::.rx_canonical_fields()
 
-  testthat::expect_setequal(names(normalized), fields, info = "has all canonical fields")
+  testthat::expect_setequal(names(normalized), fields)
 
   type_map <- xtweetsR:::.rx_type_map()
   for (field in fields) {
@@ -483,24 +461,20 @@ test_that("normalized fixture has all canonical fields with correct types", {
 
     if (expected_type == "character") {
       testthat::expect_true(
-        is.character(actual),
-        info = paste(field, "is character")
-      )
+        is.character(actual)
+        )
     } else if (expected_type == "integer") {
       testthat::expect_true(
-        is.integer(actual),
-        info = paste(field, "is integer")
-      )
+        is.integer(actual)
+        )
     } else if (expected_type == "logical") {
       testthat::expect_true(
-        is.logical(actual),
-        info = paste(field, "is logical")
-      )
+        is.logical(actual)
+        )
     } else if (expected_type == "list") {
       testthat::expect_true(
-        is.list(actual),
-        info = paste(field, "is list")
-      )
+        is.list(actual)
+        )
     }
   }
 })
@@ -514,40 +488,41 @@ test_that("normalized fixture preserves all expected values", {
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
 
-  testthat::expect_equal(normalized$post_id[1L], "1900000000000000001", info = "first post_id correct")
-  testthat::expect_equal(normalized$username[2L], "rstats_david", info = "second username correct")
-  testthat::expect_equal(normalized$like_count[3L], 150L, info = "third like_count correct")
-  testthat::expect_false(normalized$is_repost[1L], info = "is_repost FALSE for first post")
+  testthat::expect_equal(normalized$post_id[1L], "1900000000000000001")
+  testthat::expect_equal(normalized$username[2L], "rstats_david")
+  testthat::expect_equal(normalized$like_count[3L], 150L)
+  testthat::expect_false(normalized$is_repost[1L])
 })
 
 # --- Test 18: Empty response returns all twenty-one empty vectors ---
 test_that("empty response returns all twenty-one empty vectors", {
   result_null <- xtweetsR:::.rx_parse_posts(NULL)
-  testthat::expect_equal(length(result_null$post_id), 0L, info = "NULL returns empty post_id")
-  testthat::expect_equal(length(result_null$text), 0L, info = "NULL returns empty text")
-  testthat::expect_equal(length(result_null$author_id), 0L, info = "NULL returns empty author_id")
-  testthat::expect_equal(length(result_null$username), 0L, info = "NULL returns empty username")
-  testthat::expect_equal(length(result_null$display_name), 0L, info = "NULL returns empty display_name")
-  testthat::expect_equal(length(result_null$created_at), 0L, info = "NULL returns empty created_at")
-  testthat::expect_equal(length(result_null$reply_count), 0L, info = "NULL returns empty reply_count")
-  testthat::expect_equal(length(result_null$repost_count), 0L, info = "NULL returns empty repost_count")
-  testthat::expect_equal(length(result_null$like_count), 0L, info = "NULL returns empty like_count")
-  testthat::expect_equal(length(result_null$quote_count), 0L, info = "NULL returns empty quote_count")
-  testthat::expect_equal(length(result_null$bookmark_count), 0L, info = "NULL returns empty bookmark_count")
-  testthat::expect_equal(length(result_null$view_count), 0L, info = "NULL returns empty view_count")
-  testthat::expect_equal(length(result_null$conversation_id), 0L, info = "NULL returns empty conversation_id")
-  testthat::expect_equal(length(result_null$is_reply), 0L, info = "NULL returns empty is_reply")
-  testthat::expect_equal(length(result_null$is_repost), 0L, info = "NULL returns empty is_repost")
-  testthat::expect_equal(length(result_null$is_quote), 0L, info = "NULL returns empty is_quote")
-  testthat::expect_equal(length(result_null$reply_to_post_id), 0L, info = "NULL returns empty reply_to_post_id")
-  testthat::expect_equal(length(result_null$quoted_post_id), 0L, info = "NULL returns empty quoted_post_id")
-  testthat::expect_equal(length(result_null$hashtags), 0L, info = "NULL returns empty hashtags")
-  testthat::expect_equal(length(result_null$mentions), 0L, info = "NULL returns empty mentions")
-  testthat::expect_equal(length(result_null$urls), 0L, info = "NULL returns empty urls")
-  testthat::expect_equal(length(result_null$cursors), 0L, info = "NULL returns empty cursors")
+  testthat::expect_equal(length(result_null$post_id), 0L)
+  testthat::expect_equal(length(result_null$text), 0L)
+  testthat::expect_equal(length(result_null$author_id), 0L)
+  testthat::expect_equal(length(result_null$username), 0L)
+  testthat::expect_equal(length(result_null$display_name), 0L)
+  testthat::expect_equal(length(result_null$created_at), 0L)
+  testthat::expect_equal(length(result_null$reply_count), 0L)
+  testthat::expect_equal(length(result_null$repost_count), 0L)
+  testthat::expect_equal(length(result_null$like_count), 0L)
+  testthat::expect_equal(length(result_null$quote_count), 0L)
+  testthat::expect_equal(length(result_null$bookmark_count), 0L)
+  testthat::expect_equal(length(result_null$view_count), 0L)
+  testthat::expect_equal(length(result_null$conversation_id), 0L)
+  testthat::expect_equal(length(result_null$is_reply), 0L)
+  testthat::expect_equal(length(result_null$is_repost), 0L)
+  testthat::expect_equal(length(result_null$is_quote), 0L)
+  testthat::expect_equal(length(result_null$reply_to_post_id), 0L)
+  testthat::expect_equal(length(result_null$quoted_post_id), 0L)
+  testthat::expect_equal(length(result_null$hashtags), 0L)
+  testthat::expect_equal(length(result_null$mentions), 0L)
+  testthat::expect_equal(length(result_null$urls), 0L)
+  testthat::expect_equal(length(result_null$cursors), 0L)
 })
 
 # --- Test 19: .rx_normalized_to_tibble returns a tibble (Task 37) ---
@@ -559,13 +534,14 @@ test_that(".rx_normalized_to_tibble returns a tibble that inherits from tbl_df",
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
 
-  testthat::expect_s3_class(tbl, "tbl_df", info = "result inherits from tbl_df")
-  testthat::expect_s3_class(tbl, "tbl", info = "result inherits from tbl")
-  testthat::expect_s3_class(tbl, "data.frame", info = "result inherits from data.frame")
+  testthat::expect_s3_class(tbl, "tbl_df")
+  testthat::expect_s3_class(tbl, "tbl")
+  testthat::expect_s3_class(tbl, "data.frame")
 })
 
 # --- Test 20: Tibble has 21 columns and 4 rows from fixture ---
@@ -577,12 +553,13 @@ test_that("tibble has 21 columns and 4 rows from fixture", {
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
 
-  testthat::expect_equal(ncol(tbl), 26L, info = "26 canonical columns")
-  testthat::expect_equal(nrow(tbl), 4L, info = "4 posts from fixture")
+  testthat::expect_equal(ncol(tbl), 26L)
+  testthat::expect_equal(nrow(tbl), 4L)
 })
 
 # --- Test 21: post_id is character in the tibble (Task 37) ---
@@ -594,14 +571,14 @@ test_that("post_id is character in the tibble", {
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
 
   testthat::expect_true(
-    is.character(tbl$post_id),
-    info = "post_id is character in tibble"
-  )
+    is.character(tbl$post_id)
+    )
 })
 
 # --- Test 22: Empty normalized list returns zero-row tibble (Task 37) ---
@@ -609,15 +586,15 @@ test_that("empty normalized returns zero-row tibble", {
   empty_norm <- xtweetsR:::.rx_normalize_posts(NULL)
   tbl <- xtweetsR:::.rx_normalized_to_tibble(empty_norm)
 
-  testthat::expect_s3_class(tbl, "tbl_df", info = "still a tibble")
-  testthat::expect_equal(nrow(tbl), 0L, info = "zero rows")
+  testthat::expect_s3_class(tbl, "tbl_df")
+  testthat::expect_equal(nrow(tbl), 0L)
 })
 
 # --- Test 23: NULL input returns empty tibble (Task 37) ---
 test_that(".rx_normalized_to_tibble(NULL) returns empty tibble", {
   tbl <- xtweetsR:::.rx_normalized_to_tibble(NULL)
-  testthat::expect_s3_class(tbl, "tbl_df", info = "still a tibble")
-  testthat::expect_equal(nrow(tbl), 0L, info = "zero rows")
+  testthat::expect_s3_class(tbl, "tbl_df")
+  testthat::expect_equal(nrow(tbl), 0L)
 })
 
 # --- Test 24: Tibble column names match canonical fields (Task 37) ---
@@ -629,12 +606,13 @@ test_that("tibble column names match canonical schema", {
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
 
   expected <- xtweetsR:::.rx_canonical_fields()
-  testthat::expect_equal(names(tbl), expected, info = "column names match canonical fields")
+  testthat::expect_equal(names(tbl), expected)
 })
 
 # --- Test 25: .rx_deduplicate_posts removes duplicate post_id from tibble (Task 38) ---
@@ -646,6 +624,7 @@ test_that("deduplicate removes duplicate post_id from tibble, keeping first-seen
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
@@ -653,17 +632,16 @@ test_that("deduplicate removes duplicate post_id from tibble, keeping first-seen
   # Manually add a duplicate row (copy of the first post).
   dup_tbl <- rbind(tbl, tbl[1L, , drop = FALSE])
 
-  testthat::expect_equal(nrow(dup_tbl), 5L, info = "5 rows before dedup (4 + 1 dup)")
+  testthat::expect_equal(nrow(dup_tbl), 5L)
 
   deduped <- xtweetsR:::.rx_deduplicate_posts(dup_tbl)
 
-  testthat::expect_equal(nrow(deduped), 4L, info = "4 rows after dedup")
+  testthat::expect_equal(nrow(deduped), 4L)
   testthat::expect_equal(
     deduped$post_id,
-    c("1900000000000000001", "1900000000000000002", "1900000000000000003", "1900000000000000004"),
-    info = "first-seen order preserved"
-  )
-  testthat::expect_true(inherits(deduped, "tbl_df"), info = "still a tibble")
+    c("1900000000000000001", "1900000000000000002", "1900000000000000003", "1900000000000000004")
+    )
+  testthat::expect_true(inherits(deduped, "tbl_df"))
 })
 
 # --- Test 26: .rx_deduplicate_posts removes duplicate post_id from normalized list (Task 38) ---
@@ -675,6 +653,7 @@ test_that("deduplicate removes duplicate post_id from normalized list", {
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
 
@@ -683,8 +662,8 @@ test_that("deduplicate removes duplicate post_id from normalized list", {
 
   deduped <- xtweetsR:::.rx_deduplicate_posts(dup_normalized)
 
-  testthat::expect_true(inherits(deduped, "tbl_df"), info = "returns a tibble")
-  testthat::expect_equal(nrow(deduped), 4L, info = "4 rows after dedup")
+  testthat::expect_true(inherits(deduped, "tbl_df"))
+  testthat::expect_equal(nrow(deduped), 4L)
 })
 
 # --- Test 27: Different posts with same text are NOT deduplicated (Task 38) ---
@@ -713,12 +692,11 @@ test_that("different post_ids with identical text are kept", {
   normalized <- xtweetsR:::.rx_normalize_posts(same_text)
   deduped <- xtweetsR:::.rx_deduplicate_posts(normalized)
 
-  testthat::expect_equal(nrow(deduped), 2L, info = "both posts kept despite same text")
+  testthat::expect_equal(nrow(deduped), 2L)
   testthat::expect_equal(
     deduped$post_id,
-    c("100", "200"),
-    info = "different post_ids are not collapsed"
-  )
+    c("100", "200")
+    )
 })
 
 # --- Test 28: Empty input returns unchanged (Task 38) ---
@@ -735,8 +713,8 @@ test_that("zero-row tibble returns unchanged through deduplication", {
   empty_tbl <- xtweetsR:::.rx_normalized_to_tibble(empty_norm)
   deduped <- xtweetsR:::.rx_deduplicate_posts(empty_tbl)
 
-  testthat::expect_equal(nrow(deduped), 0L, info = "zero rows stays zero")
-  testthat::expect_true(inherits(deduped, "tbl_df"), info = "still a tibble")
+  testthat::expect_equal(nrow(deduped), 0L)
+  testthat::expect_true(inherits(deduped, "tbl_df"))
 })
 
 # --- Test 29: Deduplication preserves all column types (Task 38) ---
@@ -748,6 +726,7 @@ test_that("deduplication preserves column types", {
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
@@ -764,24 +743,20 @@ test_that("deduplication preserves column types", {
 
     if (expected_type == "character") {
       testthat::expect_true(
-        is.character(actual),
-        info = paste(field, "is character after dedup")
-      )
+        is.character(actual)
+        )
     } else if (expected_type == "integer") {
       testthat::expect_true(
-        is.integer(actual),
-        info = paste(field, "is integer after dedup")
-      )
+        is.integer(actual)
+        )
     } else if (expected_type == "logical") {
       testthat::expect_true(
-        is.logical(actual),
-        info = paste(field, "is logical after dedup")
-      )
+        is.logical(actual)
+        )
     } else if (expected_type == "list") {
       testthat::expect_true(
-        is.list(actual),
-        info = paste(field, "is list after dedup")
-      )
+        is.list(actual)
+        )
     }
   }
 })
@@ -790,31 +765,28 @@ test_that("deduplication preserves column types", {
 test_that(".rx_canonical_fields returns 26 fields including entity, media, and provenance fields", {
   fields <- xtweetsR:::.rx_canonical_fields()
 
-  testthat::expect_length(fields, 26L, info = "26 canonical fields")
+  testthat::expect_length(fields, 26L)
   testthat::expect_equal(
     fields[19:21],
-    c("hashtags", "mentions", "urls"),
-    info = "entity fields are at positions 19-21"
-  )
+    c("hashtags", "mentions", "urls")
+    )
   testthat::expect_equal(
     fields[22:23],
-    c("media_type", "media_urls"),
-    info = "media fields are at positions 22-23"
-  )
+    c("media_type", "media_urls")
+    )
   testthat::expect_equal(
     fields[24:26],
-    c("collected_at", "collection_query", "collection_id"),
-    info = "observation provenance fields are at the end"
-  )
+    c("collected_at", "collection_query", "collection_id")
+    )
 })
 
 # --- Test 31: Type map covers observation provenance fields (Task 46) ---
 test_that("observation provenance fields are character in type map", {
   type_map <- xtweetsR:::.rx_type_map()
 
-  testthat::expect_equal(type_map["collected_at"], "character", info = "collected_at is character")
-  testthat::expect_equal(type_map["collection_query"], "character", info = "collection_query is character")
-  testthat::expect_equal(type_map["collection_id"], "character", info = "collection_id is character")
+  testthat::expect_equal(type_map[["collected_at"]], "character")
+  testthat::expect_equal(type_map[["collection_query"]], "character")
+  testthat::expect_equal(type_map[["collection_id"]], "character")
 })
 
 # --- Test 32: NA defaults cover observation provenance fields (Task 46) ---
@@ -822,17 +794,14 @@ test_that("observation provenance fields default to NA_character_", {
   na_defs <- xtweetsR:::.rx_na_defaults()
 
   testthat::expect_true(
-    is.na(na_defs[["collected_at"]]),
-    info = "collected_at default is NA"
-  )
+    is.na(na_defs[["collected_at"]])
+    )
   testthat::expect_true(
-    is.na(na_defs[["collection_query"]]),
-    info = "collection_query default is NA"
-  )
+    is.na(na_defs[["collection_query"]])
+    )
   testthat::expect_true(
-    is.na(na_defs[["collection_id"]]),
-    info = "collection_id default is NA"
-  )
+    is.na(na_defs[["collection_id"]])
+    )
 })
 
 # --- Test 33: Tibble has 26 columns (Tasks 56-57) ---
@@ -844,27 +813,25 @@ test_that("tibble has 26 columns from fixture", {
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
 
-  testthat::expect_equal(ncol(tbl), 26L, info = "26 canonical columns")
-  testthat::expect_equal(nrow(tbl), 4L, info = "4 posts from fixture")
+  testthat::expect_equal(ncol(tbl), 26L)
+  testthat::expect_equal(nrow(tbl), 4L)
   testthat::expect_equal(
     names(tbl)[19:21],
-    c("hashtags", "mentions", "urls"),
-    info = "entity columns are at positions 19-21"
-  )
+    c("hashtags", "mentions", "urls")
+    )
   testthat::expect_equal(
     names(tbl)[22:23],
-    c("media_type", "media_urls"),
-    info = "media columns are at positions 22-23"
-  )
+    c("media_type", "media_urls")
+    )
   testthat::expect_equal(
     names(tbl)[24:26],
-    c("collected_at", "collection_query", "collection_id"),
-    info = "provenance columns are last"
-  )
+    c("collected_at", "collection_query", "collection_id")
+    )
 })
 
 # --- Test 34: List columns (hashtags, mentions, urls) survive normalization and tibble conversion ---
@@ -876,24 +843,25 @@ test_that("list columns survive normalization and appear as list-columns in tibb
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
+  parsed <- xtweetsR:::.rx_parse_posts(parsed)
 
   normalized <- xtweetsR:::.rx_normalize_posts(parsed)
   tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
 
   # List columns should be lists (not character/integer/logical).
-  testthat::expect_true(is.list(normalized$hashtags), info = "hashtags is a list after normalization")
-  testthat::expect_true(is.list(normalized$mentions), info = "mentions is a list after normalization")
-  testthat::expect_true(is.list(normalized$urls), info = "urls is a list after normalization")
+  testthat::expect_true(is.list(normalized$hashtags))
+  testthat::expect_true(is.list(normalized$mentions))
+  testthat::expect_true(is.list(normalized$urls))
 
   # Tibble columns should be list-columns.
-  testthat::expect_true(is.list(tbl$hashtags), info = "hashtags column is a list-column")
-  testthat::expect_true(is.list(tbl$mentions), info = "mentions column is a list-column")
-  testthat::expect_true(is.list(tbl$urls), info = "urls column is a list-column")
+  testthat::expect_true(is.list(tbl$hashtags))
+  testthat::expect_true(is.list(tbl$mentions))
+  testthat::expect_true(is.list(tbl$urls))
 
   # Check specific values: tweet 1 has 2 hashtags.
-  testthat::expect_equal(as.character(tbl$hashtags[[1L]]), c("RStats", "tidyverse"), info = "hashtags value correct")
-  testthat::expect_equal(as.character(tbl$urls[[1L]]), "https://posit.co/blog/new-release", info = "urls value correct")
-  testthat::expect_equal(tbl$mentions[[2L]][["screen_name"]], "rstudio", info = "mentions value correct")
+  testthat::expect_equal(as.character(tbl$hashtags[[1L]]), c("RStats", "tidyverse"))
+  testthat::expect_equal(as.character(tbl$urls[[1L]]), "https://posit.co/blog/new-release")
+  testthat::expect_equal(tbl$mentions[[2L]][[1L]][["screen_name"]], "rstudio")
 })
 
 # --- Test 35: Missing list fields get NA defaults and survive normalization ---
@@ -912,13 +880,13 @@ test_that("normalized list with no entity fields gets NA defaults for list colum
 
   normalized <- xtweetsR:::.rx_normalize_posts(partial)
 
-  # List columns should be filled with list(NULL) (NA default).
-  testthat::expect_equal(normalized$hashtags, list(NULL), info = "hashtags defaults to list(NULL)")
-  testthat::expect_equal(normalized$mentions, list(NULL), info = "mentions defaults to list(NULL)")
-  testthat::expect_equal(normalized$urls, list(NULL), info = "urls defaults to list(NULL)")
+  # List columns should be filled with list(NULL) (NA default), wrapped per-post.
+  testthat::expect_equal(normalized$hashtags, list(list(NULL)))
+  testthat::expect_equal(normalized$mentions, list(list(NULL)))
+  testthat::expect_equal(normalized$urls, list(list(NULL)))
 
   # Should still convert to tibble successfully.
   tbl <- xtweetsR:::.rx_normalized_to_tibble(normalized)
-  testthat::expect_equal(nrow(tbl), 1L, info = "one row")
-  testthat::expect_true(is.list(tbl$hashtags), info = "hashtags is list-column in tibble")
+  testthat::expect_equal(nrow(tbl), 1L)
+  testthat::expect_true(is.list(tbl$hashtags))
 })

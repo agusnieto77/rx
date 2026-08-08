@@ -44,6 +44,19 @@ NULL
 #'   .rx_build_date_range_filter()
 #'
 #' @noRd
+#' Check whether a string parses as a valid `Date`.
+#'
+#' `as.Date()` throws for non-standard strings instead of returning `NA`,
+#' so this wrapper converts parse errors to `FALSE`.
+#'
+#' @param d A single character string.
+#' @return `TRUE` when `d` parses to a non-`NA` `Date`, otherwise `FALSE`.
+#' @noRd
+.rx_is_valid_date <- function(d) {
+  parsed <- suppressWarnings(tryCatch(as.Date(d), error = function(e) NA))
+  !is.na(parsed)
+}
+
 .rx_build_date_range_filter <- function(since = NULL, until = NULL) {
   parts <- character(0L)
 
@@ -55,7 +68,7 @@ NULL
     if (!nzchar(d)) {
       stop("since must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
     }
-    if (is.na(as.Date(d))) {
+    if (!.rx_is_valid_date(d)) {
       stop("since is not a valid date (YYYY-MM-DD): ", since, call. = FALSE)
     }
     parts <- c(parts, paste0("since:", d))
@@ -69,7 +82,7 @@ NULL
     if (!nzchar(d)) {
       stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
     }
-    if (is.na(as.Date(d))) {
+    if (!.rx_is_valid_date(d)) {
       stop("until is not a valid date (YYYY-MM-DD): ", until, call. = FALSE)
     }
     parts <- c(parts, paste0("until:", d))

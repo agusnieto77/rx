@@ -176,8 +176,8 @@ test_that("x_post normalizes bare post ID to canonical URL", {
 
   x_post(mock_session, "1234567890123456789")
 
-  expect_true(grepl("^https://x.com/status/1234567890123456789$", captured_url),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("^https://x.com/status/1234567890123456789$", captured_url)
+              )
 })
 
 # --- Test 21: x_post normalizes full URL ---
@@ -197,8 +197,8 @@ test_that("x_post normalizes full URL to canonical form", {
 
   x_post(mock_session, "https://x.com/rstudio/status/1234567890123456789")
 
-  expect_true(grepl("^https://x.com/status/1234567890123456789$", captured_url),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("^https://x.com/status/1234567890123456789$", captured_url)
+              )
 })
 
 # --- Test 22: x_post normalizes twitter.com URL ---
@@ -218,8 +218,8 @@ test_that("x_post normalizes twitter.com URLs to x.com", {
 
   x_post(mock_session, "https://twitter.com/rstudio/status/9876543210987654321")
 
-  expect_true(grepl("^https://x.com/status/9876543210987654321$", captured_url),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("^https://x.com/status/9876543210987654321$", captured_url)
+              )
 })
 
 # --- Test 23: x_post with fixture data through mock backend ---
@@ -248,13 +248,13 @@ test_that("x_post processes fixture data through mock backend", {
   result <- x_post(mock_session, "1234567890123456789")
 
   expect_true(inherits(result, "tbl_df"))
-  expect_true(nrow(result) >= 1, info = "fixture has posts, should get at least one")
+  expect_true(nrow(result) >= 1)
   expect_true("post_id" %in% names(result))
   expect_true("text" %in% names(result))
 
   provenance <- attr(result, "rx_collection_provenance")
   expect_true(grepl("^post:", provenance$query))
-  expect_lte(provenance$records, 1L, info = "limit=1 should cap results")
+  expect_lte(provenance$records, 1L)
 })
 
 # --- Test 24: x_post empty response returns zero-row tibble ---

@@ -71,10 +71,10 @@ test_that("x_replies constructs URL with @username", {
 
   x_replies(mock_session, "rstudio")
 
-  expect_true(grepl("@rstudio", captured_url),
-              info = paste("captured URL:", captured_url))
-  expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("@rstudio", captured_url)
+              )
+  expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE)
+              )
 })
 
 # --- Test 6: x_replies URL-encodes special characters in username ---
@@ -94,8 +94,8 @@ test_that("x_replies URL-encodes special characters in username", {
 
   x_replies(mock_session, "test+user")
 
-  expect_true(grepl("test%2Buser", captured_url),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("test%2Buser", captured_url)
+              )
 })
 
 # --- x_replies() navigation failure tests ---
@@ -107,6 +107,7 @@ test_that("x_replies navigation failure returns empty tibble with warning", {
   mock_session$backend <- new.env(parent = emptyenv())
   class(mock_session) <- "xtweetsR_session"
   mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
   mock_session$backend$networkCaptureGet <- function() list()
   mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
   mock_session$backend$navigate <- function(url) list(status = "error", error = list(code = "NAV_FAIL"))
@@ -151,7 +152,7 @@ test_that("x_replies extracts 2 replies from fixture (5 total posts)", {
   result <- x_replies(mock_session, "rstudio")
 
   expect_true(inherits(result, "tbl_df"))
-  expect_equal(nrow(result), 2L, info = "fixture has 5 posts, 2 of which are replies")
+  expect_equal(nrow(result), 2L)
   expect_true("post_id" %in% names(result))
   expect_true("text" %in% names(result))
   expect_true("is_reply" %in% names(result))
@@ -184,8 +185,8 @@ test_that("x_replies filters to only reply posts", {
   result <- x_replies(mock_session, "rstudio")
 
   # All returned posts must be replies
-  expect_true(all(result$is_reply == TRUE),
-              info = "all returned posts should have is_reply = TRUE")
+  expect_true(all(result$is_reply == TRUE)
+              )
   # Should not include non-reply posts (200 = regular mention, 203 = mention with URL)
   expect_false("1900000000000000200" %in% result$post_id)
   expect_false("1900000000000000203" %in% result$post_id)
@@ -201,6 +202,7 @@ test_that("x_replies returns empty tibble when no events captured", {
   mock_session$backend <- new.env(parent = emptyenv())
   class(mock_session) <- "xtweetsR_session"
   mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
   mock_session$backend$networkCaptureGet <- function() list()
   mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
 
@@ -248,6 +250,7 @@ test_that("x_replies attaches provenance with zero-row result", {
   mock_session$backend <- new.env(parent = emptyenv())
   class(mock_session) <- "xtweetsR_session"
   mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
   mock_session$backend$networkCaptureGet <- function() list()
   mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
 
@@ -348,7 +351,7 @@ test_that("x_replies respects limit parameter", {
   result <- x_replies(mock_session, "rstudio", limit = 1L)
 
   expect_true(inherits(result, "tbl_df"))
-  expect_true(nrow(result) <= 1L, info = "limit=1 should return at most 1 post")
+  expect_true(nrow(result) <= 1L)
 })
 
 # --- x_replies() edge case tests ---
@@ -441,8 +444,8 @@ test_that("x_replies mode='latest' produces f=live in URL", {
 
   x_replies(mock_session, "rstudio", mode = "latest")
 
-  expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE)
+              )
 })
 
 # --- Test 22: x_replies mode='top' produces f=top in URL ---
@@ -462,8 +465,8 @@ test_that("x_replies mode='top' produces f=top in URL", {
 
   x_replies(mock_session, "rstudio", mode = "top")
 
-  expect_true(grepl("f%3Dtop", captured_url, ignore.case = TRUE),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("f%3Dtop", captured_url, ignore.case = TRUE)
+              )
 })
 
 # --- Test 23: x_replies mode is case-insensitive ---
@@ -483,8 +486,8 @@ test_that("x_replies mode is case-insensitive", {
 
   x_replies(mock_session, "rstudio", mode = "TOP")
 
-  expect_true(grepl("f%3Dtop", captured_url, ignore.case = TRUE),
-              info = paste("captured URL:", captured_url))
+  expect_true(grepl("f%3Dtop", captured_url, ignore.case = TRUE)
+              )
 })
 
 # --- Test 24: x_replies rejects invalid mode ---

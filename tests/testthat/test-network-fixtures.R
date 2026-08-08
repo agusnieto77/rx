@@ -16,14 +16,14 @@ test_that("fake-post.json parses as valid JSON with an 'entries' array", {
     "inst", "tests", "fixtures", "fake-post.json"
   )
 
-  testthat::expect_true(file.exists(fixture_path), info = "fixture exists")
+  testthat::expect_true(file.exists(fixture_path))
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
-  testthat::expect_true(nzchar(content), info = "fixture is non-empty")
+  testthat::expect_true(nzchar(content))
 
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
-  testthat::expect_true(is.list(parsed), info = "parsed JSON is a list")
-  testthat::expect_true("entries" %in% names(parsed), info = "has 'entries' field")
+  testthat::expect_true(is.list(parsed))
+  testthat::expect_true("entries" %in% names(parsed))
 })
 
 # --- Test 2: request discovery — expected event structure ---
@@ -44,34 +44,29 @@ test_that("network event structure matches expected discovery fields", {
   required_fields <- c("requestId", "url", "method", "resourceType")
   for (field in required_fields) {
     testthat::expect_true(
-      field %in% names(sample_event),
-      info = paste("event has", field)
-    )
+      field %in% names(sample_event)
+      )
   }
 
   # Fields must be non-empty strings.
   testthat::expect_true(
-    nzchar(sample_event$requestId),
-    info = "requestId is non-empty"
-  )
+    nzchar(sample_event$requestId)
+    )
   testthat::expect_true(
-    nzchar(sample_event$url),
-    info = "url is non-empty"
-  )
+    nzchar(sample_event$url)
+    )
   testthat::expect_true(
-    nzchar(sample_event$method),
-    info = "method is non-empty"
-  )
+    nzchar(sample_event$method)
+    )
   testthat::expect_true(
-    nzchar(sample_event$resourceType),
-    info = "resourceType is non-empty"
-  )
+    nzchar(sample_event$resourceType)
+    )
 
   # Discovery should be able to find events by URL substring.
   found <- Filter(function(e) {
     grepl("api/data", e$url, ignore.case = TRUE)
   }, list(sample_event))
-  testthat::expect_equal(length(found), 1, info = "URL-based discovery finds the event")
+  testthat::expect_equal(length(found), 1)
 })
 
 # --- Test 3: response metadata — expected fields and types ---
@@ -93,13 +88,13 @@ test_that("response metadata has expected structure and types", {
   # All metadata fields must be present.
   expected_fields <- c("requestId", "url", "method", "resourceType", "status")
   for (f in expected_fields) {
-    testthat::expect_true(f %in% names(sample_metadata), info = paste("metadata has", f))
+    testthat::expect_true(f %in% names(sample_metadata))
   }
 
   # Types should be correct.
-  testthat::expectTrue(is.character(sample_metadata$statusText), info = "statusText is character")
-  testthat::expect_true(isTRUE(is.numeric(sample_metadata$status)), info = "status is numeric")
-  testthat::expect_true(isTRUE(sample_metadata$status >= 200 && sample_metadata$status < 300), info = "status is 2xx")
+  testthat::expect_true(is.character(sample_metadata$statusText))
+  testthat::expect_true(isTRUE(is.numeric(sample_metadata$status)))
+  testthat::expect_true(isTRUE(sample_metadata$status >= 200 && sample_metadata$status < 300))
 })
 
 # --- Test 4: response body capture — sidecar response contract ---
@@ -123,22 +118,19 @@ test_that("response body capture follows the sidecar response contract", {
   contract_fields <- c("requestId", "body", "contentType", "error")
   for (f in contract_fields) {
     testthat::expect_true(
-      f %in% names(sample_body_response),
-      info = paste("body response has", f)
-    )
+      f %in% names(sample_body_response)
+      )
   }
 
   # Body should be a list (parsed JSON).
   testthat::expect_true(
-    is.list(sample_body_response$body),
-    info = "body is a list (parsed JSON)"
-  )
+    is.list(sample_body_response$body)
+    )
 
   # Error should be NULL on success.
   testthat::expect_true(
-    is.null(sample_body_response$error),
-    info = "error is NULL on success"
-  )
+    is.null(sample_body_response$error)
+    )
 })
 
 # --- Test 5: response body capture — error case for invalid requestId ---
@@ -153,10 +145,10 @@ test_that("response body capture returns error for unknown requestId", {
     )
   )
 
-  testthat::expect_true(is.list(error_response$error), info = "has error field")
-  testthat::expect_equal(error_response$error$code, "NOT_FOUND", info = "error code is NOT_FOUND")
-  testthat::expect_true(nzchar(error_response$error$message), info = "error message is non-empty")
-  testthat::expect_true(is.null(error_response$result), info = "result is NULL on error")
+  testthat::expect_true(is.list(error_response$error))
+  testthat::expect_equal(error_response$error$code, "NOT_FOUND")
+  testthat::expect_true(nzchar(error_response$error$message))
+  testthat::expect_true(is.null(error_response$result))
 })
 
 # --- Test 6: JSON parsing — each post entry has expected fields ---
@@ -171,8 +163,8 @@ test_that("fake-post.json entries have all expected post fields", {
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
 
   entries <- parsed$entries
-  testthat::expect_true(is.list(entries), info = "entries is a list")
-  testthat::expect_true(length(entries) >= 2, info = "at least 2 entries exist")
+  testthat::expect_true(is.list(entries))
+  testthat::expect_true(length(entries) >= 2)
 
   expected_fields <- c("post_id", "text", "author", "created_at", "metrics", "relationships", "entities")
 
@@ -180,9 +172,8 @@ test_that("fake-post.json entries have all expected post fields", {
     entry <- entries[[i]]
     for (f in expected_fields) {
       testthat::expect_true(
-        f %in% names(entry),
-        info = paste("entry", i, "has field", f)
-      )
+        f %in% names(entry)
+        )
     }
   }
 })
@@ -199,10 +190,9 @@ test_that("post_id values are character strings, not numeric", {
   for (i in seq_along(parsed$entries)) {
     pid <- parsed$entries[[i]]$post_id
     testthat::expect_true(
-      is.character(pid),
-      info = paste("entry", i, "post_id is character, got:", class(pid))
-    )
-    testthat::expect_true(nzchar(pid), info = paste("entry", i, "post_id is non-empty"))
+      is.character(pid)
+      )
+    testthat::expect_true(nzchar(pid))
   }
 })
 
@@ -221,13 +211,11 @@ test_that("metrics fields are numeric/integer values", {
     entry <- parsed$entries[[i]]
     for (m in expected_metrics) {
       testthat::expect_true(
-        m %in% names(entry$metrics),
-        info = paste("entry", i, "metrics has", m)
-      )
+        m %in% names(entry$metrics)
+        )
       testthat::expect_true(
-        is.numeric(entry$metrics[[m]]),
-        info = paste("entry", i, "metrics.", m, "is numeric")
-      )
+        is.numeric(entry$metrics[[m]])
+        )
     }
   }
 })
@@ -247,13 +235,11 @@ test_that("author sub-object has id, username, display_name fields", {
     author <- parsed$entries[[i]]$author
     for (f in expected_author_fields) {
       testthat::expect_true(
-        f %in% names(author),
-        info = paste("entry", i, "author has", f)
-      )
+        f %in% names(author)
+        )
       testthat::expect_true(
-        is.character(author[[f]]),
-        info = paste("entry", i, "author.", f, "is character")
-      )
+        is.character(author[[f]])
+        )
     }
   }
 })
@@ -272,14 +258,14 @@ test_that("relationships and entities sub-objects parse correctly", {
 
     # relationships should have boolean and character fields.
     rel <- entry$relationships
-    testthat::expect_true(is.logical(rel$is_reply), info = paste("entry", i, "is_reply is logical"))
-    testthat::expect_true(is.character(rel$conversation_id), info = paste("entry", i, "conversation_id is character"))
+    testthat::expect_true(is.logical(rel$is_reply))
+    testthat::expect_true(is.character(rel$conversation_id))
 
     # entities should have list columns (hashtags, mentions, urls).
     entities <- entry$entities
-    testthat::expect_true(is.list(entities$hashtags), info = paste("entry", i, "hashtags is a list"))
-    testthat::expect_true(is.list(entities$mentions), info = paste("entry", i, "mentions is a list"))
-    testthat::expect_true(is.list(entities$urls), info = paste("entry", i, "urls is a list"))
+    testthat::expect_true(is.list(entities$hashtags))
+    testthat::expect_true(is.list(entities$mentions))
+    testthat::expect_true(is.list(entities$urls))
   }
 })
 
@@ -311,15 +297,15 @@ test_that("multiple network events are distinguishable by URL and resourceType",
 
   # Discovery by URL substring.
   json_events <- Filter(function(e) grepl("fake-post", e$url, ignore.case = TRUE), events)
-  testthat::expect_equal(length(json_events), 1, info = "URL filter isolates exactly one JSON event")
+  testthat::expect_equal(length(json_events), 1)
 
   # Discovery by resource type.
   doc_events <- Filter(function(e) e$resourceType == "document", events)
-  testthat::expect_equal(length(doc_events), 1, info = "resourceType filter isolates exactly one document event")
+  testthat::expect_equal(length(doc_events), 1)
 
   # All requestIds are unique.
   ids <- vapply(events, function(e) e$requestId, character(1))
-  testthat::expect_equal(length(unique(ids)), length(ids), info = "all requestIds are unique")
+  testthat::expect_equal(length(unique(ids)), length(ids))
 })
 
 # --- Test 12: Response metadata — HTTP status codes are categorized ---
@@ -343,9 +329,8 @@ test_that("response status codes can be categorized by class", {
       "unknown"
     )
     testthat::expect_equal(
-      actual_class, s$expected_class,
-      info = paste("status", s$status, "categorizes as", s$expected_class)
-    )
+      actual_class, s$expected_class
+      )
   }
 })
 
@@ -360,12 +345,11 @@ test_that("created_at values are ISO 8601 timestamp strings", {
 
   for (i in seq_along(parsed$entries)) {
     ts <- parsed$entries[[i]]$created_at
-    testthat::expect_true(is.character(ts), info = paste("entry", i, "created_at is character"))
+    testthat::expect_true(is.character(ts))
     # ISO 8601 pattern: YYYY-MM-DDTHH:MM:SS.sssZ
     testthat::expect_true(
-      grepl("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}", ts),
-      info = paste("entry", i, "created_at matches ISO 8601 pattern")
-    )
+      grepl("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}", ts)
+      )
   }
 })
 
@@ -381,21 +365,21 @@ test_that("parsed body structure is suitable for downstream post extraction", {
   body <- jsonlite::fromJSON(content, simplifyVector = FALSE)
 
   # Top level: has 'entries' key with list of posts.
-  testthat::expect_true("entries" %in% names(body), info = "body has entries")
-  testthat::expect_true(is.list(body$entries), info = "entries is a list")
-  testthat::expect_true(length(body$entries) >= 1, info = "entries is non-empty")
+  testthat::expect_true("entries" %in% names(body))
+  testthat::expect_true(is.list(body$entries))
+  testthat::expect_true(length(body$entries) >= 1)
 
   # First entry is a valid post-like object.
   first_entry <- body$entries[[1]]
-  testthat::expect_true("post_id" %in% names(first_entry), info = "first entry has post_id")
-  testthat::expect_true("text" %in% names(first_entry), info = "first entry has text")
+  testthat::expect_true("post_id" %in% names(first_entry))
+  testthat::expect_true("text" %in% names(first_entry))
 
   # The structure can be converted to a data frame (tibble-ready).
   post_ids <- vapply(body$entries, function(e) e$post_id, character(1))
   texts    <- vapply(body$entries, function(e) e$text, character(1))
-  testthat::expect_true(length(post_ids) >= 1, info = "post_ids vector is non-empty")
-  testthat::expect_true(length(texts) >= 1, info = "texts vector is non-empty")
-  testthat::expect_true(length(post_ids) == length(texts), info = "post_ids and texts have same length")
+  testthat::expect_true(length(post_ids) >= 1)
+  testthat::expect_true(length(texts) >= 1)
+  testthat::expect_true(length(post_ids) == length(texts))
 })
 
 # --- Test 15: Server serves the fixture with correct content type ---
@@ -414,8 +398,8 @@ test_that("test server serves fake-post.json with application/json content type"
     "inst", "tests", "fixtures"
   )
 
-  testthat::expect_true(file.exists(server_script), info = "server.js exists")
-  testthat::expect_true(file.exists(fixture_dir), info = "fixtures directory exists")
+  testthat::expect_true(file.exists(server_script))
+  testthat::expect_true(file.exists(fixture_dir))
 
   port <- sample(20000:65535, 1)
   proc <- processx::process$new(
@@ -437,7 +421,7 @@ test_that("test server serves fake-post.json with application/json content type"
     if (ready) break
     Sys.sleep(0.1)
   }
-  testthat::expect_true(ready, info = "test server started")
+  testthat::expect_true(ready)
 
   on.exit({
     tryCatch(proc$kill(), error = function(e) NULL)
@@ -457,12 +441,12 @@ test_that("test server serves fake-post.json with application/json content type"
     raw <- paste(readLines(conn, warn = FALSE), collapse = "\n")
   }
 
-  testthat::expect_true(nzchar(raw), info = "response is non-empty")
+  testthat::expect_true(nzchar(raw))
 
   # Parse and validate.
   parsed <- jsonlite::fromJSON(raw)
-  testthat::expect_true("entries" %in% names(parsed), info = "served JSON has entries")
-  testthat::expect_true(isTRUE(nrow(parsed$entries) >= 1), info = "entries has at least one post")
+  testthat::expect_true("entries" %in% names(parsed))
+  testthat::expect_true(isTRUE(nrow(parsed$entries) >= 1))
 })
 
 # --- Test 16: x-search-response.json fixture is valid JSON with correct top-level structure ---
@@ -473,17 +457,17 @@ test_that("x-search-response.json parses as valid JSON with expected top-level s
     "inst", "tests", "fixtures", "x-search-response.json"
   )
 
-  testthat::expect_true(file.exists(fixture_path), info = "X search fixture exists")
+  testthat::expect_true(file.exists(fixture_path))
 
   content <- paste(readLines(fixture_path, warn = FALSE), collapse = "\n")
-  testthat::expect_true(nzchar(content), info = "X search fixture is non-empty")
+  testthat::expect_true(nzchar(content))
 
   parsed <- jsonlite::fromJSON(content, simplifyVector = FALSE)
-  testthat::expect_true(is.list(parsed), info = "parsed JSON is a list")
-  testthat::expect_true("data" %in% names(parsed), info = "has 'data' field")
-  testthat::expect_true(is.list(parsed$data), info = "data is a list")
-  testthat::expect_true("timeline" %in% names(parsed$data), info = "data has 'timeline' field")
-  testthat::expect_true("instructions" %in% names(parsed$data$timeline), info = "timeline has 'instructions'")
+  testthat::expect_true(is.list(parsed))
+  testthat::expect_true("data" %in% names(parsed))
+  testthat::expect_true(is.list(parsed$data))
+  testthat::expect_true("timeline" %in% names(parsed$data))
+  testthat::expect_true("instructions" %in% names(parsed$data$timeline))
 })
 
 # --- Test 17: x-search-response.json contains tweet entries with post data ---
@@ -501,25 +485,25 @@ test_that("x-search-response.json contains tweet entries with post data", {
 
   # Find the TimelineAddEntries instruction.
   add_entries <- Filter(function(inst) inst$type == "TimelineAddEntries", instructions)
-  testthat::expect_true(length(add_entries) >= 1, info = "TimelineAddEntries instruction exists")
+  testthat::expect_true(length(add_entries) >= 1)
 
   entries <- add_entries[[1]]$entries
-  testthat::expect_true(length(entries) >= 1, info = "has at least one entry")
+  testthat::expect_true(length(entries) >= 1)
 
   # Each entry should have tweet_results containing a result with rest_id.
   tweet_entries <- Filter(function(e) {
     !is.null(e$content$itemContent$tweet_results$result)
   }, entries)
-  testthat::expect_true(length(tweet_entries) >= 1, info = "at least one tweet entry found")
+  testthat::expect_true(length(tweet_entries) >= 1)
 
   # Extract rest_ids — they should be character strings.
   rest_ids <- vapply(tweet_entries, function(e) {
     e$content$itemContent$tweet_results$result$rest_id
   }, character(1))
 
-  testthat::expect_true(all(nzchar(rest_ids)), info = "all rest_ids are non-empty")
-  testthat::expect_true(all(is.character(rest_ids)), info = "all rest_ids are character")
-  testthat::expect_true(length(unique(rest_ids)) == length(rest_ids), info = "rest_ids are unique")
+  testthat::expect_true(all(nzchar(rest_ids)))
+  testthat::expect_true(all(is.character(rest_ids)))
+  testthat::expect_true(length(unique(rest_ids)) == length(rest_ids))
 })
 
 # --- Test 18: x-search-response.json contains pagination cursors ---
@@ -536,27 +520,27 @@ test_that("x-search-response.json contains pagination cursor entries", {
 
   # Find the TimelineAddToModule instruction that holds cursors.
   add_module <- Filter(function(inst) inst$type == "TimelineAddToModule", instructions)
-  testthat::expect_true(length(add_module) >= 1, info = "TimelineAddToModule instruction exists")
+  testthat::expect_true(length(add_module) >= 1)
 
   module_items <- add_module[[1]]$moduleItems
   cursor_entries <- Filter(function(item) {
     !is.null(item$item$content$cursorType)
   }, module_items)
 
-  testthat::expect_true(length(cursor_entries) >= 1, info = "at least one cursor entry exists")
+  testthat::expect_true(length(cursor_entries) >= 1)
 
   cursor_types <- vapply(cursor_entries, function(e) {
     e$item$content$cursorType
   }, character(1))
 
-  testthat::expect_true("Bottom" %in% cursor_types, info = "Bottom cursor present")
-  testthat::expect_true("Top" %in% cursor_types, info = "Top cursor present")
+  testthat::expect_true("Bottom" %in% cursor_types)
+  testthat::expect_true("Top" %in% cursor_types)
 
   # Cursor values should be non-empty strings.
   cursor_values <- vapply(cursor_entries, function(e) {
     e$item$content$value
   }, character(1))
-  testthat::expect_true(all(nzchar(cursor_values)), info = "all cursor values are non-empty")
+  testthat::expect_true(all(nzchar(cursor_values)))
 })
 
 # --- Test 19: x-search-response.json post structure supports downstream parser expectations ---
@@ -578,7 +562,7 @@ test_that("x-search-response.json posts have fields expected by the downstream p
     !is.null(e$content$itemContent$tweet_results$result)
   }, entries)
 
-  testthat::expect_true(length(tweet_entries) >= 2, info = "at least 2 tweets in fixture")
+  testthat::expect_true(length(tweet_entries) >= 2)
 
   for (i in seq_along(tweet_entries)) {
     tweet <- tweet_entries[[i]]
@@ -586,52 +570,42 @@ test_that("x-search-response.json posts have fields expected by the downstream p
 
     # rest_id is required.
     testthat::expect_true(
-      "rest_id" %in% names(result),
-      info = paste("tweet", i, "has rest_id")
-    )
+      "rest_id" %in% names(result)
+      )
 
     # User identity via core > user_results > result > legacy.
     user_result <- result$core$user_results$result$legacy
     testthat::expect_true(
-      "screen_name" %in% names(user_result),
-      info = paste("tweet", i, "has screen_name")
-    )
+      "screen_name" %in% names(user_result)
+      )
     testthat::expect_true(
-      "name" %in% names(user_result),
-      info = paste("tweet", i, "has name")
-    )
+      "name" %in% names(user_result)
+      )
 
     # Tweet text and metadata via legacy.
     legacy <- result$legacy
     testthat::expect_true(
-      "full_text" %in% names(legacy),
-      info = paste("tweet", i, "has full_text")
-    )
+      "full_text" %in% names(legacy)
+      )
     testthat::expect_true(
-      "created_at" %in% names(legacy),
-      info = paste("tweet", i, "has created_at")
-    )
+      "created_at" %in% names(legacy)
+      )
     testthat::expect_true(
-      "conversation_id_str" %in% names(legacy),
-      info = paste("tweet", i, "has conversation_id_str")
-    )
+      "conversation_id_str" %in% names(legacy)
+      )
 
     # Engagement metrics.
     testthat::expect_true(
-      "reply_count" %in% names(legacy),
-      info = paste("tweet", i, "has reply_count")
-    )
+      "reply_count" %in% names(legacy)
+      )
     testthat::expect_true(
-      "retweet_count" %in% names(legacy),
-      info = paste("tweet", i, "has retweet_count")
-    )
+      "retweet_count" %in% names(legacy)
+      )
     testthat::expect_true(
-      "favorite_count" %in% names(legacy),
-      info = paste("tweet", i, "has favorite_count")
-    )
+      "favorite_count" %in% names(legacy)
+      )
     testthat::expect_true(
-      "views" %in% names(legacy),
-      info = paste("tweet", i, "has views")
-    )
+      "views" %in% names(legacy)
+      )
   }
 })
