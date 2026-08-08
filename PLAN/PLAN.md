@@ -1639,7 +1639,7 @@ Implement `x_thread()` by reusing the canonical parser.
 - `R/search.R` — added `x_thread()` function (~90 lines) after `x_post()`
 - `NAMESPACE` — added `export(x_thread)`
 
-### Iteration 83: Add replies extraction [ ]
+### Iteration 83: Add replies extraction [x]
 
 Implement `x_replies()` without creating a second post schema.
 
