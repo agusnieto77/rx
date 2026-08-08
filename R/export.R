@@ -179,7 +179,7 @@ x_save <- function(posts, path) {
   con <- tryCatch(
     duckdb::dbConnect(duckdb::DuckDB(), path),
     error = function(e) {
-      stop(.rx_error_cdp(paste0("Failed to connect to DuckDB at '", path, "': ", e$message)))
+      stop(.rx_error(paste0("Failed to connect to DuckDB at '", path, "': ", e$message)))
     }
   )
   on.exit(duckdb::dbDisconnect(con), add = TRUE)
@@ -242,7 +242,7 @@ x_save <- function(posts, path) {
   tryCatch(
     duckdb::dbWriteTable(con, "posts", posts, row.names = FALSE, overwrite = TRUE),
     error = function(e) {
-      stop(.rx_error_cdp(paste0("Failed to write posts table: ", e$message)))
+      stop(.rx_error(paste0("Failed to write posts table: ", e$message)))
     }
   )
 

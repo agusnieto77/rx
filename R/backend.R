@@ -143,7 +143,7 @@ NULL
       state$connected <- FALSE
       state$endpoint <- NULL
       backend$connected <- FALSE
-      stop(.rx_error_cdp("Malformed connect response from sidecar (missing result field)"))
+      stop(.rx_error("Malformed connect response from sidecar (missing result field)"))
     }
 
     state$connected <- TRUE

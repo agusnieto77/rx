@@ -136,7 +136,7 @@ NULL
   id <- if (!is.null(reqId)) reqId() else 1L
 
   if (!proc$is_alive()) {
-    stop(.rx_error_cdp("Sidecar process is not running."), call. = FALSE)
+    stop(.rx_error("Sidecar process is not running."), call. = FALSE)
   }
 
   req <- list(id = id, method = method)
@@ -156,7 +156,7 @@ NULL
   start <- Sys.time()
   while (Sys.time() - start < timeout) {
     if (!proc$is_alive()) {
-      stop(.rx_error_cdp("Sidecar process died while waiting for response."), call. = FALSE)
+      stop(.rx_error("Sidecar process died while waiting for response."), call. = FALSE)
     }
     # read_output_lines returns all available lines from stdout.
     lines <- tryCatch(proc$read_output_lines(), error = function(e) character(0))
