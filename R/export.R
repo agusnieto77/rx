@@ -342,7 +342,10 @@ x_save <- function(posts, path) {
 
   # Build a data frame that arrow::write_dataset can work with.
   # Partition columns must be present in the table.
-  df <- posts
+  # Ensure df is an independent copy so we don't mutate the caller's
+  # tibble when adding the partition column below.
+  # Use the data.frame constructor which copies all columns.
+  df <- as.data.frame(posts, stringsAsFactors = FALSE)
   df$collected_at_date <- collected_at_dates
 
   # Determine partition columns: use collection_id and the extracted date.

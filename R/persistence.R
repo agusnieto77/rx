@@ -74,7 +74,7 @@ NULL
 
   # Write (or append) the lines to the file.
   # Use writeLines which handles newlines correctly across platforms.
-  con <- file(path, open = if (append) "a" else "w")
+  con <- file(path, open = if (append) "a" else "w", encoding = "UTF-8")
   on.close <- TRUE
   tryCatch(
     writeLines(lines, con, useBytes = TRUE),
@@ -247,7 +247,7 @@ NULL
     records_collected = checkpoint$records_collected
   )
 
-  con <- file(path, open = "w")
+  con <- file(path, open = "w", encoding = "UTF-8")
   on.exit(close(con), add = TRUE)
 
   tryCatch(

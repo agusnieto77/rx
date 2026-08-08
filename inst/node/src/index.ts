@@ -230,6 +230,8 @@ function handleNetworkCaptureGet(id: unknown): void {
   }
   // Return a snapshot and clear the array, but keep the secondary map
   // so handleNetworkCaptureGetBody can still look up events by requestId.
+  // Note: networkEventsById accumulates entries until handleNetworkCaptureClear
+  // is called. This is a known limitation (see TODO at line 117).
   const events = networkEvents.slice();
   networkEvents = [];
   respond(id, { events });
