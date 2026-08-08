@@ -1620,7 +1620,7 @@ Add `latest` and `top` where technically supported.
 - `tests/testthat/test-replies.R` — fixed Test 5 assertion, added Tests 21-24 (mode parameter)
 - `tests/testthat/test-quotes.R` — fixed Test 5 assertion, added Tests 21-24 (mode parameter)
 
-### Iteration 82: Add thread extraction [ ]
+### Iteration 82: Add thread extraction [x]
 
 Implement `x_thread()` by reusing the canonical parser.
 
