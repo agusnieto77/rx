@@ -303,21 +303,18 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     limit <- as.integer(limit)
   }
   if (!is.numeric(max_scrolls) || length(max_scrolls) != 1L || anyNA(max_scrolls) || max_scrolls < 0L) {
-    stop("max_scrolls must be a non-negative integer, or NULL.", call. = FALSE)
+    stop("max_scrolls must be a non-negative integer.", call. = FALSE)
   }
   max_scrolls <- as.integer(max_scrolls)
 
-  # Validate resume-related parameters.
   if (!is.logical(resume) || length(resume) != 1L || anyNA(resume)) {
     stop("resume must be a single logical value.", call. = FALSE)
   }
-
   if (!is.null(checkpoint_path)) {
     if (!is.character(checkpoint_path) || length(checkpoint_path) != 1L || anyNA(checkpoint_path) || !nzchar(checkpoint_path[[1L]])) {
       stop("checkpoint_path must be a single non-empty character string, or NULL.", call. = FALSE)
     }
   }
-
   if (!is.null(jsonl_path)) {
     if (!is.character(jsonl_path) || length(jsonl_path) != 1L || anyNA(jsonl_path) || !nzchar(jsonl_path[[1L]])) {
       stop("jsonl_path must be a single non-empty character string, or NULL.", call. = FALSE)
@@ -337,7 +334,6 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
       stop("since is not a valid date (YYYY-MM-DD): ", since, call. = FALSE)
     }
   }
-
   if (!is.null(until)) {
     if (!is.character(until) || length(until) != 1L || anyNA(until)) {
       stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
@@ -350,8 +346,6 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
       stop("until is not a valid date (YYYY-MM-DD): ", until, call. = FALSE)
     }
   }
-
-  # Validate lang.
   if (!is.null(lang)) {
     if (!is.character(lang) || length(lang) != 1L || anyNA(lang)) {
       stop("lang must be a single character string with a language code, or NULL.", call. = FALSE)
@@ -364,8 +358,6 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
       stop("lang must be a valid language code (e.g. 'en', 'es', 'ja'): ", lang, call. = FALSE)
     }
   }
-
-  # Validate mode.
   if (!is.null(mode)) {
     if (!is.character(mode) || length(mode) != 1L || anyNA(mode)) {
       stop("mode must be 'latest', 'top', or NULL.", call. = FALSE)
@@ -379,27 +371,19 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     }
   }
 
-  backend <- session$backend
-
   # 1b. Resume handling (Task 49).
-  # When resume=TRUE and a checkpoint file exists, restore collection state
-  # from the checkpoint so that already-seen posts are not duplicated.
   resumed_checkpoint <- NULL
   if (isTRUE(resume)) {
     if (is.null(checkpoint_path)) {
       checkpoint_path <- paste0(gsub("[^A-Za-z0-9._-]", "_", query), ".checkpoint.json")
     }
-    if (is.null(jsonl_path)) {
-      jsonl_path <- paste0(gsub("[^A-Za-z0-9._-]", "_", query), ".jsonl")
-    }
-
     resumed_checkpoint <- .rx_checkpoint_read(checkpoint_path)
     if (!is.null(resumed_checkpoint)) {
       collection_id <- resumed_checkpoint$collection_id
     }
   }
 
-  # 1c. Capture collection start time and generate collection_id for provenance (Tasks 45, 46).
+  # 1c. Capture collection start time and generate collection_id.
   collection_started_at <- Sys.time()
   if (is.null(resumed_checkpoint) || is.null(resumed_checkpoint$collection_id)) {
     collection_id <- .rx_generate_uuid()
@@ -411,7 +395,56 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     backend_label <- "chromium"
   }
 
-  # 2. Enable network capture before navigation.
+  # 2. Construct URL and delegate to shared pipeline.
+  url <- .rx_construct_search_url(query, since = since, until = until, lang = lang, mode = mode)
+
+  .rx_search_pipeline(
+    session = session, url = url, query = query,
+    collection_id = collection_id, limit = limit,
+    scroll = scroll, max_scrolls = max_scrolls,
+    resume = resume, resumed_checkpoint = resumed_checkpoint,
+    checkpoint_path = checkpoint_path,
+    quiet = quiet, collection_started_at = collection_started_at,
+    backend_label = backend_label
+  )
+}
+
+# ---------------------------------------------------------------------------
+# Shared search pipeline (deduplicates x_search / x_user_posts)
+# ---------------------------------------------------------------------------
+
+#' Core search pipeline: navigate, extract, scroll, merge, normalize, dedup.
+#'
+#' This is the shared backbone used by `x_search()` and `x_user_posts()`.
+#' It encapsulates the common flow of session validation, network capture
+#' setup, navigation, batch extraction with bounded scrolling, batch
+#' merging (via `.rx_merge_batches()`), normalization, deduplication, and
+#' provenance attachment.
+#'
+#' @param session An `xtweetsR_session` object.
+#' @param url The fully constructed URL to navigate to.
+#' @param query The query string for provenance metadata.
+#' @param collection_id UUID for this collection run.
+#' @param limit Maximum number of posts (optional).
+#' @param scroll Whether to perform infinite scrolling (default `TRUE`).
+#' @param max_scrolls Maximum scroll iterations.
+#' @param resumed_checkpoint Previously restored checkpoint (or `NULL`).
+#' @param checkpoint_path Path for checkpoint persistence (or `NULL`).
+#' @param quiet Suppress progress messages.
+#' @param collection_started_at Timestamp when the collection began.
+#' @param backend_label Human-readable backend label.
+#' @return A deduplicated post tibble with `rx_collection_provenance`
+#'   and relational attributes attached.
+#' @noRd
+.rx_search_pipeline <- function(
+  session, url, query, collection_id, limit,
+  scroll = TRUE, max_scrolls = 5L,
+  resume = FALSE, resumed_checkpoint = NULL, checkpoint_path = NULL,
+  quiet = FALSE, collection_started_at, backend_label
+) {
+  backend <- session$backend
+
+  # 1. Enable network capture.
   tryCatch(
     backend$networkCaptureEnable(),
     error = function(e) {
@@ -421,12 +454,9 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     }
   )
 
-  # 3. Construct search URL and navigate.
-  url <- .rx_construct_search_url(query, since = since, until = until, lang = lang, mode = mode)
-
+  # 2. Navigate.
   nav_result <- backend$navigate(url)
   if (is.null(nav_result$status) || nav_result$status == "error") {
-    # Navigation failed — still try to return what we can.
     error_info <- if (!is.null(nav_result$error)) nav_result$error$code else "unknown"
     .rx_search_cleanup(backend)
     warning("Navigation failed (", error_info, "). No posts returned.")
@@ -445,13 +475,10 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
   }
 
-  # 4. Wait for initial network responses to arrive (X search loads content
-  #    asynchronously via XHR/GraphQL). A short wait is more reliable
-  #    than polling for specific response types.
+  # 3. Wait for initial content.
   Sys.sleep(3)
 
-  # 5. Create scroll state and retrieve initial batch.
-  # When resuming, pre-populate seen_post_ids from the checkpoint.
+  # 4. Create scroll state and extract initial batch.
   if (!is.null(resumed_checkpoint) && length(resumed_checkpoint$seen_post_ids) > 0L) {
     state <- .rx_scroll_state_new(seen_post_ids = resumed_checkpoint$seen_post_ids)
   } else {
@@ -475,41 +502,26 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     quiet = quiet
   )
 
-  # 6. Bounded repeated scroll+extract loop (Task 42).
-  #
-  #    The loop iterates at most max_scrolls times. After each iteration:
-  #    - If the limit is reached, we stop.
-  #    - If no new data appears for two consecutive batches, we stop.
-  #    - After max_scrolls iterations, we stop.
-  #
-  #    Each iteration scrolls the page, waits for new network responses,
-  #    extracts posts, and accumulates them into all_batches.
-
-  # Accumulate initial batch so it is included in the final merge.
+  # 5. Scroll loop.
   all_batches <- list()
   if (length(initial_posts$post_id) > 0L) {
     all_batches[[1L]] <- initial_posts
   } else {
     all_batches[[1L]] <- .rx_search_empty_batch()
   }
+
   if (isTRUE(scroll) && max_scrolls > 0L) {
     for (i in seq_len(max_scrolls)) {
-      # Scroll the page.
       .rx_scroll_page(backend)
       state$advance_scroll()
-
-      # Wait for new network responses triggered by the scroll.
       Sys.sleep(3)
 
-      # Capture events and extract posts (new batch).
       batch_events <- tryCatch(
         backend$networkCaptureGet(),
         error = function(e) list()
       )
 
       extracted <- .rx_search_extract_from_events(batch_events, backend)
-
-      # Record in scroll state (dedup, stall detection).
       state$add_posts(extracted, new_cursor = extracted$cursors)
 
       .rx_progress(
@@ -518,16 +530,13 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
         quiet = quiet
       )
 
-      # Accumulate batch for later merging.
       if (length(extracted$post_id) > 0L) {
         all_batches[[length(all_batches) + 1L]] <- extracted
       } else {
-        # Track zero-length batch to maintain consistent field structure.
         zero_batch <- .rx_search_empty_batch()
         all_batches[[length(all_batches) + 1L]] <- zero_batch
       }
 
-      # Check termination conditions.
       if (!is.null(limit) && state$current_count >= limit) {
         break
       }
@@ -537,115 +546,33 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     }
   }
 
-  # 7. Merge all batches (initial + scroll batches).
-  if (length(all_batches) > 0L) {
-    all_post_ids <- lapply(all_batches, `[[`, "post_id")
-    all_texts <- lapply(all_batches, `[[`, "text")
-    all_author_ids <- lapply(all_batches, `[[`, "author_id")
-    all_usernames <- lapply(all_batches, `[[`, "username")
-    all_display_names <- lapply(all_batches, `[[`, "display_name")
-    all_created_at <- lapply(all_batches, `[[`, "created_at")
-    all_reply_counts <- lapply(all_batches, `[[`, "reply_count")
-    all_repost_counts <- lapply(all_batches, `[[`, "repost_count")
-    all_like_counts <- lapply(all_batches, `[[`, "like_count")
-    all_quote_counts <- lapply(all_batches, `[[`, "quote_count")
-    all_bookmark_counts <- lapply(all_batches, `[[`, "bookmark_count")
-    all_view_counts <- lapply(all_batches, `[[`, "view_count")
-    all_conversation_ids <- lapply(all_batches, `[[`, "conversation_id")
-    all_is_replies <- lapply(all_batches, `[[`, "is_reply")
-    all_is_reposts <- lapply(all_batches, `[[`, "is_repost")
-    all_is_quotes <- lapply(all_batches, `[[`, "is_quote")
-    all_reply_to_ids <- lapply(all_batches, `[[`, "reply_to_post_id")
-    all_quoted_ids <- lapply(all_batches, `[[`, "quoted_post_id")
-    all_hashtags     <- lapply(all_batches, `[[`, "hashtags")
-    all_mentions     <- lapply(all_batches, `[[`, "mentions")
-    all_urls         <- lapply(all_batches, `[[`, "urls")
-    all_media_types  <- lapply(all_batches, `[[`, "media_type")
-    all_media_urls   <- lapply(all_batches, `[[`, "media_urls")
-
-    merged_posts <- list(
-      post_id        = unlist(all_post_ids, use.names = FALSE),
-      text           = unlist(all_texts, use.names = FALSE),
-      author_id      = unlist(all_author_ids, use.names = FALSE),
-      username       = unlist(all_usernames, use.names = FALSE),
-      display_name   = unlist(all_display_names, use.names = FALSE),
-      created_at     = unlist(all_created_at, use.names = FALSE),
-      reply_count    = unlist(all_reply_counts, use.names = FALSE),
-      repost_count   = unlist(all_repost_counts, use.names = FALSE),
-      like_count     = unlist(all_like_counts, use.names = FALSE),
-      quote_count    = unlist(all_quote_counts, use.names = FALSE),
-      bookmark_count = unlist(all_bookmark_counts, use.names = FALSE),
-      view_count     = unlist(all_view_counts, use.names = FALSE),
-      conversation_id = unlist(all_conversation_ids, use.names = FALSE),
-      is_reply       = unlist(all_is_replies, use.names = FALSE),
-      is_repost      = unlist(all_is_reposts, use.names = FALSE),
-      is_quote       = unlist(all_is_quotes, use.names = FALSE),
-      reply_to_post_id = unlist(all_reply_to_ids, use.names = FALSE),
-      quoted_post_id   = unlist(all_quoted_ids, use.names = FALSE),
-      # Entity fields (Task 56)
-      hashtags       = unlist(all_hashtags, recursive = FALSE),
-      mentions       = unlist(all_mentions, recursive = FALSE),
-      urls           = unlist(all_urls, recursive = FALSE),
-      # Media fields (Task 57)
-      media_type     = unlist(all_media_types, recursive = FALSE),
-      media_urls     = unlist(all_media_urls, recursive = FALSE)
-    )
+  # 6. Merge, normalize, deduplicate.
+  if (length(all_batches) == 0L) {
+    merged_posts <- .rx_search_empty_batch()
+    merged_posts$collected_at      <- character(0)
+    merged_posts$collection_query  <- character(0)
+    merged_posts$collection_id     <- character(0)
   } else {
-    # No batches collected at all (scroll=FALSE, no initial posts).
-    merged_posts <- list(
-      post_id        = character(0),
-      text           = character(0),
-      author_id      = character(0),
-      username       = character(0),
-      display_name   = character(0),
-      created_at     = character(0),
-      reply_count    = integer(0),
-      repost_count   = integer(0),
-      like_count     = integer(0),
-      quote_count    = integer(0),
-      bookmark_count = integer(0),
-      view_count     = integer(0),
-      conversation_id = character(0),
-      is_reply       = logical(0),
-      is_repost      = logical(0),
-      is_quote       = logical(0),
-      reply_to_post_id = character(0),
-      quoted_post_id   = character(0),
-      # Entity fields (Task 56)
-      hashtags       = list(),
-      mentions       = list(),
-      urls           = list(),
-      # Media fields (Task 57)
-      media_type     = list(),
-      media_urls     = list()
-    )
+    merged_posts <- .rx_merge_batches(all_batches)
   }
 
-  # 7b. Observation-level provenance (Task 46).
-  # Populate collected_at, collection_query, collection_id for every row.
   n_merged <- if (length(merged_posts$post_id) > 0L) length(merged_posts$post_id) else 0L
-  merged_posts$collected_at     <- rep(format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), n_merged)
-  merged_posts$collection_query <- rep(query, n_merged)
-  merged_posts$collection_id    <- rep(collection_id, n_merged)
+  merged_posts$collected_at      <- rep(format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), n_merged)
+  merged_posts$collection_query  <- rep(query, n_merged)
+  merged_posts$collection_id     <- rep(collection_id, n_merged)
 
-  # 8. Normalize, convert to tibble, deduplicate.
   normalized <- .rx_normalize_posts(merged_posts)
   tibble_posts <- .rx_normalized_to_tibble(normalized)
   deduped <- .rx_deduplicate_posts(tibble_posts)
 
-  # 9. Apply limit.
+  # 7. Apply limit.
   if (!is.null(limit) && nrow(deduped) > limit) {
     deduped <- deduped[seq_len(limit), , drop = FALSE]
   }
 
-  # 10. Clean up network capture.
+  # 8. Clean up and persist checkpoint.
   .rx_search_cleanup(backend)
 
-  # 10b. Write checkpoint for resume support (Task 49).
-  # Persist the current state so that a future call with resume=TRUE
-  # can continue from where we left off. The checkpoint is always
-  # written (overwriting any previous checkpoint) since it represents
-  # the latest state.
   if (isTRUE(resume) && !is.null(checkpoint_path)) {
     checkpoint <- .rx_checkpoint_from_state(state, collection_id, query)
     tryCatch(
@@ -659,7 +586,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     )
   }
 
-  # 11. Attach collection provenance metadata (Tasks 45, 46).
+  # 9. Attach provenance and return.
   provenance <- .rx_collection_metadata(
     collection_id = collection_id,
     started_at = collection_started_at,
@@ -1360,6 +1287,38 @@ x_quotes <- function(session, post_id, limit = NULL, mode = "latest", quiet = FA
   .rx_relational_result(quotes, quotes_parsed)
 }
 
+#' Merge all collected batches into a single post list.
+#'
+#' Takes a list of batch lists (each with the canonical field structure)
+#' and merges them by concatenating each field. List fields use
+#' `recursive = FALSE` to flatten nested lists; atomic fields use
+#' plain `unlist()`. This replaces the 26-field hardcoded merge
+#' previously used in `x_search()` and `x_user_posts()`.
+#'
+#' @param batches A list of batch lists, each with fields matching
+#'   `.rx_canonical_fields()`.
+#' @return A list with one element per canonical field, each a
+#'   concatenated vector of the corresponding batch field values.
+#' @noRd
+.rx_merge_batches <- function(batches) {
+  fields <- .rx_canonical_fields()
+  type_map <- .rx_type_map()
+
+  merged <- vector("list", length(fields))
+  names(merged) <- fields
+
+  for (f in fields) {
+    field_batches <- lapply(batches, `[[`, f)
+    if (type_map[[f]] == "list") {
+      merged[[f]] <- unlist(field_batches, recursive = FALSE)
+    } else {
+      merged[[f]] <- unlist(field_batches, use.names = FALSE)
+    }
+  }
+
+  merged
+}
+
 #' Return an empty batch with the canonical field structure.
 #'
 #' Used to maintain consistent field structure when a scroll iteration
@@ -2046,21 +2005,18 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     limit <- as.integer(limit)
   }
   if (!is.numeric(max_scrolls) || length(max_scrolls) != 1L || anyNA(max_scrolls) || max_scrolls < 0L) {
-    stop("max_scrolls must be a non-negative integer, or NULL.", call. = FALSE)
+    stop("max_scrolls must be a non-negative integer.", call. = FALSE)
   }
   max_scrolls <- as.integer(max_scrolls)
 
-  # Validate resume-related parameters.
   if (!is.logical(resume) || length(resume) != 1L || anyNA(resume)) {
     stop("resume must be a single logical value.", call. = FALSE)
   }
-
   if (!is.null(checkpoint_path)) {
     if (!is.character(checkpoint_path) || length(checkpoint_path) != 1L || anyNA(checkpoint_path) || !nzchar(checkpoint_path[[1L]])) {
       stop("checkpoint_path must be a single non-empty character string, or NULL.", call. = FALSE)
     }
   }
-
   if (!is.null(jsonl_path)) {
     if (!is.character(jsonl_path) || length(jsonl_path) != 1L || anyNA(jsonl_path) || !nzchar(jsonl_path[[1L]])) {
       stop("jsonl_path must be a single non-empty character string, or NULL.", call. = FALSE)
@@ -2080,7 +2036,6 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
       stop("since is not a valid date (YYYY-MM-DD): ", since, call. = FALSE)
     }
   }
-
   if (!is.null(until)) {
     if (!is.character(until) || length(until) != 1L || anyNA(until)) {
       stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
@@ -2093,8 +2048,6 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
       stop("until is not a valid date (YYYY-MM-DD): ", until, call. = FALSE)
     }
   }
-
-  # Validate lang.
   if (!is.null(lang)) {
     if (!is.character(lang) || length(lang) != 1L || anyNA(lang)) {
       stop("lang must be a single character string with a language code, or NULL.", call. = FALSE)
@@ -2107,8 +2060,6 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
       stop("lang must be a valid language code (e.g. 'en', 'es', 'ja'): ", lang, call. = FALSE)
     }
   }
-
-  # Validate mode.
   if (!is.null(mode)) {
     if (!is.character(mode) || length(mode) != 1L || anyNA(mode)) {
       stop("mode must be 'latest', 'top', or NULL.", call. = FALSE)
@@ -2122,25 +2073,19 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     }
   }
 
-  backend <- session$backend
-
-  # 1b. Resume handling (same pattern as x_search).
+  # 1b. Resume handling.
   resumed_checkpoint <- NULL
   if (isTRUE(resume)) {
     if (is.null(checkpoint_path)) {
       checkpoint_path <- paste0(gsub("[^A-Za-z0-9._-]", "_", username), ".checkpoint.json")
     }
-    if (is.null(jsonl_path)) {
-      jsonl_path <- paste0(gsub("[^A-Za-z0-9._-]", "_", username), ".jsonl")
-    }
-
     resumed_checkpoint <- .rx_checkpoint_read(checkpoint_path)
     if (!is.null(resumed_checkpoint)) {
       collection_id <- resumed_checkpoint$collection_id
     }
   }
 
-  # 1c. Capture collection start time and generate collection_id for provenance.
+  # 1c. Capture collection start time and generate collection_id.
   collection_started_at <- Sys.time()
   if (is.null(resumed_checkpoint) || is.null(resumed_checkpoint$collection_id)) {
     collection_id <- .rx_generate_uuid()
@@ -2152,245 +2097,17 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     backend_label <- "chromium"
   }
 
-  # 2. Enable network capture before navigation.
-  tryCatch(
-    backend$networkCaptureEnable(),
-    error = function(e) {
-      stop(.rx_error_network(
-        paste0("Failed to enable network capture: ", e$message)
-      ))
-    }
-  )
-
-  # 3. Construct user timeline URL and navigate.
+  # 2. Construct URL and delegate to shared pipeline.
+  query_str <- paste0("@", trimws(username))
   url <- .rx_construct_user_timeline_url(username, path = path, since = since, until = until, lang = lang, mode = mode)
 
-  nav_result <- backend$navigate(url)
-  if (is.null(nav_result$status) || nav_result$status == "error") {
-    # Navigation failed — still try to return what we can.
-    error_info <- if (!is.null(nav_result$error)) nav_result$error$code else "unknown"
-    .rx_search_cleanup(backend)
-    warning("Navigation failed (", error_info, "). No posts returned.")
-    empty <- .rx_search_empty_tibble()
-    empty <- .rx_relational_result(empty, list(post_id = character(0)))
-    provenance <- .rx_collection_metadata(
-      collection_id = collection_id,
-      started_at = collection_started_at,
-      query = paste0("@", trimws(username)),
-      backend = backend_label,
-      record_count = 0L
-    )
-    attr(empty, "rx_collection_provenance") <- provenance
-    return(empty)
-  } else {
-    .rx_progress("Navigated to ", nav_result$url, quiet = quiet)
-  }
-
-  # 4. Wait for initial network responses to arrive.
-  Sys.sleep(3)
-
-  # 5. Create scroll state and retrieve initial batch.
-  if (!is.null(resumed_checkpoint) && length(resumed_checkpoint$seen_post_ids) > 0L) {
-    state <- .rx_scroll_state_new(seen_post_ids = resumed_checkpoint$seen_post_ids)
-  } else {
-    state <- .rx_scroll_state_new()
-  }
-
-  initial_events <- tryCatch(
-    backend$networkCaptureGet(),
-    error = function(e) {
-      .rx_search_cleanup(backend)
-      warning("Failed to retrieve network events: ", e$message)
-      return(list())
-    }
+  .rx_search_pipeline(
+    session = session, url = url, query = query_str,
+    collection_id = collection_id, limit = limit,
+    scroll = scroll, max_scrolls = max_scrolls,
+    resume = resume, resumed_checkpoint = resumed_checkpoint,
+    checkpoint_path = checkpoint_path,
+    quiet = quiet, collection_started_at = collection_started_at,
+    backend_label = backend_label
   )
-
-  initial_posts <- .rx_search_extract_from_events(initial_events, backend)
-  state$add_posts(initial_posts, new_cursor = initial_posts$cursors)
-
-  .rx_progress(
-    "Extracted ", length(initial_posts$post_id), " post(s) from initial batch",
-    quiet = quiet
-  )
-
-  # Accumulate initial batch.
-  all_batches <- list()
-  if (length(initial_posts$post_id) > 0L) {
-    all_batches[[1L]] <- initial_posts
-  } else {
-    all_batches[[1L]] <- .rx_search_empty_batch()
-  }
-
-  # 6. Bounded repeated scroll+extract loop (same pattern as x_search).
-  if (isTRUE(scroll) && max_scrolls > 0L) {
-    for (i in seq_len(max_scrolls)) {
-      .rx_scroll_page(backend)
-      state$advance_scroll()
-
-      Sys.sleep(3)
-
-      batch_events <- tryCatch(
-        backend$networkCaptureGet(),
-        error = function(e) list()
-      )
-
-      extracted <- .rx_search_extract_from_events(batch_events, backend)
-      state$add_posts(extracted, new_cursor = extracted$cursors)
-
-      .rx_progress(
-        "Scroll iteration ", i, ": extracted ", length(extracted$post_id),
-        " post(s)",
-        quiet = quiet
-      )
-
-      if (length(extracted$post_id) > 0L) {
-        all_batches[[length(all_batches) + 1L]] <- extracted
-      } else {
-        zero_batch <- .rx_search_empty_batch()
-        all_batches[[length(all_batches) + 1L]] <- zero_batch
-      }
-
-      if (!is.null(limit) && state$current_count >= limit) {
-        break
-      }
-      if (state$check_stalled(threshold = 2L)) {
-        break
-      }
-    }
-  }
-
-  # 7. Merge all batches.
-  if (length(all_batches) > 0L) {
-    all_post_ids <- lapply(all_batches, `[[`, "post_id")
-    all_texts <- lapply(all_batches, `[[`, "text")
-    all_author_ids <- lapply(all_batches, `[[`, "author_id")
-    all_usernames <- lapply(all_batches, `[[`, "username")
-    all_display_names <- lapply(all_batches, `[[`, "display_name")
-    all_created_at <- lapply(all_batches, `[[`, "created_at")
-    all_reply_counts <- lapply(all_batches, `[[`, "reply_count")
-    all_repost_counts <- lapply(all_batches, `[[`, "repost_count")
-    all_like_counts <- lapply(all_batches, `[[`, "like_count")
-    all_quote_counts <- lapply(all_batches, `[[`, "quote_count")
-    all_bookmark_counts <- lapply(all_batches, `[[`, "bookmark_count")
-    all_view_counts <- lapply(all_batches, `[[`, "view_count")
-    all_conversation_ids <- lapply(all_batches, `[[`, "conversation_id")
-    all_is_replies <- lapply(all_batches, `[[`, "is_reply")
-    all_is_reposts <- lapply(all_batches, `[[`, "is_repost")
-    all_is_quotes <- lapply(all_batches, `[[`, "is_quote")
-    all_reply_to_ids <- lapply(all_batches, `[[`, "reply_to_post_id")
-    all_quoted_ids <- lapply(all_batches, `[[`, "quoted_post_id")
-    all_hashtags     <- lapply(all_batches, `[[`, "hashtags")
-    all_mentions     <- lapply(all_batches, `[[`, "mentions")
-    all_urls         <- lapply(all_batches, `[[`, "urls")
-    all_media_types  <- lapply(all_batches, `[[`, "media_type")
-    all_media_urls   <- lapply(all_batches, `[[`, "media_urls")
-
-    merged_posts <- list(
-      post_id        = unlist(all_post_ids, use.names = FALSE),
-      text           = unlist(all_texts, use.names = FALSE),
-      author_id      = unlist(all_author_ids, use.names = FALSE),
-      username       = unlist(all_usernames, use.names = FALSE),
-      display_name   = unlist(all_display_names, use.names = FALSE),
-      created_at     = unlist(all_created_at, use.names = FALSE),
-      reply_count    = unlist(all_reply_counts, use.names = FALSE),
-      repost_count   = unlist(all_repost_counts, use.names = FALSE),
-      like_count     = unlist(all_like_counts, use.names = FALSE),
-      quote_count    = unlist(all_quote_counts, use.names = FALSE),
-      bookmark_count = unlist(all_bookmark_counts, use.names = FALSE),
-      view_count     = unlist(all_view_counts, use.names = FALSE),
-      conversation_id = unlist(all_conversation_ids, use.names = FALSE),
-      is_reply       = unlist(all_is_replies, use.names = FALSE),
-      is_repost      = unlist(all_is_reposts, use.names = FALSE),
-      is_quote       = unlist(all_is_quotes, use.names = FALSE),
-      reply_to_post_id = unlist(all_reply_to_ids, use.names = FALSE),
-      quoted_post_id   = unlist(all_quoted_ids, use.names = FALSE),
-      # Entity fields (Task 56)
-      hashtags       = unlist(all_hashtags, recursive = FALSE),
-      mentions       = unlist(all_mentions, recursive = FALSE),
-      urls           = unlist(all_urls, recursive = FALSE),
-      # Media fields (Task 57)
-      media_type     = unlist(all_media_types, recursive = FALSE),
-      media_urls     = unlist(all_media_urls, recursive = FALSE)
-    )
-  } else {
-    merged_posts <- list(
-      post_id        = character(0),
-      text           = character(0),
-      author_id      = character(0),
-      username       = character(0),
-      display_name   = character(0),
-      created_at     = character(0),
-      reply_count    = integer(0),
-      repost_count   = integer(0),
-      like_count     = integer(0),
-      quote_count    = integer(0),
-      bookmark_count = integer(0),
-      view_count     = integer(0),
-      conversation_id = character(0),
-      is_reply       = logical(0),
-      is_repost      = logical(0),
-      is_quote       = logical(0),
-      reply_to_post_id = character(0),
-      quoted_post_id   = character(0),
-      # Entity fields (Task 56)
-      hashtags       = list(),
-      mentions       = list(),
-      urls           = list(),
-      # Media fields (Task 57)
-      media_type     = list(),
-      media_urls     = list()
-    )
-  }
-
-  # 7b. Observation-level provenance.
-  n_merged <- if (length(merged_posts$post_id) > 0L) length(merged_posts$post_id) else 0L
-  merged_posts$collected_at     <- rep(format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"), n_merged)
-  merged_posts$collection_query <- rep(paste0("@", trimws(username)), n_merged)
-  merged_posts$collection_id    <- rep(collection_id, n_merged)
-
-  # 8. Normalize, convert to tibble, deduplicate.
-  normalized <- .rx_normalize_posts(merged_posts)
-  tibble_posts <- .rx_normalized_to_tibble(normalized)
-  deduped <- .rx_deduplicate_posts(tibble_posts)
-
-  # 9. Apply limit.
-  if (!is.null(limit) && nrow(deduped) > limit) {
-    deduped <- deduped[seq_len(limit), , drop = FALSE]
-  }
-
-  # 10. Clean up network capture.
-  .rx_search_cleanup(backend)
-
-  # 10b. Write checkpoint for resume support.
-  if (isTRUE(resume) && !is.null(checkpoint_path)) {
-    checkpoint <- .rx_checkpoint_from_state(state, collection_id, paste0("@", trimws(username)))
-    tryCatch(
-      {
-        .rx_checkpoint_write(checkpoint_path, checkpoint)
-        .rx_progress("Checkpoint saved to ", checkpoint_path, quiet = quiet)
-      },
-      error = function(e) {
-        warning("Failed to write checkpoint to '", checkpoint_path, "': ", e$message)
-      }
-    )
-  }
-
-  # 11. Attach collection provenance metadata.
-  provenance <- .rx_collection_metadata(
-    collection_id = collection_id,
-    started_at = collection_started_at,
-    query = paste0("@", trimws(username)),
-    backend = backend_label,
-    record_count = as.integer(nrow(deduped))
-  )
-  attr(deduped, "rx_collection_provenance") <- provenance
-
-  .rx_progress(
-    "Collection complete: ", nrow(deduped), " post(s) in ",
-    round(as.numeric(difftime(Sys.time(), collection_started_at, units = "secs")), 1),
-    "s",
-    quiet = quiet
-  )
-
-  .rx_relational_result(deduped, merged_posts)
 }

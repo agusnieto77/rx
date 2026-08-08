@@ -77,7 +77,7 @@ NULL
   con <- file(path, open = if (append) "a" else "w")
   on.close <- TRUE
   tryCatch(
-    writeLines(lines, con),
+    writeLines(lines, con, useBytes = TRUE),
     error = function(e) {
       if (on.close) close(con)
       stop("Failed to write JSONL to '", path, "': ", e$message, call. = FALSE)
@@ -251,7 +251,7 @@ NULL
   on.exit(close(con), ignore = TRUE)
 
   tryCatch(
-    writeLines(jsonlite::toJSON(data, auto_unbox = TRUE, pretty = TRUE), con),
+    writeLines(jsonlite::toJSON(data, auto_unbox = TRUE, pretty = TRUE), con, useBytes = TRUE),
     error = function(e) {
       stop("Failed to write checkpoint to '", path, "': ", e$message, call. = FALSE)
     }
