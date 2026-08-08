@@ -16,16 +16,13 @@ Reproducible benchmarks for the xtweetsR sidecar and collection pipeline.
 
 ```sh
 # Run with defaults (1 warmup, 3 measured iterations)
-npx ts-node benchmark.ts
+node benchmark.js
 
 # Custom warmup and iterations
-npx ts-node benchmark.ts --warmup 3 --iterations 10
+node benchmark.js --warmup 3 --iterations 10
 
 # Custom sidecar path
-npx ts-node benchmark.ts --sidecar ./path/to/sidecar.js
-
-# Using the runner script
-./run.sh --warmup 3 --iterations 5
+node benchmark.js --sidecar ./path/to/sidecar.js
 ```
 
 ## Output

@@ -1416,7 +1416,7 @@ Run:
 
 ---
 
-### Task 73: Add a minimal benchmark harness [ ]
+### Task 73: Add a minimal benchmark harness [x]
 
 **Goal:** Measure instead of assuming performance.
 
