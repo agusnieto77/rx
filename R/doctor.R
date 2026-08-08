@@ -332,7 +332,7 @@ print.rx_doctor <- function(x, ...) {
   }
   n_ok <- sum(x$results == "ok")
   n_issues <- sum(x$results %in% c("missing", "error"))
-  n_skipped <- sum(x$results == "n/a")
+  n_skipped <- sum(x$results %in% c("n/a", "skipped"))
   cat(sprintf("\n  %d ok, %d issue(s), %d skipped\n", n_ok, n_issues, n_skipped))
   invisible(x)
 }

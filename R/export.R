@@ -106,7 +106,8 @@ x_save <- function(posts, path) {
 #' @param posts A tibble with the canonical post schema.
 #' @param path Character string with the output `.parquet` path.
 #'
-#' @return Invisible NULL.
+#' @return Invisible fallback path (character) when the optional package
+#'   is missing (and JSONL was written instead), otherwise invisible NULL.
 #'
 #' @noRd
 .rx_save_parquet <- function(posts, path) {
@@ -161,7 +162,8 @@ x_save <- function(posts, path) {
 #'   `rx_collection_provenance` / `rx_collection_posts` attributes).
 #' @param path Character string with the output `.duckdb` path.
 #'
-#' @return Invisible NULL.
+#' @return Invisible fallback path (character) when the optional package
+#'   is missing (and JSONL was written instead), otherwise invisible NULL.
 #'
 #' @noRd
 .rx_save_duckdb <- function(posts, path) {

@@ -316,7 +316,9 @@ NULL
 
   # Validate records_collected is a real non-negative integer.
   rec <- parsed$records_collected
-  if (is.null(rec) || (length(rec) == 1 && is.na(as.integer(rec)))) {
+  if (is.null(rec) ||
+      (length(rec) == 1 && is.na(as.integer(rec))) ||
+      (length(rec) == 1L && as.integer(rec) < 0L)) {
     warning("Checkpoint has invalid records_collected; treating as 0")
     rec <- 0L
   } else {

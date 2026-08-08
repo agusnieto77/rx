@@ -61,7 +61,7 @@ test_that("sidecar reports ok when dist/index.js exists", {
 
 test_that("lightpanda_connection reports ok or error (not crash)", {
   out <- x_doctor()
-  expect_true(out$results[4] %in% c("ok", "error", "n/a"))
+  expect_true(out$results[4] %in% c("ok", "error", "n/a", "skipped"))
 })
 
 test_that("lightpanda_connection is n/a when sidecar is missing", {
@@ -89,7 +89,7 @@ test_that("lightpanda_connection is n/a when sidecar is missing", {
 
 test_that("cdp_connection reports ok or error (not crash)", {
   out <- x_doctor()
-  expect_true(out$results[5] %in% c("ok", "error", "n/a"))
+  expect_true(out$results[5] %in% c("ok", "error", "n/a", "skipped"))
 })
 
 # -- JavaScript evaluation check ----------------------------------------------
@@ -110,7 +110,7 @@ test_that("javascript_evaluation detail contains '1 + 1' when ok", {
 
 test_that("network_capture reports ok or error (not crash)", {
   out <- x_doctor()
-  expect_true(out$results[7] %in% c("ok", "error", "n/a"))
+  expect_true(out$results[7] %in% c("ok", "error", "n/a", "skipped"))
 })
 
 # -- X navigation check -------------------------------------------------------
@@ -118,7 +118,7 @@ test_that("network_capture reports ok or error (not crash)", {
 test_that("x_navigation reports ok or error (not crash)", {
   out <- x_doctor()
   # X navigation may succeed or fail (X blocks automated browsers) — both are valid.
-  expect_true(out$results[8] %in% c("ok", "error", "n/a"))
+  expect_true(out$results[8] %in% c("ok", "error", "n/a", "skipped"))
 })
 
 # -- No crashes on repeated calls ---------------------------------------------
@@ -142,7 +142,7 @@ test_that("x_doctor results are deterministic across calls", {
 
 test_that("all check results are valid status strings", {
   out <- x_doctor()
-  expect_true(all(out$results %in% c("ok", "missing", "error", "n/a")))
+  expect_true(all(out$results %in% c("ok", "missing", "error", "n/a", "skipped")))
 })
 
 test_that("failed check does not prevent later independent checks from running", {
