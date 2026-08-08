@@ -75,15 +75,13 @@ NULL
   # Write (or append) the lines to the file.
   # Use writeLines which handles newlines correctly across platforms.
   con <- file(path, open = if (append) "a" else "w", encoding = "UTF-8")
-  on.close <- TRUE
+  on.exit(close(con), add = TRUE)
   tryCatch(
     writeLines(lines, con, useBytes = TRUE),
     error = function(e) {
-      if (on.close) close(con)
       stop("Failed to write JSONL to '", path, "': ", e$message, call. = FALSE)
     }
   )
-  close(con)
 
   invisible(NULL)
 }
@@ -310,14 +308,31 @@ NULL
     return(NULL)
   }
 
+  # seen_post_ids is written as a JSON array and read back as a list;
+  # unlist it to a character vector.
+  seen <- parsed$seen_post_ids
+  if (is.list(seen) && !is.null(names(seen))) seen <- unlist(seen, use.names = FALSE)
+  seen_post_ids <- as.character(seen)
+
+  # Validate records_collected is a real non-negative integer.
+  rec <- parsed$records_collected
+  if (is.null(rec) ||
+      (length(rec) == 1 && is.na(as.integer(rec))) ||
+      (length(rec) == 1L && as.integer(rec) < 0L)) {
+    warning("Checkpoint has invalid records_collected; treating as 0")
+    rec <- 0L
+  } else {
+    rec <- as.integer(rec)
+  }
+
   structure(
     list(
       collection_id   = as.character(parsed$collection_id),
       query           = as.character(parsed$query),
-      seen_post_ids   = as.character(parsed$seen_post_ids),
+      seen_post_ids   = seen_post_ids,
       last_cursor     = as.character(parsed$last_cursor),
       last_post_id    = as.character(parsed$last_post_id),
-      records_collected = as.integer(parsed$records_collected)
+      records_collected = rec
     ),
     class = "rx_checkpoint"
   )

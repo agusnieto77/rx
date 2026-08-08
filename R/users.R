@@ -5,7 +5,7 @@
 # complements the posts tibble without changing its structure.
 #
 #   posts   -> tibble with 26 columns (canonical post schema)
-#   users   -> tibble with 4 columns (canonical user schema)
+#   users   -> tibble with 3 columns (canonical user schema)
 #   relation -> posts rows reference users via author_id
 #
 # The simple tibble API is preserved: existing code that only needs
