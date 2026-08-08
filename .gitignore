@@ -12,3 +12,7 @@ inst/secrets.env
 
 # CodeGraph local index
 .codegraph/
+
+# Local tooling state (machine-specific, auto-generated)
+.atl/
+.claude/
