@@ -1058,11 +1058,18 @@ x_replies <- function(session, username, limit = NULL, mode = "latest", quiet = 
   )
 
   # Build a parsed-list from filtered results for user extraction.
+  # Includes all fields needed by .rx_extract_users(), .rx_extract_media(),
+  # and .rx_extract_collection_posts() for complete relational output.
   replies_parsed <- list(
-    post_id      = replies$post_id,
-    author_id    = replies$author_id,
-    username     = replies$username,
-    display_name = replies$display_name
+    post_id          = replies$post_id,
+    author_id        = replies$author_id,
+    username         = replies$username,
+    display_name     = replies$display_name,
+    media_type       = replies$media_type,
+    media_urls       = replies$media_urls,
+    collection_id    = replies$collection_id,
+    collection_query = replies$collection_query,
+    collected_at     = replies$collected_at
   )
   .rx_relational_result(replies, replies_parsed)
 }
@@ -1218,7 +1225,23 @@ x_quotes <- function(session, post_id, limit = NULL, mode = "latest", quiet = FA
   # Extract bare post ID from canonical URL for comparison (quoted_post_id
   # in the parsed data is always a bare numeric string, not a URL).
   canonical_post_id <- regmatches(canonical_url, regexec("/status/(\\d+)", canonical_url))[[1L]][2L]
-  quote_mask <- deduped$is_quote == TRUE & deduped$quoted_post_id == canonical_post_id
+  if (is.na(canonical_post_id)) {
+    # URL could not be parsed (e.g. t.co short links). Clean up network
+    # capture before returning to avoid leaking networkEvents accumulation.
+    .rx_search_cleanup(backend)
+    provenance <- .rx_collection_metadata(
+      collection_id = collection_id,
+      started_at = collection_started_at,
+      query = paste0("quotes:", trimws(post_id)),
+      backend = backend_label,
+      record_count = 0L
+    )
+    empty <- .rx_relational_result(.rx_search_empty_tibble(), list(post_id = character(0)))
+    attr(empty, "rx_collection_provenance") <- provenance
+    return(empty)
+  }
+  quote_mask <- !is.na(deduped$is_quote) & deduped$is_quote == TRUE &
+    !is.na(deduped$quoted_post_id) & deduped$quoted_post_id == canonical_post_id
   quotes <- deduped[quote_mask, , drop = FALSE]
 
   # 7b. Observation-level provenance for filtered results.
@@ -1258,11 +1281,18 @@ x_quotes <- function(session, post_id, limit = NULL, mode = "latest", quiet = FA
   )
 
   # Build a parsed-list from filtered results for user extraction.
+  # Includes all fields needed by .rx_extract_users(), .rx_extract_media(),
+  # and .rx_extract_collection_posts() for complete relational output.
   quotes_parsed <- list(
-    post_id      = quotes$post_id,
-    author_id    = quotes$author_id,
-    username     = quotes$username,
-    display_name = quotes$display_name
+    post_id          = quotes$post_id,
+    author_id        = quotes$author_id,
+    username         = quotes$username,
+    display_name     = quotes$display_name,
+    media_type       = quotes$media_type,
+    media_urls       = quotes$media_urls,
+    collection_id    = quotes$collection_id,
+    collection_query = quotes$collection_query,
+    collected_at     = quotes$collected_at
   )
   .rx_relational_result(quotes, quotes_parsed)
 }
@@ -1309,7 +1339,7 @@ x_quotes <- function(session, post_id, limit = NULL, mode = "latest", quiet = FA
 .rx_search_empty_batch <- function() {
   fields <- .rx_canonical_fields()
   type_map <- .rx_type_map()
-  lapply(fields, function(f) {
+  out <- lapply(fields, function(f) {
     switch(type_map[[f]],
       character = character(0),
       integer   = integer(0),
@@ -1318,6 +1348,8 @@ x_quotes <- function(session, post_id, limit = NULL, mode = "latest", quiet = FA
       character(0)
     )
   })
+  names(out) <- fields
+  out
 }
 
 #' Clean up network capture resources after a search.

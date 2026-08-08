@@ -70,9 +70,10 @@ x_doctor <- function() {
     results <- c(results, "missing")
     details <- c(details, "sidecar dist/index.js not found (run npm run build in inst/node)")
     # Checks 4-8 require a working sidecar — mark them as skipped.
+    results <- c(results, rep("n/a", 5L))
     checks <- c(checks, c("lightpanda_connection", "cdp_connection",
                            "javascript_evaluation", "network_capture", "x_navigation"))
-    details <- c(details, rep("skipped -- sidecar not available", 5L))
+    details <- c(details, rep("n/a -- sidecar not available", 5L))
     out <- list(checks = checks, results = results, details = details)
     class(out) <- "rx_doctor"
     print(out)
@@ -102,9 +103,10 @@ x_doctor <- function() {
   if (!is.null(ping_result$error)) {
     results <- c(results, "error")
     details <- c(details, paste0("sidecar ping failed: ", ping_result$error$message))
+    results <- c(results, rep("n/a", 5L))
     checks <- c(checks, c("lightpanda_connection", "cdp_connection",
                            "javascript_evaluation", "network_capture", "x_navigation"))
-    details <- c(details, rep("skipped -- sidecar ping failed", 5L))
+    details <- c(details, rep("n/a -- sidecar ping failed", 5L))
     out <- list(checks = checks, results = results, details = details)
     class(out) <- "rx_doctor"
     print(out)
@@ -116,9 +118,10 @@ x_doctor <- function() {
   } else {
     results <- c(results, "error")
     details <- c(details, "sidecar ping returned unexpected response")
+    results <- c(results, rep("n/a", 5L))
     checks <- c(checks, c("lightpanda_connection", "cdp_connection",
                            "javascript_evaluation", "network_capture", "x_navigation"))
-    details <- c(details, rep("skipped -- sidecar ping failed", 5L))
+    details <- c(details, rep("n/a -- sidecar ping failed", 5L))
     out <- list(checks = checks, results = results, details = details)
     class(out) <- "rx_doctor"
     print(out)
@@ -319,7 +322,7 @@ print.rx_doctor <- function(x, ...) {
   }
   n_ok <- sum(x$results == "ok")
   n_issues <- sum(x$results %in% c("missing", "error"))
-  n_na <- sum(x$results == "n/a")
-  cat(sprintf("\n  %d ok, %d issue(s), %d skipped\n", n_ok, n_issues, n_na))
+  n_skipped <- sum(x$results == "n/a")
+  cat(sprintf("\n  %d ok, %d issue(s), %d skipped\n", n_ok, n_issues, n_skipped))
   invisible(x)
 }
