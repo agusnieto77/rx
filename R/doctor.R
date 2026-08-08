@@ -129,10 +129,19 @@ x_doctor <- function() {
   }
 
   # -- 4. Lightpanda connection -----------------------------------------------
-  checks <- c(checks, "lightpanda_connection")
-  lp_result <- NULL
-  proc <- NULL
-  tryCatch({
+  # If LPD_ENDPOINT is not configured, skip checks 4-8 — there is no
+  # Lightpanda instance to test.
+  lpd_ep <- trimws(Sys.getenv("LPD_ENDPOINT"))
+  if (lpd_ep == "") {
+    results <- c(results, rep("skipped", 5L))
+    details <- c(details, rep("LPD_ENDPOINT not set — Lightpanda not configured", 5L))
+    checks <- c(checks, c("lightpanda_connection", "cdp_connection",
+                           "javascript_evaluation", "network_capture", "x_navigation"))
+  } else {
+    checks <- c(checks, "lightpanda_connection")
+    lp_result <- NULL
+    proc <- NULL
+    tryCatch({
     proc <- .rx_start_sidecar(sidecar_path = sc_dir)
     if (proc$is_alive()) {
       resp <- tryCatch(
@@ -302,6 +311,7 @@ x_doctor <- function() {
     results <- c(results, "ok")
     details <- c(details, "navigated to x.com")
   }
+  }  # end else: LPD_ENDPOINT was set
 
   out <- list(
     checks  = checks,

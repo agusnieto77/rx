@@ -111,15 +111,16 @@ x_save <- function(posts, path) {
 #' @noRd
 .rx_save_parquet <- function(posts, path) {
   if (!requireNamespace("arrow", quietly = TRUE)) {
+    fallback <- sub("\\.parquet$", ".jsonl", path)
     warning(
       "The 'arrow' package is not installed. ",
       "Falling back to JSONL at '",
-      sub("\\.parquet$", ".jsonl", path),
+      fallback,
       "'. Install arrow for native Parquet support.",
       call. = FALSE
     )
-    .rx_jsonl_write(sub("\\.parquet$", ".jsonl", path), posts, append = FALSE)
-    return(invisible(NULL))
+    .rx_jsonl_write(fallback, posts, append = FALSE)
+    return(invisible(fallback))
   }
 
   # Guard: zero-row tibble — write an empty Parquet file.
@@ -165,15 +166,16 @@ x_save <- function(posts, path) {
 #' @noRd
 .rx_save_duckdb <- function(posts, path) {
   if (!requireNamespace("duckdb", quietly = TRUE)) {
+    fallback <- sub("\\.duckdb$", ".jsonl", path)
     warning(
       "The 'duckdb' package is not installed. ",
       "Falling back to JSONL at '",
-      sub("\\.duckdb$", ".jsonl", path),
+      fallback,
       "'. Install duckdb for native DuckDB support.",
       call. = FALSE
     )
-    .rx_jsonl_write(sub("\\.duckdb$", ".jsonl", path), posts, append = FALSE)
-    return(invisible(NULL))
+    .rx_jsonl_write(fallback, posts, append = FALSE)
+    return(invisible(fallback))
   }
 
   con <- tryCatch(
