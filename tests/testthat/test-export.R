@@ -892,7 +892,7 @@ test_that(".rx_save_duckdb writes a collections table from provenance attribute"
   xtweetsR:::x_save(tbl, tmp)
 
   # Verify collections table was written.
-  con <- duckdb::dbConnect(duckdb::DuckDB(), tmp)
+  con <- DBI::dbConnect(duckdb::duckdb(), tmp)
   on.exit(duckdb::dbDisconnect(con), add = TRUE)
 
   collections <- duckdb::dbGetQuery(con, "SELECT * FROM collections")
@@ -950,7 +950,7 @@ test_that(".rx_save_duckdb writes post_collection_relations from attribute", {
   xtweetsR:::x_save(tbl, tmp)
 
   # Verify post_collection_relations table.
-  con <- duckdb::dbConnect(duckdb::DuckDB(), tmp)
+  con <- DBI::dbConnect(duckdb::duckdb(), tmp)
   on.exit(duckdb::dbDisconnect(con), add = TRUE)
 
   rels <- duckdb::dbGetQuery(con, "SELECT * FROM post_collection_relations")
@@ -1177,7 +1177,7 @@ test_that(".rx_save_duckdb zero-row writes collections table when provenance pre
   xtweetsR:::x_save(empty_tbl, tmp)
 
   # Verify collections table was written despite zero posts.
-  con <- duckdb::dbConnect(duckdb::DuckDB(), tmp)
+  con <- DBI::dbConnect(duckdb::duckdb(), tmp)
   on.exit(duckdb::dbDisconnect(con), add = TRUE)
 
   collections <- duckdb::dbGetQuery(con, "SELECT * FROM collections")

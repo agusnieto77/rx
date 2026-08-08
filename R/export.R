@@ -254,7 +254,7 @@ x_save <- function(posts, path) {
           character = "VARCHAR",
           integer = "BIGINT",
           logical = "BOOLEAN",
-          list = "JSON",
+          list = "VARCHAR",
           "VARCHAR"
         )
       }),
