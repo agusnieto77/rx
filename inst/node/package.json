@@ -17,5 +17,8 @@
   "dependencies": {
     "puppeteer": "^24.0.0",
     "ws": "^8.18.0"
+  },
+  "allowScripts": {
+    "puppeteer@24.43.1": true
   }
 }
