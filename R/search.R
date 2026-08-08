@@ -1274,7 +1274,10 @@ x_quotes <- function(session, post_id, limit = NULL, quiet = FALSE) {
   deduped <- .rx_deduplicate_posts(tibble_posts)
 
   # 7. Filter to only quote tweets of the target post.
-  quote_mask <- deduped$is_quote == TRUE & deduped$quoted_post_id == trimws(post_id)
+  # Extract bare post ID from canonical URL for comparison (quoted_post_id
+  # in the parsed data is always a bare numeric string, not a URL).
+  canonical_post_id <- regmatches(canonical_url, regexec("/status/(\\d+)$", canonical_url))[[1L]][2L]
+  quote_mask <- deduped$is_quote == TRUE & deduped$quoted_post_id == canonical_post_id
   quotes <- deduped[quote_mask, , drop = FALSE]
 
   # 7b. Observation-level provenance for filtered results.
