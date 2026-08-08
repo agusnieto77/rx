@@ -96,7 +96,7 @@ test_that("cdp_connection reports ok or error (not crash)", {
 
 test_that("javascript_evaluation reports ok or error (not crash)", {
   out <- x_doctor()
-  expect_true(out$results[6] %in% c("ok", "error", "n/a"))
+  expect_true(out$results[6] %in% c("ok", "error", "n/a", "skipped"))
 })
 
 test_that("javascript_evaluation detail contains '1 + 1' when ok", {

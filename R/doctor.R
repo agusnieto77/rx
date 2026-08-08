@@ -11,9 +11,11 @@
 #   7. Network capture (CDP Network domain enable)
 #   8. X navigation (page navigation attempt)
 #
-# Each check reports "ok", "missing", "error", or "n/a".
+# Each check reports "ok", "missing", "error", "n/a", or "skipped".
 # Checks 4-8 are skipped (n/a) when check 3 fails because they require
-# a working sidecar. Checks 4-8 each start their own sidecar instance.
+# a working sidecar. Checks 4-8 are "skipped" when LPD_ENDPOINT is not
+# set (no Lightpanda instance to test). Checks 4-8 each start their own
+# sidecar instance.
 #
 # @name doctor
 # @aliases x_doctor
@@ -24,7 +26,7 @@
 # @return A list with class "rx_doctor" containing:
 #   \describe{
 #     \item{checks}{Named character vector of check names.}
-#     \item{results}{Named character vector of status strings ("ok", "missing", "error", "n/a").}
+#     \item{results}{Named character vector of status strings ("ok", "missing", "error", "n/a", "skipped").}
 #     \item{details}{Named character vector of human-readable details.}
 #   }
 #   Prints a deterministic summary and invisibly returns the list.

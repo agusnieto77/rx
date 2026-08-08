@@ -309,7 +309,9 @@ NULL
   }
 
   # seen_post_ids is written as a JSON array and read back as a list;
-  # unlist it to a character vector.
+  # unlist it to a character vector.  A valid JSON array produces an
+  # unnamed list; a malformed checkpoint may produce a named list.
+  # Only unlist when needed.
   seen <- parsed$seen_post_ids
   if (is.list(seen) && !is.null(names(seen))) seen <- unlist(seen, use.names = FALSE)
   seen_post_ids <- as.character(seen)
@@ -317,10 +319,17 @@ NULL
   # Validate records_collected is a real non-negative integer.
   rec <- parsed$records_collected
   if (is.null(rec) ||
-      (length(rec) == 1 && is.na(as.integer(rec))) ||
-      (length(rec) == 1L && as.integer(rec) < 0L)) {
+      !is.numeric(rec) ||
+      length(rec) != 1L ||
+      is.na(rec) ||
+      !is.finite(rec) ||
+      rec < 0L ||
+      rec > .Machine$integer.max) {
     warning("Checkpoint has invalid records_collected; treating as 0")
     rec <- 0L
+  } else if (rec != trunc(rec)) {
+    warning("Checkpoint has non-integer records_collected; truncating to ", trunc(rec))
+    rec <- as.integer(trunc(rec))
   } else {
     rec <- as.integer(rec)
   }

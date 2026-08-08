@@ -49,7 +49,9 @@ NULL
 #' @param path Character string with the output file path. The
 #'   extension determines the format (`.parquet`, `.duckdb`, or `.jsonl`).
 #'
-#' @return Invisible NULL.
+#' @return Invisible NULL when the target format is written successfully,
+#'   or the fallback `.jsonl` path (character) invisibly when an optional
+#'   dependency is missing and data was written as JSONL instead.
 #'
 #' @examples
 #' \dontrun{
@@ -72,16 +74,36 @@ x_save <- function(posts, path) {
   }
 
   # Infer format from extension.
-  ext <- tolower(sub("^.*\\.", "", path))
+  ext <- tolower(tools::file_ext(path))
+  if (ext == "") {
+    stop(
+      "Unsupported file extension ''. ",
+      "Use '.parquet', '.parquetds', '.duckdb', or '.jsonl'.",
+      call. = FALSE
+    )
+  }
 
+  # Dispatch to the appropriate save helper.
+  # Each helper returns the fallback path invisibly when an optional
+  # dependency is missing (and JSONL was written instead), or NULL.
+  result <- NULL
   if (ext == "parquet") {
-    .rx_save_parquet(posts, path)
+    result <- .rx_save_parquet(posts, path)
   } else if (ext == "parquetds") {
-    .rx_save_partitioned(posts, path)
+    result <- .rx_save_partitioned(posts, path)
   } else if (ext == "duckdb") {
-    .rx_save_duckdb(posts, path)
+    result <- .rx_save_duckdb(posts, path)
   } else if (ext == "jsonl") {
-    .rx_jsonl_write(path, posts, append = FALSE)
+    jsonl_dir <- dirname(path)
+    .rx_ensure_dir(jsonl_dir, path)
+    # .rx_jsonl_write returns early for zero-row tibbles without writing;
+    # truncate the file to avoid stale content on overwrite.
+    if (nrow(posts) == 0L) {
+      .rx_truncate_file(path)
+      result <- invisible(NULL)
+    } else {
+      result <- .rx_jsonl_write(path, posts, append = FALSE)
+    }
   } else {
     stop(
       "Unsupported file extension '", ext, "'. ",
@@ -90,7 +112,7 @@ x_save <- function(posts, path) {
     )
   }
 
-  invisible(NULL)
+  invisible(result)
 }
 
 #' Save a tibble as Parquet using the Arrow package.
@@ -112,7 +134,7 @@ x_save <- function(posts, path) {
 #' @noRd
 .rx_save_parquet <- function(posts, path) {
   if (!requireNamespace("arrow", quietly = TRUE)) {
-    fallback <- sub("\\.parquet$", ".jsonl", path)
+    fallback <- sub("(?i)\\.parquet$", ".jsonl", path, perl = TRUE)
     warning(
       "The 'arrow' package is not installed. ",
       "Falling back to JSONL at '",
@@ -120,15 +142,29 @@ x_save <- function(posts, path) {
       "'. Install arrow for native Parquet support.",
       call. = FALSE
     )
-    .rx_jsonl_write(fallback, posts, append = FALSE)
+    fallback_dir <- dirname(fallback)
+    .rx_ensure_dir(fallback_dir, fallback)
+    if (nrow(posts) == 0L) {
+      .rx_truncate_file(fallback)
+    } else {
+      .rx_jsonl_write(fallback, posts, append = FALSE)
+    }
     return(invisible(fallback))
   }
 
+  parent_dir <- dirname(path)
+  .rx_ensure_dir(parent_dir, path)
+
   # Guard: zero-row tibble — write an empty Parquet file.
   if (nrow(posts) == 0L) {
-    arrow::write_parquet(
-      arrow::as_arrow_table(posts),
-      path
+    tryCatch(
+      arrow::write_parquet(
+        arrow::as_arrow_table(posts),
+        path
+      ),
+      error = function(e) {
+        stop(.rx_error(paste0("Failed to write empty Parquet file: ", e$message)))
+      }
     )
     return(invisible(NULL))
   }
@@ -136,7 +172,12 @@ x_save <- function(posts, path) {
   # Convert tibble to Arrow table and write.
   # arrow::write_parquet handles the conversion automatically
   # for data frames / tibbles.
-  arrow::write_parquet(posts, path)
+  tryCatch(
+    arrow::write_parquet(posts, path),
+    error = function(e) {
+      stop(.rx_error(paste0("Failed to write Parquet file: ", e$message)))
+    }
+  )
 
   invisible(NULL)
 }
@@ -168,7 +209,7 @@ x_save <- function(posts, path) {
 #' @noRd
 .rx_save_duckdb <- function(posts, path) {
   if (!requireNamespace("duckdb", quietly = TRUE)) {
-    fallback <- sub("\\.duckdb$", ".jsonl", path)
+    fallback <- sub("(?i)\\.duckdb$", ".jsonl", path, perl = TRUE)
     warning(
       "The 'duckdb' package is not installed. ",
       "Falling back to JSONL at '",
@@ -176,9 +217,18 @@ x_save <- function(posts, path) {
       "'. Install duckdb for native DuckDB support.",
       call. = FALSE
     )
-    .rx_jsonl_write(fallback, posts, append = FALSE)
+    fallback_dir <- dirname(fallback)
+    .rx_ensure_dir(fallback_dir, fallback)
+    if (nrow(posts) == 0L) {
+      .rx_truncate_file(fallback)
+    } else {
+      .rx_jsonl_write(fallback, posts, append = FALSE)
+    }
     return(invisible(fallback))
   }
+
+  parent_dir <- dirname(path)
+  .rx_ensure_dir(parent_dir, path)
 
   con <- tryCatch(
     duckdb::dbConnect(duckdb::DuckDB(), path),
@@ -189,8 +239,12 @@ x_save <- function(posts, path) {
   on.exit(duckdb::dbDisconnect(con), add = TRUE)
 
   # Guard: zero-row tibble — drop any existing tables and create with canonical schema.
+  # Drop ALL tables unconditionally to prevent stale data from a previous
+  # export that had collections/relations when the current tibble does not.
   if (nrow(posts) == 0L) {
     duckdb::dbExecute(con, "DROP TABLE IF EXISTS posts")
+    duckdb::dbExecute(con, "DROP TABLE IF EXISTS collections")
+    duckdb::dbExecute(con, "DROP TABLE IF EXISTS post_collection_relations")
     fields <- .rx_canonical_fields()
     type_map <- .rx_type_map()
     col_defs <- paste(
@@ -206,12 +260,16 @@ x_save <- function(posts, path) {
       }),
       collapse = ", "
     )
-    duckdb::dbExecute(con, paste0("CREATE TABLE posts (", col_defs, ")"))
+    tryCatch(
+      duckdb::dbExecute(con, paste0("CREATE TABLE posts (", col_defs, ")")),
+      error = function(e) {
+        stop(.rx_error(paste0("Failed to create empty posts table: ", e$message)))
+      }
+    )
 
     # Write collections table from provenance (if present).
     provenance <- attr(posts, "rx_collection_provenance")
     if (!is.null(provenance) && is.list(provenance)) {
-      duckdb::dbExecute(con, "DROP TABLE IF EXISTS collections")
       collections_df <- data.frame(
         collection_id   = as.character(provenance$collection_id),
         started_at      = as.character(format(provenance$started_at)),
@@ -223,16 +281,25 @@ x_save <- function(posts, path) {
         records         = as.integer(provenance$records),
         stringsAsFactors = FALSE
       )
-      duckdb::dbWriteTable(con, "collections", collections_df, row.names = FALSE, overwrite = TRUE)
+      tryCatch(
+        duckdb::dbWriteTable(con, "collections", collections_df, row.names = FALSE, overwrite = TRUE),
+        error = function(e) {
+          warning("Failed to write collections table: ", e$message)
+        }
+      )
     }
 
     # Write post_collection_relations table (if present).
     rels_attr <- attr(posts, "rx_collection_posts")
     if (!is.null(rels_attr) && is.data.frame(rels_attr) && nrow(rels_attr) > 0L) {
-      duckdb::dbExecute(con, "DROP TABLE IF EXISTS post_collection_relations")
-      duckdb::dbWriteTable(
-        con, "post_collection_relations",
-        rels_attr, row.names = FALSE, overwrite = TRUE
+      tryCatch(
+        duckdb::dbWriteTable(
+          con, "post_collection_relations",
+          rels_attr, row.names = FALSE, overwrite = TRUE
+        ),
+        error = function(e) {
+          warning("Failed to write post_collection_relations table: ", e$message)
+        }
       )
     }
 
@@ -242,7 +309,10 @@ x_save <- function(posts, path) {
   # Write the posts table.
   # Drop existing tables first to guarantee the canonical 26-column schema
   # regardless of what a previous export (possibly with fewer columns) left behind.
+  # Drop ALL tables unconditionally to prevent stale collections/relations data.
   duckdb::dbExecute(con, "DROP TABLE IF EXISTS posts")
+  duckdb::dbExecute(con, "DROP TABLE IF EXISTS collections")
+  duckdb::dbExecute(con, "DROP TABLE IF EXISTS post_collection_relations")
   tryCatch(
     duckdb::dbWriteTable(con, "posts", posts, row.names = FALSE, overwrite = TRUE),
     error = function(e) {
@@ -253,7 +323,6 @@ x_save <- function(posts, path) {
   # Write collections table from provenance (if present).
   provenance <- attr(posts, "rx_collection_provenance")
   if (!is.null(provenance) && is.list(provenance)) {
-    duckdb::dbExecute(con, "DROP TABLE IF EXISTS collections")
     collections_df <- data.frame(
       collection_id   = as.character(provenance$collection_id),
       started_at      = as.character(format(provenance$started_at)),
@@ -276,7 +345,6 @@ x_save <- function(posts, path) {
   # Write post_collection_relations table (if present).
   rels_attr <- attr(posts, "rx_collection_posts")
   if (!is.null(rels_attr) && is.data.frame(rels_attr) && nrow(rels_attr) > 0L) {
-    duckdb::dbExecute(con, "DROP TABLE IF EXISTS post_collection_relations")
     tryCatch(
       duckdb::dbWriteTable(
         con, "post_collection_relations",
@@ -314,7 +382,9 @@ x_save <- function(posts, path) {
 #' @param path Character string with the output directory path.
 #'   The directory is created if it does not exist.
 #'
-#' @return Invisible NULL.
+#' @return Invisible NULL when the target format is written successfully,
+#'   or the fallback `.jsonl` path (character) invisibly when the optional
+#'   package is missing (and JSONL was written instead).
 #'
 #' @noRd
 .rx_save_partitioned <- function(posts, path) {
@@ -326,13 +396,25 @@ x_save <- function(posts, path) {
       "'. Install arrow for partitioned dataset support.",
       call. = FALSE
     )
-    .rx_jsonl_write(paste0(path, ".jsonl"), posts, append = FALSE)
-    return(invisible(NULL))
+    fallback_path <- paste0(path, ".jsonl")
+    fallback_dir <- dirname(fallback_path)
+    .rx_ensure_dir(fallback_dir, fallback_path)
+    if (nrow(posts) == 0L) {
+      .rx_truncate_file(fallback_path)
+    } else {
+      .rx_jsonl_write(fallback_path, posts, append = FALSE)
+    }
+    return(invisible(fallback_path))
   }
 
-  # Guard: zero-row tibble — write nothing (an empty directory).
+  # Guard: zero-row tibble — clean any existing partition data, then
+  # return.  unlink + recreate prevents stale parquet files from a
+  # previous non-zero write.
   if (nrow(posts) == 0L) {
-    dir.create(path, recursive = TRUE, showWarnings = FALSE)
+    if (dir.exists(path)) {
+      unlink(path, recursive = TRUE)
+    }
+    .rx_ensure_dir(path, path)
     return(invisible(NULL))
   }
 
@@ -363,19 +445,41 @@ x_save <- function(posts, path) {
   if (length(partition_cols) == 0L) {
     # If there's only one distinct value (or all NA), fall back to a single
     # Parquet file (non-partitioned) for simplicity.
-    arrow::write_parquet(df, file.path(path, "posts.parquet"))
+    parent_dir <- dirname(path)
+    .rx_ensure_dir(parent_dir, path)
+    # Clean existing parquet files from the target directory.
+    if (dir.exists(path)) {
+      unlink(path, recursive = TRUE)
+    }
+    .rx_ensure_dir(path, path)
+    tryCatch(
+      arrow::write_parquet(df, file.path(path, "posts.parquet")),
+      error = function(e) {
+        stop(.rx_error(paste0("Failed to write partitioned Parquet file: ", e$message)))
+      }
+    )
     return(invisible(NULL))
   }
 
-  # Ensure the target directory exists.
-  dir.create(path, recursive = TRUE, showWarnings = FALSE)
+  # Clean existing partition data, then create a fresh directory.
+  if (dir.exists(path)) {
+    unlink(path, recursive = TRUE)
+  }
+  parent_dir <- dirname(path)
+  .rx_ensure_dir(parent_dir, path)
+  .rx_ensure_dir(path, path)
 
   # Write partitioned dataset.
   # partition = TRUE uses the column names as directory names.
-  arrow::write_dataset(
-    arrow::as_arrow_table(df),
-    path = path,
-    partition = partition_cols
+  tryCatch(
+    arrow::write_dataset(
+      arrow::as_arrow_table(df),
+      path = path,
+      partition = partition_cols
+    ),
+    error = function(e) {
+      stop(.rx_error(paste0("Failed to write partitioned dataset: ", e$message)))
+    }
   )
 
   invisible(NULL)
@@ -542,7 +646,19 @@ x_save <- function(posts, path) {
           backend         = as.character(collections_df$backend),
           parser_version  = as.character(collections_df$parser_version),
           schema_version  = as.character(collections_df$schema_version),
-          records         = as.integer(collections_df$records)
+          records         = {
+            v <- collections_df$records
+            if (is.null(v) || !is.numeric(v) || length(v) != 1L || is.na(v) ||
+                !is.finite(v) || v < 0 || v > .Machine$integer.max) {
+              warning("Collection has invalid records count; treating as 0")
+              0L
+            } else if (v != trunc(v)) {
+              warning("Collection has non-integer records count; truncating to ", trunc(v))
+              as.integer(trunc(v))
+            } else {
+              as.integer(v)
+            }
+          }
         ),
         class = "rx_collection_provenance"
       )
@@ -571,4 +687,44 @@ x_save <- function(posts, path) {
 
   class(posts) <- c("rx_relational", class(posts))
   posts
+}
+
+# --- Internal helpers used across export paths ---
+
+#' Ensure a directory exists (TOCTOU-safe).
+#'
+#' Checks whether [dir.exists] reports the directory, creates it if not,
+#' and re-checks to avoid a race with another process.
+#'
+#' @param dir Character string with the directory path.
+#' @param path Contextual file path for the error message.
+#'
+#' @return Invisible TRUE when the directory exists afterwards;
+#'   raises an error on failure.
+#'
+#' @noRd
+.rx_ensure_dir <- function(dir, path) {
+  if (dir.exists(dir)) return(invisible(TRUE))
+  if (!isTRUE(dir.create(dir, recursive = TRUE, showWarnings = FALSE)) &&
+      !dir.exists(dir)) {
+    stop("Failed to create directory for '", path, "'", call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
+#' Truncate a file to zero bytes.
+#'
+#' Opens the file in write mode and immediately closes it, producing
+#' an empty file.  No on.exit is needed because the handle is closed
+#' in the same expression.
+#'
+#' @param path Character string with the file path.
+#'
+#' @return Invisible NULL.
+#'
+#' @noRd
+.rx_truncate_file <- function(path) {
+  con <- file(path, open = "w", encoding = "UTF-8")
+  close(con)
+  invisible(NULL)
 }

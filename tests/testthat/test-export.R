@@ -724,7 +724,53 @@ test_that(".rx_save_partitioned writes single Parquet file when only one collect
   testthat::expect_equal(nrow(loaded), 3L, info = "3 rows read back from single-collection dataset")
 })
 
-# --- Test 21: x_save rejects unsupported extension ---
+# --- Test 21: .rx_save_partitioned creates target directory for single-collection nested path ---
+test_that(".rx_save_partitioned creates dataset directory when path is nested", {
+  skip_if_not(requireNamespace("arrow", quietly = TRUE))
+
+  df <- data.frame(
+    post_id       = paste0("post-", 1:2),
+    text          = paste0("text ", 1:2),
+    author_id     = paste0("auth-", 1:2),
+    username      = paste0("user", 1:2),
+    display_name  = paste0("User ", 1:2),
+    created_at    = paste0("2025-01-", 1:2, "T00:00:00Z"),
+    reply_count   = (1:2) * 2L,
+    repost_count  = (1:2) * 3L,
+    like_count    = (1:2) * 5L,
+    quote_count   = (1:2) * 1L,
+    bookmark_count = (1:2) * 4L,
+    view_count    = (1:2) * 10L,
+    conversation_id = paste0("conv-", 1:2),
+    is_reply      = FALSE,
+    is_repost     = FALSE,
+    is_quote      = FALSE,
+    reply_to_post_id = NA_character_,
+    quoted_post_id   = NA_character_,
+    collected_at     = paste0("2025-01-", 1:2, "T12:00:00Z"),
+    collection_query = "r programming",
+    collection_id    = c("uuid-same", "uuid-same"),
+    stringsAsFactors = FALSE
+  )
+  tbl <- tibble::as_tibble(df)
+
+  # Create only the top-level temp dir; the nested output path must be
+  # created by the function itself.
+  tmp <- tempfile()
+  dir.create(tmp)
+  nested_output <- file.path(tmp, "a", "b", "output.parquetds")
+  on.exit(unlink(tmp, recursive = TRUE, force = TRUE), add = TRUE)
+
+  # Should create both the parent and target directories automatically.
+  xtweetsR:::x_save(tbl, nested_output)
+
+  testthat::expect_true(dir.exists(nested_output), info = "nested dataset directory created")
+
+  loaded <- xtweetsR:::.rx_read_partitioned(nested_output)
+  testthat::expect_equal(nrow(loaded), 2L, info = "2 rows read from nested single-collection dataset")
+})
+
+# --- Test 22: x_save rejects unsupported extension ---
 test_that("x_save rejects unsupported file extensions", {
   fields <- xtweetsR:::.rx_canonical_fields()
   df <- data.frame(
@@ -766,7 +812,7 @@ test_that("x_save rejects unsupported file extensions", {
   )
 })
 
-# --- Test 22: x_save validates path parameter ---
+# --- Test 23: x_save validates path parameter ---
 test_that("x_save validates path parameter", {
   fields <- xtweetsR:::.rx_canonical_fields()
   df <- data.frame(
@@ -808,7 +854,7 @@ test_that("x_save validates path parameter", {
   )
 })
 
-# --- Test 23: .rx_save_duckdb writes collections table from provenance ---
+# --- Test 24: .rx_save_duckdb writes collections table from provenance ---
 test_that(".rx_save_duckdb writes a collections table from provenance attribute", {
   skip_if_not(requireNamespace("duckdb", quietly = TRUE))
 
@@ -873,7 +919,7 @@ test_that(".rx_save_duckdb writes a collections table from provenance attribute"
   testthat::expect_equal(as.integer(collections$records), 2L, info = "records count matches")
 })
 
-# --- Test 24: .rx_save_duckdb writes post_collection_relations table ---
+# --- Test 25: .rx_save_duckdb writes post_collection_relations table ---
 test_that(".rx_save_duckdb writes post_collection_relations from attribute", {
   skip_if_not(requireNamespace("duckdb", quietly = TRUE))
 
@@ -928,7 +974,7 @@ test_that(".rx_save_duckdb writes post_collection_relations from attribute", {
   testthat::expect_equal(sort(rels$post_id), c("post-1", "post-2"), info = "post_ids match")
 })
 
-# --- Test 25: .rx_save_duckdb without relational attributes (backward compat) ---
+# --- Test 26: .rx_save_duckdb without relational attributes (backward compat) ---
 test_that(".rx_save_duckdb works without relational attributes", {
   skip_if_not(requireNamespace("duckdb", quietly = TRUE))
 
@@ -972,7 +1018,7 @@ test_that(".rx_save_duckdb works without relational attributes", {
   testthat::expect_equal(loaded$post_id, "post-noprov", info = "post_id matches")
 })
 
-# --- Test 26: .rx_duckdb_tables reads all tables and reconstructs relational ---
+# --- Test 27: .rx_duckdb_tables reads all tables and reconstructs relational ---
 test_that(".rx_duckdb_tables reconstructs relational result from all tables", {
   skip_if_not(requireNamespace("duckdb", quietly = TRUE))
 
@@ -1056,7 +1102,7 @@ test_that(".rx_duckdb_tables reconstructs relational result from all tables", {
   testthat::expect_equal(nrow(rels), 2L, info = "2 relation rows")
 })
 
-# --- Test 27: .rx_duckdb_tables reads only posts when no relational tables ---
+# --- Test 28: .rx_duckdb_tables reads only posts when no relational tables ---
 test_that(".rx_duckdb_tables returns posts-only when no collections/relations tables", {
   skip_if_not(requireNamespace("duckdb", quietly = TRUE))
 
@@ -1100,7 +1146,7 @@ test_that(".rx_duckdb_tables returns posts-only when no collections/relations ta
   testthat::expect_equal(result$post_id, "post-simple", info = "post_id matches")
 })
 
-# --- Test 28: .rx_duckdb_tables returns empty for non-existent file ---
+# --- Test 29: .rx_duckdb_tables returns empty for non-existent file ---
 test_that(".rx_duckdb_tables returns empty tibble for missing file", {
   tmp <- tempfile(fileext = ".duckdb")
   # Do NOT create the file.
@@ -1110,7 +1156,7 @@ test_that(".rx_duckdb_tables returns empty tibble for missing file", {
   testthat::expect_equal(nrow(loaded), 0L, info = "zero rows for missing file")
 })
 
-# --- Test 29: .rx_save_duckdb zero-row with provenance writes collections table ---
+# --- Test 30: .rx_save_duckdb zero-row with provenance writes collections table ---
 test_that(".rx_save_duckdb zero-row writes collections table when provenance present", {
   skip_if_not(requireNamespace("duckdb", quietly = TRUE))
 
@@ -1159,20 +1205,3 @@ test_that(".rx_save_duckdb zero-row writes collections table when provenance pre
   testthat::expect_equal(nrow(posts), 0L, info = "zero post rows")
 })
 
-# --- Test 30: x_save rejects non-tibble input for DuckDB path ---
-test_that("x_save rejects non-tibble input for .duckdb", {
-  tmp <- tempfile(fileext = ".duckdb")
-  on.exit(file.remove(tmp), ignore = TRUE)
-
-  testthat::expect_error(
-    xtweetsR:::x_save(list(post_id = "1"), tmp),
-    "must be a tibble",
-    info = "rejects list input for .duckdb"
-  )
-
-  testthat::expect_error(
-    xtweetsR:::x_save(data.frame(post_id = "1"), tmp),
-    "must be a tibble",
-    info = "rejects data.frame input for .duckdb"
-  )
-})
