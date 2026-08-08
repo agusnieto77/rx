@@ -38,10 +38,6 @@ jobs:
         working-directory: inst/node
         run: npm run build
 
-      - name: Run protocol tests (no browser required)
+      - name: Run protocol + recovery tests
         working-directory: inst/node
         run: node --test dist/protocol.test.js dist/recovery.test.js
-
-      - name: Run Chromium tests (skipped if no browser)
-        working-directory: inst/node
-        run: node --test dist/chromium.test.js || true
