@@ -1599,7 +1599,7 @@ Add `since` and `until` query helpers with unit tests.
 - `R/search.R` — extended `x_search()` and `x_user_posts()` with `since`/`until` params and validation
 - `tests/testthat/test-search-url.R` — added 25 new tests
 
-### Iteration 80: Add language query helper [ ]
+### Iteration 80: Add language query helper [x]
 
 Add `lang` handling with unit tests.
 
