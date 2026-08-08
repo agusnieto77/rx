@@ -16,3 +16,6 @@ inst/secrets.env
 # Local tooling state (machine-specific, auto-generated)
 .atl/
 .claude/
+
+# Archived dev artifacts (not part of the package)
+closet/
