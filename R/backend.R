@@ -362,5 +362,8 @@ NULL
     invisible(NULL)
   }
 
+  # Set a class so callers can distinguish backend types via inherits().
+  class(backend) <- c(paste0("rx_", backend_type, "_backend"), "environment")
+
   backend
 }
