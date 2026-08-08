@@ -85,14 +85,19 @@ NULL
 
 #' Generate a version-4 UUID string.
 #'
-#' Uses `tools::UUIDgenerate()` when available (R >= 4.4.0), which draws
+#' Uses `tools::UUIDgenerate()` when available (R >= 4.2.0), which draws
 #' from the OS CSPRNG. Falls back to a `sample()` + `sprintf()` hex
 #' generator for older R versions.
 #'
 #' @return A single-element character vector with a lowercase UUID string.
 #' @noRd
 .rx_generate_uuid <- function() {
-  # UUID v4 generator using base-R CSPRNG via sample().
+  if (requireNamespace("tools", quietly = TRUE) &&
+      exists("UUIDgenerate", envir = asNamespace("tools"))) {
+    return(tools::UUIDgenerate(FALSE))
+  }
+
+  # Fallback: UUID v4 generator using base-R CSPRNG via sample().
   # Uniform hex chars via sample() + sprintf("%x") to avoid
   # multi-digit decimal output (e.g. 10 -> "10" instead of "a").
   hex4 <- function() sprintf("%04x", sum(sample(0:15, 4, replace = TRUE) * 16^(3:0)))
@@ -321,31 +326,6 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     }
   }
 
-  # Validate date-range parameters.
-  if (!is.null(since)) {
-    if (!is.character(since) || length(since) != 1L || anyNA(since)) {
-      stop("since must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
-    }
-    d <- trimws(since)
-    if (!nzchar(d)) {
-      stop("since must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
-    }
-    if (is.na(as.Date(d))) {
-      stop("since is not a valid date (YYYY-MM-DD): ", since, call. = FALSE)
-    }
-  }
-  if (!is.null(until)) {
-    if (!is.character(until) || length(until) != 1L || anyNA(until)) {
-      stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
-    }
-    d <- trimws(until)
-    if (!nzchar(d)) {
-      stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
-    }
-    if (is.na(as.Date(d))) {
-      stop("until is not a valid date (YYYY-MM-DD): ", until, call. = FALSE)
-    }
-  }
   if (!is.null(lang)) {
     if (!is.character(lang) || length(lang) != 1L || anyNA(lang)) {
       stop("lang must be a single character string with a language code, or NULL.", call. = FALSE)
@@ -385,7 +365,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
 
   # 1c. Capture collection start time and generate collection_id.
   collection_started_at <- Sys.time()
-  if (is.null(resumed_checkpoint) || is.null(resumed_checkpoint$collection_id)) {
+  if (is.null(resumed_checkpoint) || is.null(resumed_checkpoint$collection_id) || length(resumed_checkpoint$collection_id) == 0L) {
     collection_id <- .rx_generate_uuid()
   }
   backend_label <- "unknown"
@@ -1237,7 +1217,7 @@ x_quotes <- function(session, post_id, limit = NULL, mode = "latest", quiet = FA
   # 7. Filter to only quote tweets of the target post.
   # Extract bare post ID from canonical URL for comparison (quoted_post_id
   # in the parsed data is always a bare numeric string, not a URL).
-  canonical_post_id <- regmatches(canonical_url, regexec("/status/(\\d+)$", canonical_url))[[1L]][2L]
+  canonical_post_id <- regmatches(canonical_url, regexec("/status/(\\d+)", canonical_url))[[1L]][2L]
   quote_mask <- deduped$is_quote == TRUE & deduped$quoted_post_id == canonical_post_id
   quotes <- deduped[quote_mask, , drop = FALSE]
 
@@ -1327,37 +1307,17 @@ x_quotes <- function(session, post_id, limit = NULL, mode = "latest", quiet = FA
 #' @return A list with 26 canonical fields, all empty vectors.
 #' @noRd
 .rx_search_empty_batch <- function() {
-  list(
-    post_id        = character(0),
-    text           = character(0),
-    author_id      = character(0),
-    username       = character(0),
-    display_name   = character(0),
-    created_at     = character(0),
-    reply_count    = integer(0),
-    repost_count   = integer(0),
-    like_count     = integer(0),
-    quote_count    = integer(0),
-    bookmark_count = integer(0),
-    view_count     = integer(0),
-    conversation_id = character(0),
-    is_reply       = logical(0),
-    is_repost      = logical(0),
-    is_quote       = logical(0),
-    reply_to_post_id = character(0),
-    quoted_post_id   = character(0),
-    # Entity fields (Task 56)
-    hashtags         = list(),
-    mentions         = list(),
-    urls             = list(),
-    # Media fields (Task 57)
-    media_type       = list(),
-    media_urls       = list(),
-    # Observation-level provenance (Task 46)
-    collected_at     = character(0),
-    collection_query = character(0),
-    collection_id    = character(0)
-  )
+  fields <- .rx_canonical_fields()
+  type_map <- .rx_type_map()
+  lapply(fields, function(f) {
+    switch(type_map[[f]],
+      character = character(0),
+      integer   = integer(0),
+      logical   = logical(0),
+      list      = list(),
+      character(0)
+    )
+  })
 }
 
 #' Clean up network capture resources after a search.
@@ -1529,26 +1489,8 @@ print.rx_relational <- function(x, ...) {
 #' @return A parsed posts list (as from `.rx_parse_posts()`).
 #' @noRd
 .rx_search_extract_from_events <- function(events, backend) {
-  all_parsed <- list(
-    post_id = character(0), text = character(0),
-    author_id = character(0), username = character(0),
-    display_name = character(0), created_at = character(0),
-    reply_count = integer(0), repost_count = integer(0),
-    like_count = integer(0), quote_count = integer(0),
-    bookmark_count = integer(0), view_count = integer(0),
-    conversation_id = character(0),
-    is_reply = logical(0), is_repost = logical(0), is_quote = logical(0),
-    reply_to_post_id = character(0), quoted_post_id = character(0),
-    # Entity fields (Task 56)
-    hashtags = list(), mentions = list(), urls = list(),
-    # Media fields (Task 57)
-    media_type = list(), media_urls = list(),
-    # Observation-level provenance (Task 46) — placeholders;
-    # populated later from search context.
-    collected_at = character(0),
-    collection_query = character(0),
-    collection_id = character(0)
-  )
+  # Accumulate parsed results in a list; merge via canonical helper below.
+  batches <- list()
 
   # Accumulate the last-extracted cursor (scalar, for scroll state).
   # Cursors from the parser are a named character vector; we keep the
@@ -1602,31 +1544,8 @@ print.rx_relational <- function(x, ...) {
       next
     }
 
-    # Append to accumulated results.
-    all_parsed$post_id      <- c(all_parsed$post_id,      parsed$post_id)
-    all_parsed$text         <- c(all_parsed$text,         parsed$text)
-    all_parsed$author_id    <- c(all_parsed$author_id,    parsed$author_id)
-    all_parsed$username     <- c(all_parsed$username,     parsed$username)
-    all_parsed$display_name <- c(all_parsed$display_name, parsed$display_name)
-    all_parsed$created_at   <- c(all_parsed$created_at,   parsed$created_at)
-    all_parsed$reply_count  <- c(all_parsed$reply_count,  parsed$reply_count)
-    all_parsed$repost_count <- c(all_parsed$repost_count, parsed$repost_count)
-    all_parsed$like_count   <- c(all_parsed$like_count,   parsed$like_count)
-    all_parsed$quote_count  <- c(all_parsed$quote_count,  parsed$quote_count)
-    all_parsed$bookmark_count <- c(all_parsed$bookmark_count, parsed$bookmark_count)
-    all_parsed$view_count   <- c(all_parsed$view_count,   parsed$view_count)
-    all_parsed$conversation_id <- c(all_parsed$conversation_id, parsed$conversation_id)
-    all_parsed$is_reply     <- c(all_parsed$is_reply,     parsed$is_reply)
-    all_parsed$is_repost    <- c(all_parsed$is_repost,    parsed$is_repost)
-    all_parsed$is_quote     <- c(all_parsed$is_quote,     parsed$is_quote)
-    all_parsed$reply_to_post_id <- c(all_parsed$reply_to_post_id, parsed$reply_to_post_id)
-    all_parsed$quoted_post_id   <- c(all_parsed$quoted_post_id,   parsed$quoted_post_id)
-    # Entity fields (Task 56).
-    all_parsed$hashtags <- c(all_parsed$hashtags, parsed$hashtags)
-    all_parsed$mentions <- c(all_parsed$mentions, parsed$mentions)
-    all_parsed$urls     <- c(all_parsed$urls,     parsed$urls)
-    all_parsed$media_type <- c(all_parsed$media_type, parsed$media_type)
-    all_parsed$media_urls <- c(all_parsed$media_urls, parsed$media_urls)
+    # Accumulate parsed results; merge via canonical helper at the end.
+    batches <- c(batches, list(parsed))
 
     # Capture the last cursor for scroll state tracking.
     # Prefer the "Bottom" cursor (infinite-scroll pagination key).
@@ -1640,9 +1559,11 @@ print.rx_relational <- function(x, ...) {
     }
   }
 
-  # Attach the last-extracted cursor to the result.
-  all_parsed$cursors <- last_cursor
-  all_parsed
+  # Merge accumulated batches using the canonical field helper.
+  # `.rx_merge_batches(list())` returns all-empty canonical fields, which is correct.
+  result <- .rx_merge_batches(batches)
+  result$cursors <- last_cursor
+  result
 }
 
 #' Check whether a network event is a candidate post-bearing response.
@@ -2023,31 +1944,6 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     }
   }
 
-  # Validate date-range parameters.
-  if (!is.null(since)) {
-    if (!is.character(since) || length(since) != 1L || anyNA(since)) {
-      stop("since must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
-    }
-    d <- trimws(since)
-    if (!nzchar(d)) {
-      stop("since must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
-    }
-    if (is.na(as.Date(d))) {
-      stop("since is not a valid date (YYYY-MM-DD): ", since, call. = FALSE)
-    }
-  }
-  if (!is.null(until)) {
-    if (!is.character(until) || length(until) != 1L || anyNA(until)) {
-      stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
-    }
-    d <- trimws(until)
-    if (!nzchar(d)) {
-      stop("until must be a single character string with a date (YYYY-MM-DD), or NULL.", call. = FALSE)
-    }
-    if (is.na(as.Date(d))) {
-      stop("until is not a valid date (YYYY-MM-DD): ", until, call. = FALSE)
-    }
-  }
   if (!is.null(lang)) {
     if (!is.character(lang) || length(lang) != 1L || anyNA(lang)) {
       stop("lang must be a single character string with a language code, or NULL.", call. = FALSE)
@@ -2087,7 +1983,7 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
 
   # 1c. Capture collection start time and generate collection_id.
   collection_started_at <- Sys.time()
-  if (is.null(resumed_checkpoint) || is.null(resumed_checkpoint$collection_id)) {
+  if (is.null(resumed_checkpoint) || is.null(resumed_checkpoint$collection_id) || length(resumed_checkpoint$collection_id) == 0L) {
     collection_id <- .rx_generate_uuid()
   }
   backend_label <- "unknown"

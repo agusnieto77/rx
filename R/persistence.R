@@ -248,7 +248,7 @@ NULL
   )
 
   con <- file(path, open = "w")
-  on.exit(close(con), ignore = TRUE)
+  on.exit(close(con), add = TRUE)
 
   tryCatch(
     writeLines(jsonlite::toJSON(data, auto_unbox = TRUE, pretty = TRUE), con, useBytes = TRUE),

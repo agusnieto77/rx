@@ -35,12 +35,13 @@ NULL
 #' @param code Optional character string with the machine-readable
 #'   error code (matches the TypeScript sidecar error codes).
 #' @param call The original call, passed to `simpleError`. Default `NULL`.
-#' @return Invisible `NULL` — this function always throws.
+#' @return A structured error condition. Callers must invoke `stop()` on
+#'   the return value to actually throw the error.
 #'
 #' @examples
 #'   \dontrun{
 #'     tryCatch(
-#'       stop(.rx_error("not connected", "rx_cdp_error")),
+#'       stop(.rx_error("not connected", class = "rx_cdp_error")),
 #'       error = function(e) cat(class(e)[1], "\n")
 #'     )
 #'   }
@@ -50,7 +51,7 @@ NULL
   err <- simpleError(message, call)
   class(err) <- c(paste0("rx_", class), "rx_error", "error", "condition")
   attr(err, "rx_error_code") <- code
-  invisible(signalCondition(err))
+  invisible(err)
 }
 
 # ---------------------------------------------------------------------------

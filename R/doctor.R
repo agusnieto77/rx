@@ -80,6 +80,7 @@ x_doctor <- function() {
   }
 
   ping_result <- NULL
+  proc <- NULL
   tryCatch({
     proc <- .rx_start_sidecar(sidecar_path = sc_dir)
     if (proc$is_alive()) {
@@ -87,13 +88,14 @@ x_doctor <- function() {
         .rx_send_request(proc, "ping", reqId = function() 1L),
         error = function(e) list(error = list(code = "PING_ERROR", message = e$message))
       )
-      ping_result <- resp
+      ping_result <<- resp
     } else {
-      ping_result <- list(error = list(code = "PROCESSX_UNAVAILABLE",
+      ping_result <<- list(error = list(code = "PROCESSX_UNAVAILABLE",
                                         message = "sidecar process could not start"))
     }
   }, error = function(e) {
-    ping_result <- list(error = list(code = "SIDECAR_START_ERROR", message = e$message))
+    ping_result <<- list(error = list(code = "SIDECAR_START_ERROR", message = e$message))
+    proc <<- NULL
   }, finally = {
     tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
   })
@@ -126,6 +128,7 @@ x_doctor <- function() {
   # -- 4. Lightpanda connection -----------------------------------------------
   checks <- c(checks, "lightpanda_connection")
   lp_result <- NULL
+  proc <- NULL
   tryCatch({
     proc <- .rx_start_sidecar(sidecar_path = sc_dir)
     if (proc$is_alive()) {
@@ -133,13 +136,14 @@ x_doctor <- function() {
         .rx_send_request(proc, "connect", list(endpoint = NULL), reqId = function() 1L),
         error = function(e) list(error = list(code = "CONNECT_ERROR", message = e$message))
       )
-      lp_result <- resp
+      lp_result <<- resp
     } else {
-      lp_result <- list(error = list(code = "PROCESS_START_FAILED",
+      lp_result <<- list(error = list(code = "PROCESS_START_FAILED",
                                       message = "sidecar process could not start"))
     }
   }, error = function(e) {
-    lp_result <- list(error = list(code = "CONNECT_ERROR", message = e$message))
+    lp_result <<- list(error = list(code = "CONNECT_ERROR", message = e$message))
+    proc <<- NULL
   }, finally = {
     tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
   })
@@ -157,6 +161,7 @@ x_doctor <- function() {
   # -- 5. CDP connection ------------------------------------------------------
   checks <- c(checks, "cdp_connection")
   cdp_result <- NULL
+  proc <- NULL
   tryCatch({
     proc <- .rx_start_sidecar(sidecar_path = sc_dir)
     if (proc$is_alive()) {
@@ -168,19 +173,20 @@ x_doctor <- function() {
         error = function(e) list(error = list(code = "CLOSE_ERROR", message = e$message))
       )
       if (!is.null(close_resp$error)) {
-        cdp_result <- close_resp
+        cdp_result <<- close_resp
       } else if (isTRUE(close_resp$result$closed)) {
-        cdp_result <- list(result = list(closed = TRUE))
+        cdp_result <<- list(result = list(closed = TRUE))
       } else {
-        cdp_result <- list(error = list(code = "CLOSE_FAILED",
+        cdp_result <<- list(error = list(code = "CLOSE_FAILED",
                                         message = "browser close returned unexpected response"))
       }
     } else {
-      cdp_result <- list(error = list(code = "PROCESS_START_FAILED",
+      cdp_result <<- list(error = list(code = "PROCESS_START_FAILED",
                                       message = "sidecar process could not start"))
     }
   }, error = function(e) {
-    cdp_result <- list(error = list(code = "CDP_ERROR", message = e$message))
+    cdp_result <<- list(error = list(code = "CDP_ERROR", message = e$message))
+    proc <<- NULL
   }, finally = {
     tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
   })
@@ -198,6 +204,7 @@ x_doctor <- function() {
   # -- 6. JavaScript evaluation -----------------------------------------------
   checks <- c(checks, "javascript_evaluation")
   js_result <- NULL
+  proc <- NULL
   tryCatch({
     proc <- .rx_start_sidecar(sidecar_path = sc_dir)
     if (proc$is_alive()) {
@@ -207,13 +214,14 @@ x_doctor <- function() {
         .rx_send_request(proc, "evaluate", list(expr = "1 + 1"), reqId = function() 2L),
         error = function(e) list(error = list(code = "EVAL_ERROR", message = e$message))
       )
-      js_result <- eval_resp
+      js_result <<- eval_resp
     } else {
-      js_result <- list(error = list(code = "PROCESS_START_FAILED",
+      js_result <<- list(error = list(code = "PROCESS_START_FAILED",
                                       message = "sidecar process could not start"))
     }
   }, error = function(e) {
-    js_result <- list(error = list(code = "EVAL_ERROR", message = e$message))
+    js_result <<- list(error = list(code = "EVAL_ERROR", message = e$message))
+    proc <<- NULL
   }, finally = {
     tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
   })
@@ -231,21 +239,23 @@ x_doctor <- function() {
   # -- 7. Network capture -----------------------------------------------------
   checks <- c(checks, "network_capture")
   nc_result <- NULL
+  proc <- NULL
   tryCatch({
     proc <- .rx_start_sidecar(sidecar_path = sc_dir)
     if (proc$is_alive()) {
       .rx_send_request(proc, "connect", list(endpoint = NULL), reqId = function() 1L)
-      nc_result <- tryCatch(
+      nc_result <<- tryCatch(
         .rx_send_request(proc, "networkCaptureEnable", list(), reqId = function() 2L),
         error = function(e) list(error = list(code = "NETWORK_ENABLE_ERROR",
                                                message = e$message))
       )
     } else {
-      nc_result <- list(error = list(code = "PROCESS_START_FAILED",
+      nc_result <<- list(error = list(code = "PROCESS_START_FAILED",
                                       message = "sidecar process could not start"))
     }
   }, error = function(e) {
-    nc_result <- list(error = list(code = "NETWORK_ERROR", message = e$message))
+    nc_result <<- list(error = list(code = "NETWORK_ERROR", message = e$message))
+    proc <<- NULL
   }, finally = {
     tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
   })
@@ -263,20 +273,22 @@ x_doctor <- function() {
   # -- 8. X navigation --------------------------------------------------------
   checks <- c(checks, "x_navigation")
   nav_result <- NULL
+  proc <- NULL
   tryCatch({
     proc <- .rx_start_sidecar(sidecar_path = sc_dir)
     if (proc$is_alive()) {
       .rx_send_request(proc, "connect", list(endpoint = NULL), reqId = function() 1L)
-      nav_result <- tryCatch(
+      nav_result <<- tryCatch(
         .rx_send_request(proc, "navigate", list(url = "https://x.com"), reqId = function() 2L),
         error = function(e) list(error = list(code = "NAV_ERROR", message = e$message))
       )
     } else {
-      nav_result <- list(error = list(code = "PROCESS_START_FAILED",
+      nav_result <<- list(error = list(code = "PROCESS_START_FAILED",
                                       message = "sidecar process could not start"))
     }
   }, error = function(e) {
-    nav_result <- list(error = list(code = "NAV_ERROR", message = e$message))
+    nav_result <<- list(error = list(code = "NAV_ERROR", message = e$message))
+    proc <<- NULL
   }, finally = {
     tryCatch(.rx_stop_sidecar(proc), error = function(e) NULL)
   })
