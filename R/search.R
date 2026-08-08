@@ -265,6 +265,7 @@ print.rx_collection_provenance <- function(x, ...) {
 #' @param mode Optional character string: `"latest"` or `"top"`.
 #'   When provided, sets the X search mode to real-time (latest) or
 #'   algorithmically-top (top).  Passed as `f=live` or `f=top`.
+#'   Defaults to `"latest"` (equivalent to `f=live`).
 #'
 #' @return A tibble with the canonical post schema (26 columns) containing
 #'   posts found during the search. Returns a zero-row tibble when no
@@ -467,7 +468,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   )
 
   initial_posts <- .rx_search_extract_from_events(initial_events, backend)
-  state$add_posts(initial_posts)
+  state$add_posts(initial_posts, new_cursor = initial_posts$cursors)
 
   .rx_progress(
     "Extracted ", length(initial_posts$post_id), " post(s) from initial batch",
@@ -509,7 +510,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
       extracted <- .rx_search_extract_from_events(batch_events, backend)
 
       # Record in scroll state (dedup, stall detection).
-      state$add_posts(extracted)
+      state$add_posts(extracted, new_cursor = extracted$cursors)
 
       .rx_progress(
         "Scroll iteration ", i, ": extracted ", length(extracted$post_id),
@@ -985,6 +986,9 @@ x_thread <- function(session, post_id, quiet = FALSE) {
 #'   username (without the leading @).
 #' @param limit Optional integer limiting the maximum number of reply posts
 #'   returned. When \code{NULL} (default), no limit is applied.
+#' @param mode Optional character string: `"latest"` or `"top"`.
+#'   When provided, sets the X search mode. Defaults to `"latest"`
+#'   (equivalent to `f=live`).
 #' @param quiet Logical, default `FALSE`. When `TRUE`, progress messages
 #'   are suppressed.
 #'
@@ -996,12 +1000,13 @@ x_thread <- function(session, post_id, quiet = FALSE) {
 #' \dontrun{
 #'   sess <- x_session()
 #'   replies <- x_replies(sess, "rstudio")
+#'   replies_top <- x_replies(sess, "rstudio", mode = "top")
 #'   print(replies)
 #'   x_close(sess)
 #' }
 #'
 #' @export
-x_replies <- function(session, username, limit = NULL, quiet = FALSE) {
+x_replies <- function(session, username, limit = NULL, mode = "latest", quiet = FALSE) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -1017,6 +1022,18 @@ x_replies <- function(session, username, limit = NULL, quiet = FALSE) {
       stop("limit must be a positive integer, or NULL.", call. = FALSE)
     }
     limit <- as.integer(limit)
+  }
+
+  # Validate mode.
+  if (!is.character(mode) || length(mode) != 1L || anyNA(mode)) {
+    stop("mode must be 'latest', 'top', or NULL.", call. = FALSE)
+  }
+  mode <- tolower(trimws(mode))
+  if (!nzchar(mode)) {
+    stop("mode must be 'latest', 'top', or NULL.", call. = FALSE)
+  }
+  if (!mode %in% c("latest", "top")) {
+    stop("mode must be 'latest' or 'top'.", call. = FALSE)
   }
 
   backend <- session$backend
@@ -1042,8 +1059,9 @@ x_replies <- function(session, username, limit = NULL, quiet = FALSE) {
   )
 
   # 3. Construct search URL: posts mentioning the user (@username).
-  encoded_user <- URLencode(paste0("@", trimws(username)), reserved = TRUE)
-  url <- paste0("https://x.com/search?q=", encoded_user, "&f=live")
+  # Use .rx_construct_search_url() for consistent URL building with mode support.
+  query_str <- paste0("@", trimws(username))
+  url <- .rx_construct_search_url(query_str, mode = mode)
 
   nav_result <- backend$navigate(url)
   if (is.null(nav_result$status) || nav_result$status == "error") {
@@ -1163,6 +1181,9 @@ x_replies <- function(session, username, limit = NULL, quiet = FALSE) {
 #'   X/Twitter post URL.
 #' @param limit Optional integer limiting the maximum number of quote posts
 #'   returned. When \code{NULL} (default), no limit is applied.
+#' @param mode Optional character string: `"latest"` or `"top"`.
+#'   When provided, sets the X search mode. Defaults to `"latest"`
+#'   (equivalent to `f=live`).
 #' @param quiet Logical, default `FALSE`. When `TRUE`, progress messages
 #'   are suppressed.
 #'
@@ -1174,12 +1195,13 @@ x_replies <- function(session, username, limit = NULL, quiet = FALSE) {
 #' \dontrun{
 #'   sess <- x_session()
 #'   quotes <- x_quotes(sess, "1234567890123456789")
+#'   quotes_top <- x_quotes(sess, "1234567890123456789", mode = "top")
 #'   print(quotes)
 #'   x_close(sess)
 #' }
 #'
 #' @export
-x_quotes <- function(session, post_id, limit = NULL, quiet = FALSE) {
+x_quotes <- function(session, post_id, limit = NULL, mode = "latest", quiet = FALSE) {
   # 1. Validate inputs.
   if (!inherits(session, "xtweetsR_session")) {
     stop("session must be an xtweetsR_session object.", call. = FALSE)
@@ -1195,6 +1217,18 @@ x_quotes <- function(session, post_id, limit = NULL, quiet = FALSE) {
       stop("limit must be a positive integer, or NULL.", call. = FALSE)
     }
     limit <- as.integer(limit)
+  }
+
+  # Validate mode.
+  if (!is.character(mode) || length(mode) != 1L || anyNA(mode)) {
+    stop("mode must be 'latest', 'top', or NULL.", call. = FALSE)
+  }
+  mode <- tolower(trimws(mode))
+  if (!nzchar(mode)) {
+    stop("mode must be 'latest', 'top', or NULL.", call. = FALSE)
+  }
+  if (!mode %in% c("latest", "top")) {
+    stop("mode must be 'latest' or 'top'.", call. = FALSE)
   }
 
   backend <- session$backend
@@ -1223,8 +1257,8 @@ x_quotes <- function(session, post_id, limit = NULL, quiet = FALSE) {
   )
 
   # 3. Construct search URL: search for the post URL to find quote tweets.
-  encoded_url <- URLencode(canonical_url, reserved = TRUE)
-  url <- paste0("https://x.com/search?q=", encoded_url, "&f=live")
+  # Use .rx_construct_search_url() for consistent URL building with mode support.
+  url <- .rx_construct_search_url(canonical_url, mode = mode)
 
   nav_result <- backend$navigate(url)
   if (is.null(nav_result$status) || nav_result$status == "error") {
@@ -1557,6 +1591,12 @@ print.rx_relational <- function(x, ...) {
     collection_id = character(0)
   )
 
+  # Accumulate the last-extracted cursor (scalar, for scroll state).
+  # Cursors from the parser are a named character vector; we keep the
+  # "Bottom" cursor (used for infinite-scroll pagination) or, if absent,
+  # the last available cursor value.
+  last_cursor <- ""
+
   # Collect candidate event IDs: X domain + JSON content type.
   candidate_ids <- character(0)
   for (evt in events) {
@@ -1628,8 +1668,21 @@ print.rx_relational <- function(x, ...) {
     all_parsed$urls     <- c(all_parsed$urls,     parsed$urls)
     all_parsed$media_type <- c(all_parsed$media_type, parsed$media_type)
     all_parsed$media_urls <- c(all_parsed$media_urls, parsed$media_urls)
+
+    # Capture the last cursor for scroll state tracking.
+    # Prefer the "Bottom" cursor (infinite-scroll pagination key).
+    if (is.null(parsed$cursors) || !is.character(parsed$cursors) || length(parsed$cursors) == 0L) {
+      next
+    }
+    if ("Bottom" %in% names(parsed$cursors) && nzchar(parsed$cursors[["Bottom"]])) {
+      last_cursor <- parsed$cursors[["Bottom"]]
+    } else if (length(parsed$cursors) > 0L && nzchar(parsed$cursors[[length(parsed$cursors)]])) {
+      last_cursor <- parsed$cursors[[length(parsed$cursors)]]
+    }
   }
 
+  # Attach the last-extracted cursor to the result.
+  all_parsed$cursors <- last_cursor
   all_parsed
 }
 
@@ -2153,7 +2206,7 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
   )
 
   initial_posts <- .rx_search_extract_from_events(initial_events, backend)
-  state$add_posts(initial_posts)
+  state$add_posts(initial_posts, new_cursor = initial_posts$cursors)
 
   .rx_progress(
     "Extracted ", length(initial_posts$post_id), " post(s) from initial batch",
@@ -2182,7 +2235,7 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
       )
 
       extracted <- .rx_search_extract_from_events(batch_events, backend)
-      state$add_posts(extracted)
+      state$add_posts(extracted, new_cursor = extracted$cursors)
 
       .rx_progress(
         "Scroll iteration ", i, ": extracted ", length(extracted$post_id),

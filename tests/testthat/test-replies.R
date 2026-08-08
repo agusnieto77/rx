@@ -73,7 +73,7 @@ test_that("x_replies constructs URL with @username", {
 
   expect_true(grepl("@rstudio", captured_url),
               info = paste("captured URL:", captured_url))
-  expect_true(grepl("f=live", captured_url),
+  expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE),
               info = paste("captured URL:", captured_url))
 })
 
@@ -420,4 +420,85 @@ test_that("x_replies rejects limit=0", {
   mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
 
   expect_error(x_replies(mock_session, "rstudio", limit = 0L), "positive")
+})
+
+# --- x_replies() mode parameter tests (Iteration 81) ---
+
+# --- Test 21: x_replies mode='latest' produces f=live in URL ---
+test_that("x_replies mode='latest' produces f=live in URL", {
+  captured_url <- character(0)
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) {
+    captured_url <<- url
+    list(status = "ok")
+  }
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  x_replies(mock_session, "rstudio", mode = "latest")
+
+  expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE),
+              info = paste("captured URL:", captured_url))
+})
+
+# --- Test 22: x_replies mode='top' produces f=top in URL ---
+test_that("x_replies mode='top' produces f=top in URL", {
+  captured_url <- character(0)
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) {
+    captured_url <<- url
+    list(status = "ok")
+  }
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  x_replies(mock_session, "rstudio", mode = "top")
+
+  expect_true(grepl("f%3Dtop", captured_url, ignore.case = TRUE),
+              info = paste("captured URL:", captured_url))
+})
+
+# --- Test 23: x_replies mode is case-insensitive ---
+test_that("x_replies mode is case-insensitive", {
+  captured_url <- character(0)
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) {
+    captured_url <<- url
+    list(status = "ok")
+  }
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  x_replies(mock_session, "rstudio", mode = "TOP")
+
+  expect_true(grepl("f%3Dtop", captured_url, ignore.case = TRUE),
+              info = paste("captured URL:", captured_url))
+})
+
+# --- Test 24: x_replies rejects invalid mode ---
+test_that("x_replies rejects invalid mode", {
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  expect_error(x_replies(mock_session, "rstudio", mode = "recent"), "latest.*top")
+  expect_error(x_replies(mock_session, "rstudio", mode = NA_character_), "latest.*top")
+  expect_error(x_replies(mock_session, "rstudio", mode = "  "), "latest.*top")
 })

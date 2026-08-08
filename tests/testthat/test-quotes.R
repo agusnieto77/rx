@@ -73,7 +73,7 @@ test_that("x_quotes constructs URL with post URL", {
 
   expect_true(grepl("x\\.com/status/1234567890123456789", captured_url),
               info = paste("captured URL:", captured_url))
-  expect_true(grepl("f=live", captured_url),
+  expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE),
               info = paste("captured URL:", captured_url))
 })
 
@@ -467,4 +467,85 @@ test_that("x_quotes normalizes x.com full URL to search query", {
               info = paste("captured URL:", captured_url))
   # Should return quote tweets that quote 1900000000000000100
   expect_true(all(result$quoted_post_id == "1900000000000000100"))
+})
+
+# --- x_quotes() mode parameter tests (Iteration 81) ---
+
+# --- Test 21: x_quotes mode='latest' produces f=live in URL ---
+test_that("x_quotes mode='latest' produces f=live in URL", {
+  captured_url <- character(0)
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) {
+    captured_url <<- url
+    list(status = "ok")
+  }
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  x_quotes(mock_session, "1234567890123456789", mode = "latest")
+
+  expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE),
+              info = paste("captured URL:", captured_url))
+})
+
+# --- Test 22: x_quotes mode='top' produces f=top in URL ---
+test_that("x_quotes mode='top' produces f=top in URL", {
+  captured_url <- character(0)
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) {
+    captured_url <<- url
+    list(status = "ok")
+  }
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  x_quotes(mock_session, "1234567890123456789", mode = "top")
+
+  expect_true(grepl("f%3Dtop", captured_url, ignore.case = TRUE),
+              info = paste("captured URL:", captured_url))
+})
+
+# --- Test 23: x_quotes mode is case-insensitive ---
+test_that("x_quotes mode is case-insensitive", {
+  captured_url <- character(0)
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) {
+    captured_url <<- url
+    list(status = "ok")
+  }
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  x_quotes(mock_session, "1234567890123456789", mode = "TOP")
+
+  expect_true(grepl("f%3Dtop", captured_url, ignore.case = TRUE),
+              info = paste("captured URL:", captured_url))
+})
+
+# --- Test 24: x_quotes rejects invalid mode ---
+test_that("x_quotes rejects invalid mode", {
+  mock_session <- new.env(parent = emptyenv())
+  mock_session$connected <- TRUE
+  mock_session$backend <- new.env(parent = emptyenv())
+  class(mock_session) <- "xtweetsR_session"
+  mock_session$backend$networkCaptureEnable <- function() invisible(TRUE)
+  mock_session$backend$navigate <- function(url) list(status = "ok")
+  mock_session$backend$networkCaptureGet <- function() list()
+  mock_session$backend$networkCaptureClear <- function() invisible(TRUE)
+
+  expect_error(x_quotes(mock_session, "1234567890123456789", mode = "recent"), "latest.*top")
+  expect_error(x_quotes(mock_session, "1234567890123456789", mode = NA_character_), "latest.*top")
+  expect_error(x_quotes(mock_session, "1234567890123456789", mode = "  "), "latest.*top")
 })
