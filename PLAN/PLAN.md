@@ -1433,7 +1433,7 @@ Measure at least:
 
 ---
 
-### Task 74: Add optional Chromium backend spike [ ]
+### Task 74: Add optional Chromium backend spike [x]
 
 **Goal:** Verify that the backend abstraction is real.
 
@@ -1457,7 +1457,7 @@ Measure at least:
 
 ---
 
-### Task 75: Compare Lightpanda and Chromium on the local fixture [ ]
+### Task 75: Compare Lightpanda and Chromium on the local fixture [x]
 
 **Goal:** Produce a basic empirical comparison.
 
@@ -1500,7 +1500,7 @@ Compare:
 
 ---
 
-### Task 76: Final MVP regression run [ ]
+### Task 76: Final MVP regression run [x]
 
 **Goal:** Verify the entire implemented system before declaring MVP complete.
 
@@ -1531,7 +1531,7 @@ Run:
 
 ---
 
-### Task 77: Final repository cleanup [ ]
+### Task 77: Final repository cleanup [x]
 
 **Goal:** Remove development debris without changing behavior.
 
@@ -1554,7 +1554,7 @@ Run:
 
 ---
 
-### Task 78: Produce MVP status summary [ ]
+### Task 78: Produce MVP status summary [x]
 
 **Goal:** Leave a machine- and human-readable completion record.
 
@@ -1581,7 +1581,7 @@ Run:
 
 Do not execute these until Tasks 1–78 are complete unless a previous task explicitly requires one as a dependency.
 
-### Iteration 79: Add date-range query helpers [ ]
+### Iteration 79: Add date-range query helpers [x]
 
 Add `since` and `until` query helpers with unit tests.
 
