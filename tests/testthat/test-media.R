@@ -180,7 +180,7 @@ test_that(".rx_media_to_tibble returns empty tibble on NULL input", {
 
 # --- Test 16: Full pipeline — extract media from parsed search fixture ---
 test_that("Full pipeline: extract media from a realistic parsed response", {
-  fixture_path <- system.file("tests/fixtures/x-search-response.json", package = "xtweetsR")
+  fixture_path <- rx_fixture_path("x-search-response.json")
   if (nzchar(fixture_path)) {
     data <- jsonlite::fromJSON(fixture_path, simplifyVector = FALSE)
     parsed <- xtweetsR:::.rx_parse_posts(data)
@@ -211,7 +211,7 @@ test_that(".rx_relational_result returns rx_relational with media attribute", {
   media <- attr(result, "rx_media")
   testthat::expect_true(!is.null(media))
   testthat::expect_s3_class(media, "tbl_df")
-  testthat::expect_equal(nrow(media), 1L)
+  testthat::expect_equal(nrow(media), 2L)
 })
 
 # --- Test 18: .rx_relational_result with empty media ---
@@ -242,7 +242,7 @@ test_that("rx_media() extracts media from rx_relational object", {
   result <- xtweetsR:::.rx_relational_result(posts, parsed)
   media <- xtweetsR::rx_media(result)
   testthat::expect_s3_class(media, "tbl_df")
-  testthat::expect_equal(nrow(media), 1L)
+  testthat::expect_equal(nrow(media), 2L)
   testthat::expect_equal(media$media_type[1L], "photo")
 })
 

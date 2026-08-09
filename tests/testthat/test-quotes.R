@@ -71,7 +71,7 @@ test_that("x_quotes constructs URL with post URL", {
 
   x_quotes(mock_session, "1234567890123456789")
 
-  expect_true(grepl("x\\.com/status/1234567890123456789", captured_url)
+  expect_true(grepl("x\\.com%2Fstatus%2F1234567890123456789", captured_url, ignore.case = TRUE)
               )
   expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE)
               )
@@ -466,7 +466,7 @@ test_that("x_quotes normalizes x.com full URL to search query", {
 
   expect_true(inherits(result, "tbl_df"))
   # Should navigate to a search URL containing the post URL
-  expect_true(grepl("x\\.com/status/1900000000000000100", captured_url)
+  expect_true(grepl("x\\.com%2Fstatus%2F1900000000000000100", captured_url, ignore.case = TRUE)
               )
   # Should return quote tweets that quote 1900000000000000100
   expect_true(all(result$quoted_post_id == "1900000000000000100"))

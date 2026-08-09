@@ -97,7 +97,8 @@ NULL
 .rx_generate_uuid <- function() {
   if (requireNamespace("tools", quietly = TRUE) &&
       exists("UUIDgenerate", envir = asNamespace("tools"))) {
-    return(tools::UUIDgenerate(FALSE))
+    uuid_generate <- get("UUIDgenerate", envir = asNamespace("tools"))
+    if (is.function(uuid_generate)) return(uuid_generate(FALSE))
   }
 
   # Fallback: UUID v4 generator using base-R CSPRNG via sample().
@@ -196,6 +197,7 @@ NULL
 #' @param x The provenance list.
 #' @param ... Ignored.
 #' @noRd
+#' @exportS3Method base::print
 print.rx_collection_provenance <- function(x, ...) {
   cat("<xtweetsR Collection Provenance>\n")
   cat(sprintf("  collection_id : %s\n", x$collection_id))
@@ -364,6 +366,9 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     if (!is.null(resumed_checkpoint)) {
       collection_id <- resumed_checkpoint$collection_id
     }
+    if (is.null(jsonl_path)) {
+      jsonl_path <- paste0(gsub("[^A-Za-z0-9._-]", "_", query), ".jsonl")
+    }
   }
 
   # 1c. Capture collection start time and generate collection_id.
@@ -386,7 +391,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
     collection_id = collection_id, limit = limit,
     scroll = scroll, max_scrolls = max_scrolls,
     resume = resume, resumed_checkpoint = resumed_checkpoint,
-    checkpoint_path = checkpoint_path,
+    checkpoint_path = checkpoint_path, jsonl_path = jsonl_path,
     quiet = quiet, collection_started_at = collection_started_at,
     backend_label = backend_label
   )
@@ -423,7 +428,7 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   session, url, query, collection_id, limit,
   scroll = TRUE, max_scrolls = 5L,
   resume = FALSE, resumed_checkpoint = NULL, checkpoint_path = NULL,
-  quiet = FALSE, collection_started_at, backend_label
+  jsonl_path = NULL, quiet = FALSE, collection_started_at, backend_label
 ) {
   backend <- session$backend
 
@@ -551,6 +556,35 @@ x_search <- function(session, query, limit = NULL, scroll = TRUE, max_scrolls = 
   # 7. Apply limit.
   if (!is.null(limit) && nrow(deduped) > limit) {
     deduped <- deduped[seq_len(limit), , drop = FALSE]
+  }
+
+  if (!is.null(jsonl_path)) {
+    persist <- deduped
+    if (isTRUE(resume) && !is.null(resumed_checkpoint) &&
+        length(resumed_checkpoint$seen_post_ids) > 0L && nrow(persist) > 0L) {
+      persist <- persist[
+        !persist$post_id %in% resumed_checkpoint$seen_post_ids,
+        , drop = FALSE
+      ]
+    }
+
+    tryCatch(
+      {
+        .rx_ensure_dir(dirname(jsonl_path), jsonl_path)
+        if (nrow(persist) > 0L) {
+          .rx_jsonl_write(
+            jsonl_path,
+            persist,
+            append = isTRUE(resume) && file.exists(jsonl_path)
+          )
+        } else if (!file.exists(jsonl_path)) {
+          .rx_truncate_file(jsonl_path)
+        }
+      },
+      error = function(e) {
+        warning("Failed to write JSONL collection to '", jsonl_path, "': ", e$message)
+      }
+    )
   }
 
   # 8. Clean up and persist checkpoint.
@@ -887,7 +921,7 @@ x_thread <- function(session, post_id, quiet = FALSE) {
 #' [x_search()] and [x_post()].
 #'
 #' Unlike [x_search()], which returns all matching posts, this function
-#' filters the result set to include only posts where [is_reply] is `TRUE`.
+#' filters the result set to include only posts where `is_reply` is `TRUE`.
 #' This makes it useful for tracking conversations where a specific user
 #' is being replied to.
 #'
@@ -1089,8 +1123,8 @@ x_replies <- function(session, username, limit = NULL, mode = "latest", quiet = 
 #' pipeline as [x_search()], [x_post()], [x_thread()], and [x_replies()].
 #'
 #' Unlike [x_search()], which returns all matching posts, this function
-#' filters the result set to include only posts where [is_quote] is `TRUE`
-#' and [quoted_post_id] matches the target post.  This makes it useful for
+#' filters the result set to include only posts where `is_quote` is `TRUE`
+#' and `quoted_post_id` matches the target post.  This makes it useful for
 #' tracking how a specific post is being quoted across the platform.
 #'
 #' @param session An `xtweetsR_session` object returned by [x_session()].
@@ -1492,6 +1526,7 @@ rx_collection_posts <- function(x) {
 #' @return Invisible `x`.
 #'
 #' @noRd
+#' @exportS3Method base::print
 print.rx_relational <- function(x, ...) {
   cat("# Posts (", nrow(x), " row(s))\n", sep = "")
   print(as.data.frame(x), ...)
@@ -1524,6 +1559,12 @@ print.rx_relational <- function(x, ...) {
 #' @return A parsed posts list (as from `.rx_parse_posts()`).
 #' @noRd
 .rx_search_extract_from_events <- function(events, backend) {
+  # Some backends return one event record instead of a list of records when
+  # only one response was captured. Normalize that shape before iterating.
+  if (is.list(events) && !is.null(events$requestId) && !is.null(events$url)) {
+    events <- list(events)
+  }
+
   # Accumulate parsed results in a list; merge via canonical helper below.
   batches <- list()
 
@@ -2014,6 +2055,9 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     if (!is.null(resumed_checkpoint)) {
       collection_id <- resumed_checkpoint$collection_id
     }
+    if (is.null(jsonl_path)) {
+      jsonl_path <- paste0(gsub("[^A-Za-z0-9._-]", "_", username), ".jsonl")
+    }
   }
 
   # 1c. Capture collection start time and generate collection_id.
@@ -2037,7 +2081,7 @@ x_user_posts <- function(session, username, limit = NULL, path = NULL,
     collection_id = collection_id, limit = limit,
     scroll = scroll, max_scrolls = max_scrolls,
     resume = resume, resumed_checkpoint = resumed_checkpoint,
-    checkpoint_path = checkpoint_path,
+    checkpoint_path = checkpoint_path, jsonl_path = jsonl_path,
     quiet = quiet, collection_started_at = collection_started_at,
     backend_label = backend_label
   )

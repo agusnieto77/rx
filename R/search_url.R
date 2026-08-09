@@ -13,37 +13,6 @@
 #   .rx_construct_search_url("climate change", from_user = "alice")
 NULL
 
-#' Construct an X search URL from a query string.
-#'
-#' Takes a search query and returns a properly URL-encoded X search URL.
-#' Query terms are separated by spaces (X's default search behaviour).
-#' Optional filters can be appended as URL parameters (e.g. `from_user`).
-#'
-#' Build an X/Twitter date-range filter string.
-#'
-#' Takes optional `since` and `until` date arguments and returns a
-#' single X search filter string such as `"since:2024-01-01 until:2024-12-31"`.
-#' Only non-NULL, non-empty dates are included.
-#'
-#' # Date format
-#' X search accepts dates in `YYYY-MM-DD` format. This function validates
-#' that each date is parseable as `as.Date()` before including it.
-#'
-#' @param since Optional character string with a date (YYYY-MM-DD).
-#'   When provided, appends `since:<date>` to the filter.
-#' @param until Optional character string with a date (YYYY-MM-DD).
-#'   When provided, appends `until:<date>` to the filter.
-#'
-#' @return A character string with the combined date-range filter,
-#'   or `NULL` when neither argument is provided.
-#'
-#' @examples
-#'   # Internal use only — not exported.
-#'   .rx_build_date_range_filter(since = "2024-01-01")
-#'   .rx_build_date_range_filter(since = "2024-01-01", until = "2024-12-31")
-#'   .rx_build_date_range_filter()
-#'
-#' @noRd
 #' Check whether a string parses as a valid `Date`.
 #'
 #' `as.Date()` throws for non-standard strings instead of returning `NA`,
@@ -57,6 +26,15 @@ NULL
   !is.na(parsed)
 }
 
+#' Build an X/Twitter date-range filter string.
+#'
+#' Takes optional `since` and `until` date arguments and returns a single X
+#' search filter string. Only non-NULL, non-empty dates are included.
+#'
+#' @param since Optional character string with a date (YYYY-MM-DD).
+#' @param until Optional character string with a date (YYYY-MM-DD).
+#' @return A character string with the combined date-range filter, or `NULL`.
+#' @noRd
 .rx_build_date_range_filter <- function(since = NULL, until = NULL) {
   parts <- character(0L)
 
@@ -257,7 +235,7 @@ NULL
   # reserved = TRUE ensures characters like & and : are percent-encoded,
   # which is correct for a URL parameter value (X's search server will
   # decode the value and parse the internal syntax from it).
-  encoded <- URLencode(raw, reserved = TRUE)
+  encoded <- utils::URLencode(raw, reserved = TRUE)
 
   paste0("https://x.com/search?q=", encoded)
 }
@@ -317,7 +295,7 @@ NULL
 
   if (length(m[[1L]]) > 0L) {
     # regexec returns list of character vectors; m[[1]] has the full match + groups.
-    id <- m[[1L]][2L]
+    id <- m[[1L]][3L]
     return(paste0("https://x.com/status/", id))
   }
 
@@ -414,6 +392,14 @@ NULL
     url <- paste0(url, "/", trimws(path))
   }
 
+  if (!is.null(filter)) {
+    if (!is.character(filter) || length(filter) != 1L || anyNA(filter) ||
+        !nzchar(trimws(filter))) {
+      stop("filter must be a single non-empty character string, or NULL.", call. = FALSE)
+    }
+    filter <- trimws(filter)
+  }
+
   # Build combined query filter from date range + language + mode + optional raw filter.
   date_filter <- .rx_build_date_range_filter(since = since, until = until)
   lang_filter <- .rx_build_language_filter(lang = lang)
@@ -423,7 +409,7 @@ NULL
 
   if (length(combined_parts) > 0L) {
     combined_filter <- paste(combined_parts, collapse = " ")
-    encoded_filter <- URLencode(combined_filter, reserved = TRUE)
+    encoded_filter <- utils::URLencode(combined_filter, reserved = TRUE)
     url <- paste0(url, "?", encoded_filter)
   }
 

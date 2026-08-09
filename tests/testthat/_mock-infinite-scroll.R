@@ -317,10 +317,11 @@ rx_mock_session <- function(batches, delays = NULL, end_at = NULL,
     # Add cursor if requested.
     body <- jsonlite::fromJSON(serialized[[batch_idx]],
                                simplifyVector = FALSE)
-    if (include_cursor) {
+    if (include_cursor &&
+        length(body$TimelineResult$result$timeline_instructions[[1L]]$entries) > 0L) {
       cursor_val <- paste0("cursor-batch-", batch_idx)
-      body$TimelineResult$result$timeline_instructions[[1L]] <-
-        c(body$TimelineResult$result$timeline_instructions[[1L]], list(
+      body$TimelineResult$result$timeline_instructions <-
+        c(body$TimelineResult$result$timeline_instructions, list(
           list(
             type = "TimelineAddToModule",
             moduleItems = list(

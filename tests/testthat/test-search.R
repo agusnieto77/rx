@@ -494,7 +494,7 @@ test_that("x_search handles scroll evaluation failure gracefully", {
   }
 
   # Should NOT throw; returns empty tibble gracefully
-  expect_silent(result <- x_search(mock_session, "test", scroll = TRUE))
+  expect_silent(result <- x_search(mock_session, "test", scroll = TRUE, quiet = TRUE))
   expect_true(inherits(result, "tbl_df"))
   expect_equal(nrow(result), 0L)
 })
@@ -1480,7 +1480,7 @@ test_that("x_search with resume restores seen_post_ids from checkpoint", {
   expect_true(inherits(result, "tbl_df"))
   provenance <- attr(result, "rx_collection_provenance")
   expect_equal(provenance$collection_id, "resume-test-uuid-001")
-  expect_true(all(result$post_id %in% c("1", "2", "3", "4")))
+  expect_true(all(result$post_id %in% paste0("190000000000000000", 1:4)))
   expect_true(nrow(result) >= 1)
 
   file.remove(checkpoint_file, jsonl_file)
@@ -1582,7 +1582,7 @@ test_that("checkpoint written at end of resumed search contains updated state", 
   expect_equal(updated_checkpoint$records_collected, 6L)
   expect_equal(updated_checkpoint$collection_id, "checkpoint-test-001")
   expect_true(all(c("pre-existing-1", "pre-existing-2") %in% updated_checkpoint$seen_post_ids))
-  expect_true(all(c("1", "2", "3", "4") %in% updated_checkpoint$seen_post_ids))
+  expect_true(all(paste0("190000000000000000", 1:4) %in% updated_checkpoint$seen_post_ids))
 
   file.remove(checkpoint_file, jsonl_file)
 })
@@ -1656,7 +1656,7 @@ test_that("rx_mock_batch generates the requested number of posts", {
   expect_equal(length(entries), 5L)
 
   post_ids <- vapply(entries, function(e) {
-    e$content$itemContent$tweet_results$result$tweet$rest_id
+    e$content$itemContent$tweet_results$result$rest_id
   }, character(1))
 
   expect_equal(post_ids, c("test-10", "test-11", "test-12", "test-13", "test-14"))
@@ -1671,7 +1671,7 @@ test_that("rx_mock_batch with include_duplicates adds 2 extra entries", {
   expect_equal(length(entries), 5L)
 
   post_ids <- vapply(entries, function(e) {
-    e$content$itemContent$tweet_results$result$tweet$rest_id
+    e$content$itemContent$tweet_results$result$rest_id
   }, character(1))
 
   expect_true("dup-dup-a" %in% post_ids)

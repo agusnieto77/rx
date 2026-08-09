@@ -107,21 +107,21 @@ test_that("all error types can be caught as rx_error", {
 test_that("tryCatch can catch specific error classes", {
   # Narrow catch: lpd_connection_error
   caught_lpd <- tryCatch(
-    .rx_error_lpd_connection("fail"),
+    stop(.rx_error_lpd_connection("fail")),
     error = function(e) inherits(e, "rx_lpd_connection_error")
   )
   expect_true(caught_lpd)
 
   # Narrow catch: cdp_error
   caught_cdp <- tryCatch(
-    .rx_error_cdp("fail"),
+    stop(.rx_error_cdp("fail")),
     error = function(e) inherits(e, "rx_cdp_error")
   )
   expect_true(caught_cdp)
 
   # Narrow catch: timeout
   caught_timeout <- tryCatch(
-    .rx_error_timeout("fail"),
+    stop(.rx_error_timeout("fail")),
     error = function(e) inherits(e, "rx_timeout")
   )
   expect_true(caught_timeout)
@@ -134,7 +134,7 @@ test_that("catching rx_error catches all structured errors", {
                   .rx_error_parser, .rx_error_timeout,
                   .rx_error_no_new_data)) {
     caught <- tryCatch(
-      fn("fail"),
+      stop(fn("fail")),
       error = function(e) inherits(e, "rx_error")
     )
     expect_true(caught

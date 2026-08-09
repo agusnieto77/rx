@@ -58,6 +58,44 @@ NULL
 #'   }
 #'
 #' @noRd
+.rx_json_prepare <- function(value) {
+  if (is.null(value)) return(NULL)
+  if (is.atomic(value)) {
+    if (!is.null(names(value))) return(as.list(value))
+    return(value)
+  }
+  if (is.list(value)) return(lapply(value, .rx_json_prepare))
+  value
+}
+
+#' Decode one serialized canonical list-column cell.
+#'
+#' @noRd
+.rx_json_decode_list <- function(value) {
+  if (is.null(value) || length(value) == 0L) return(list(NULL))
+  if (!is.list(value)) return(as.character(value))
+
+  # JSONL rows wrap the original list-column cell once.
+  inner <- value[[1L]]
+  if (is.null(inner)) return(list(NULL))
+  value <- inner
+  if (!is.list(value)) return(as.character(value))
+  if (length(value) == 0L) return(character(0))
+
+  if (all(vapply(value, function(item) !is.list(item), logical(1)))) {
+    flat <- unlist(value, recursive = TRUE, use.names = FALSE)
+    return(if (length(flat) == 0L) character(0) else as.character(flat))
+  }
+
+  lapply(value, function(item) {
+    if (is.list(item) && !is.null(names(item))) {
+      return(unlist(item, recursive = TRUE, use.names = TRUE))
+    }
+    item
+  })
+}
+
+#' @noRd
 .rx_jsonl_write <- function(path, posts, append = TRUE) {
   # Guard: not a tibble or data frame.
   if (!is.data.frame(posts) || nrow(posts) == 0L) {
@@ -65,9 +103,13 @@ NULL
   }
 
   lines <- character(nrow(posts))
+  list_fields <- names(.rx_type_map())[.rx_type_map() == "list"]
   for (i in seq_len(nrow(posts))) {
     # Extract the row as a named list and serialize to JSON.
     row_list <- as.list(posts[i, , drop = FALSE])
+    for (field in intersect(list_fields, names(row_list))) {
+      row_list[[field]] <- .rx_json_prepare(row_list[[field]])
+    }
     # Convert NA to null (jsonlite handles this by default).
     lines[i] <- jsonlite::toJSON(row_list, row.names = FALSE, auto_unbox = TRUE, na = "null")
   }
@@ -146,13 +188,48 @@ NULL
     return(.rx_jsonl_empty_tibble())
   }
 
-  # Convert list-of-lists to tibble.
-  # jsonlite::rbind.fill.data.frame handles rows with different columns.
+  fields <- .rx_canonical_fields()
+  type_map <- .rx_type_map()
+
+  scalar_value <- function(value, type) {
+    if (is.null(value) || length(value) == 0L) {
+      return(switch(type,
+        character = NA_character_,
+        integer = NA_integer_,
+        logical = NA
+      ))
+    }
+
+    value <- unlist(value, recursive = TRUE, use.names = FALSE)
+    if (length(value) == 0L) {
+      return(switch(type,
+        character = NA_character_,
+        integer = NA_integer_,
+        logical = NA
+      ))
+    }
+
+    value[[1L]]
+  }
+
+  # Rebuild the canonical schema row by row.  Converting each parsed row with
+  # as.data.frame() loses JSON nulls and cannot represent list-columns with
+  # zero elements, which used to make valid files read back as zero rows.
   tryCatch(
     {
-      df <- do.call(rbind, lapply(parsed, as.data.frame))
-      # Preserve column order and types.
-      tibble::as_tibble(df)
+      columns <- lapply(fields, function(field) {
+        type <- type_map[[field]]
+        values <- lapply(parsed, function(row) {
+          value <- if (is.list(row) && field %in% names(row)) row[[field]] else NULL
+          if (type == "list") .rx_json_decode_list(value) else scalar_value(value, type)
+        })
+
+        if (type == "list") values else unlist(values, use.names = FALSE)
+      })
+      names(columns) <- fields
+
+      normalized <- .rx_normalize_posts(columns)
+      tibble::as_tibble(normalized)
     },
     error = function(e) {
       warning("Failed to parse JSONL file '", path, "': ", e$message)

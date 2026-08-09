@@ -4,36 +4,27 @@
 \alias{.rx_new_backend}
 \title{Create a new browser backend instance.}
 \usage{
-.rx_new_backend(sidecar_path = NULL)
+.rx_new_backend(sidecar_path = NULL, backend_type = "lightpanda")
 }
 \arguments{
 \item{sidecar_path}{Optional character string pointing to the sidecar
 directory (the one containing \code{dist/index.js}). If \code{NULL}, the
 installed package's sidecar is used.}
+
+\item{backend_type}{Which backend to use: \code{"lightpanda"} (CDP, default) or
+\code{"chromium"} (Puppeteer-controlled local Chromium). Both implement the
+same contract so the public API is unchanged.}
 }
 \value{
 An environment with \verb{$connected} (logical) and the four contract methods.
 }
 \description{
-Create a backend object that manages the sidecar process and provides browser
-operations. The backend does NOT connect on creation — call the
-\code{connect()} method to establish the CDP connection.
-
-Navigate to a URL. Returns a list with url and status.
-
-Evaluate JavaScript in the current page. Returns list(result, error).
-
-Close the browser session and stop the sidecar.
-
-First sends a \code{close} request to the sidecar to cleanly release
-the CDP connection. Then stops the sidecar process.
-Safe to call multiple times.
-}
-\details{
 Returns a backend object implementing the minimal contract:
 \code{connect()}, \code{navigate()}, \code{evaluate()}, \code{close()}.
-
-The default backend is the TypeScript sidecar.
+}
+\details{
+The default backend is the TypeScript sidecar with CDP (Lightpanda).
+The Chromium backend uses Puppeteer to control a local Chromium instance.
 }
 \seealso{
 The sidecar client in \code{R/sidecar.R}

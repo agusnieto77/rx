@@ -204,7 +204,7 @@ test_that(".rx_extract_users returns empty when all author_ids are NA", {
 
 # --- Test 17: Full pipeline — extract users from parsed search fixture ---
 test_that("Full pipeline: extract users from a realistic parsed response", {
-  fixture_path <- system.file("tests/fixtures/x-search-response.json", package = "xtweetsR")
+  fixture_path <- rx_fixture_path("x-search-response.json")
   if (nzchar(fixture_path)) {
     data <- jsonlite::fromJSON(fixture_path, simplifyVector = FALSE)
     parsed <- xtweetsR:::.rx_parse_posts(data)

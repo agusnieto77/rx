@@ -30,7 +30,7 @@ NULL
 #'   `collection_id` and the date extracted from `collected_at`.
 #' - `.duckdb` — writes using the DuckDB package (if available).
 #' - `.jsonl` — writes using jsonlite (always available, same as
-#'   [`.rx_jsonl_write()`]).
+#'   `.rx_jsonl_write()`).
 #'
 #' Unsupported or unrecognized extensions raise an error.
 #'
@@ -72,6 +72,8 @@ x_save <- function(posts, path) {
   if (!is.character(path) || length(path) != 1L || anyNA(path) || !nzchar(path)) {
     stop("path must be a single non-empty character string.", call. = FALSE)
   }
+
+  posts <- .rx_export_canonicalize(posts)
 
   # Infer format from extension.
   ext <- tolower(tools::file_ext(path))
@@ -115,6 +117,76 @@ x_save <- function(posts, path) {
   invisible(result)
 }
 
+#' Normalize export input to the canonical post schema.
+#'
+#' Export helpers are also exercised directly, so canonicalization happens at
+#' both the public dispatcher and helper boundaries.  Missing fields are filled
+#' with the same defaults used by the parser/normalizer pipeline.
+#'
+#' @noRd
+.rx_export_canonicalize <- function(posts) {
+  preserved <- lapply(
+    c("rx_collection_provenance", "rx_collection_posts", "rx_users", "rx_media"),
+    function(name) attr(posts, name)
+  )
+  names(preserved) <- c(
+    "rx_collection_provenance", "rx_collection_posts", "rx_users", "rx_media"
+  )
+
+  normalized <- .rx_normalize_posts(as.list(posts))
+  out <- .rx_normalized_to_tibble(normalized)
+
+  for (name in names(preserved)) {
+    if (!is.null(preserved[[name]])) attr(out, name) <- preserved[[name]]
+  }
+  if (inherits(posts, "rx_relational")) {
+    class(out) <- c("rx_relational", class(out))
+  }
+
+  out
+}
+
+#' Encode canonical list-columns for DuckDB VARCHAR storage.
+#'
+#' @noRd
+.rx_duckdb_encode <- function(posts) {
+  result <- as.data.frame(posts, stringsAsFactors = FALSE)
+  list_fields <- names(.rx_type_map())[.rx_type_map() == "list"]
+
+  for (field in list_fields) {
+    result[[field]] <- vapply(result[[field]], function(value) {
+      jsonlite::toJSON(
+        list(.rx_json_prepare(value)),
+        auto_unbox = TRUE,
+        na = "null"
+      )
+    }, character(1))
+  }
+
+  result
+}
+
+#' Decode DuckDB VARCHAR representations of canonical list-columns.
+#'
+#' @noRd
+.rx_duckdb_decode <- function(result) {
+  list_fields <- names(.rx_type_map())[.rx_type_map() == "list"]
+
+  for (field in intersect(list_fields, names(result))) {
+    result[[field]] <- lapply(as.character(result[[field]]), function(value) {
+      if (is.na(value) || !nzchar(value)) return(list(NULL))
+
+      parsed <- tryCatch(
+        jsonlite::fromJSON(value, simplifyVector = FALSE),
+        error = function(e) NULL
+      )
+      .rx_json_decode_list(parsed)
+    })
+  }
+
+  tibble::as_tibble(result)
+}
+
 #' Save a tibble as Parquet using the Arrow package.
 #'
 #' Writes a post tibble to a Parquet file.  This is an internal helper
@@ -133,6 +205,8 @@ x_save <- function(posts, path) {
 #'
 #' @noRd
 .rx_save_parquet <- function(posts, path) {
+  posts <- .rx_export_canonicalize(posts)
+
   if (!requireNamespace("arrow", quietly = TRUE)) {
     fallback <- sub("(?i)\\.parquet$", ".jsonl", path, perl = TRUE)
     warning(
@@ -189,7 +263,7 @@ x_save <- function(posts, path) {
 #' (`rx_collection_provenance` or `rx_collection_posts`), the function
 #' also writes `collections` and `post_collection_relations` tables so
 #' the full relational result can be read back with
-#' [.rx_duckdb_tables()].
+#' `.rx_duckdb_tables()`.
 #'
 #' This is an internal helper used by [x_save()] when the target path
 #' ends with `.duckdb`.
@@ -208,6 +282,8 @@ x_save <- function(posts, path) {
 #'
 #' @noRd
 .rx_save_duckdb <- function(posts, path) {
+  posts <- .rx_export_canonicalize(posts)
+
   if (!requireNamespace("duckdb", quietly = TRUE)) {
     fallback <- sub("(?i)\\.duckdb$", ".jsonl", path, perl = TRUE)
     warning(
@@ -314,7 +390,10 @@ x_save <- function(posts, path) {
   DBI::dbExecute(con, "DROP TABLE IF EXISTS collections")
   DBI::dbExecute(con, "DROP TABLE IF EXISTS post_collection_relations")
   tryCatch(
-    DBI::dbWriteTable(con, "posts", posts, row.names = FALSE, overwrite = TRUE),
+    DBI::dbWriteTable(
+      con, "posts", .rx_duckdb_encode(posts),
+      row.names = FALSE, overwrite = TRUE
+    ),
     error = function(e) {
       stop(.rx_error(paste0("Failed to write posts table: ", e$message)))
     }
@@ -388,6 +467,8 @@ x_save <- function(posts, path) {
 #'
 #' @noRd
 .rx_save_partitioned <- function(posts, path) {
+  posts <- .rx_export_canonicalize(posts)
+
   if (!requireNamespace("arrow", quietly = TRUE)) {
     warning(
       "The 'arrow' package is not installed. ",
@@ -488,7 +569,7 @@ x_save <- function(posts, path) {
 #' Read a partitioned Arrow dataset back into a tibble.
 #'
 #' Opens a directory of partitioned Parquet files (as written by
-#' [.rx_save_partitioned()]) and returns the combined result as a tibble.
+#' `.rx_save_partitioned()`) and returns the combined result as a tibble.
 #'
 #' @param path Character string with the directory containing the partitioned
 #'   Parquet files.
@@ -516,7 +597,7 @@ x_save <- function(posts, path) {
   # Arrow datasets are garbage-collected; no explicit close API exists.
 
   result <- tryCatch(
-    arrow::collect(ds),
+    as.data.frame(ds),
     error = function(e) NULL
   )
 
@@ -524,7 +605,10 @@ x_save <- function(posts, path) {
     return(.rx_jsonl_empty_tibble())
   }
 
-  tibble::as_tibble(result)
+  result <- tibble::as_tibble(result)
+  extra_fields <- setdiff(names(result), .rx_canonical_fields())
+  if (length(extra_fields) > 0L) result[extra_fields] <- NULL
+  .rx_export_canonicalize(result)
 }
 
 #' Read a DuckDB database back into a tibble.
@@ -573,7 +657,7 @@ x_save <- function(posts, path) {
     return(.rx_jsonl_empty_tibble())
   }
 
-  tibble::as_tibble(result)
+  .rx_duckdb_decode(result)
 }
 
 #' Read all tables from a DuckDB database and reconstruct a relational result.
@@ -585,7 +669,7 @@ x_save <- function(posts, path) {
 #'
 #' When collections or relations tables are missing, the corresponding
 #' attributes are omitted.  This function is the counterpart to
-#' [.rx_save_duckdb()] when the full relational result was saved.
+#' `.rx_save_duckdb()` when the full relational result was saved.
 #'
 #' @param path Character string with the `.duckdb` file path.
 #' @return An `rx_relational` tibble (posts with relational attributes).

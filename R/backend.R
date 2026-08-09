@@ -80,7 +80,7 @@ NULL
   backend <- new.env(parent = emptyenv())
   backend$connected <- FALSE
 
-  #' Connect to the sidecar and establish the CDP connection.
+  # Connect to the sidecar and establish the CDP connection.
   backend$connect <- function(endpoint = NULL) {
     if (!is.null(state$.proc) && state$.proc$is_alive() && state$connected) {
       ep <- if (!is.null(endpoint)) endpoint else state$endpoint
@@ -151,14 +151,14 @@ NULL
     backend$connected <- TRUE
   }
 
-  #' Navigate to a URL. Returns a list with url and status.
-  #'
-  #' SSRF note: the initial URL is validated against private/reserved ranges
-  #' (isPrivateHost in inst/node/src/index.ts).  However, HTTP 3xx redirects
-  #' are followed automatically by the browser (Page.navigate) without
-  #' re-validation.  An initial URL on an allowed host that redirects to a
-  #' private IP would bypass the guard.  This is a known limitation; mitigated
-  #' by the fact that navigate() is not intended for untrusted input.
+  # Navigate to a URL. Returns a list with url and status.
+  #
+  # SSRF note: the initial URL is validated against private/reserved ranges
+  # (isPrivateHost in inst/node/src/index.ts).  However, HTTP 3xx redirects
+  # are followed automatically by the browser (Page.navigate) without
+  # re-validation.  An initial URL on an allowed host that redirects to a
+  # private IP would bypass the guard.  This is a known limitation; mitigated
+  # by the fact that navigate() is not intended for untrusted input.
   backend$navigate <- function(url) {
     if (!state$connected) {
       stop(.rx_error_cdp("Backend not connected. Call connect() first."))
@@ -174,7 +174,7 @@ NULL
     }
   }
 
-  #' Evaluate JavaScript in the current page. Returns list(result, error).
+  # Evaluate JavaScript in the current page. Returns list(result, error).
   backend$evaluate <- function(expr) {
     if (!state$connected) {
       stop(.rx_error_cdp("Backend not connected. Call connect() first."))
@@ -190,25 +190,25 @@ NULL
     }
   }
 
-  #' Inspect the DOM of the current page. Returns HTML or matched elements.
-  #'
-  #' When \code{selector} is \code{NULL}, the full \code{<html>} document
-  #' (outerHTML of \code{<html>}) is returned in the \code{html} field.
-  #'
-  #' When \code{selector} is provided, an array of objects is returned,
-  #' each with \code{tagName}, \code{id}, \code{className}, and
-  #' \code{outerHTML}. Matches zero or more elements.
-  #'
-  #' @param selector Optional character string, a CSS selector. When
-  #'   \code{NULL} (default), the full document HTML is returned.
-  #' @return A list with:
-  #'   \itemize{
-  #'     \item \code{html} — full document HTML (when \code{selector} is \code{NULL})
-  #'     \item \code{selector} — the selector used (when provided)
-  #'     \item \code{found} — array of matched element info objects
-  #'     \item \code{error} — error code string, or \code{NULL} on success
-  #'   }
-  #' @noRd
+  # Inspect the DOM of the current page. Returns HTML or matched elements.
+  #
+  # When \code{selector} is \code{NULL}, the full \code{<html>} document
+  # (outerHTML of \code{<html>}) is returned in the \code{html} field.
+  #
+  # When \code{selector} is provided, an array of objects is returned,
+  # each with \code{tagName}, \code{id}, \code{className}, and
+  # \code{outerHTML}. Matches zero or more elements.
+  #
+  # @param selector Optional character string, a CSS selector. When
+  #   \code{NULL} (default), the full document HTML is returned.
+  # @return A list with:
+  #   \itemize{
+  #     \item \code{html} — full document HTML (when \code{selector} is \code{NULL})
+  #     \item \code{selector} — the selector used (when provided)
+  #     \item \code{found} — array of matched element info objects
+  #     \item \code{error} — error code string, or \code{NULL} on success
+  #   }
+  # @noRd
   backend$domInspect <- function(selector = NULL) {
     if (!state$connected) {
       stop(.rx_error_cdp("Backend not connected. Call connect() first."))
@@ -225,14 +225,14 @@ NULL
     }
   }
 
-  #' Enable CDP Network domain event capture.
-  #'
-  #' Tells the sidecar to start listening for network events
-  #' (requests, responses) over CDP. Events are stored in the
-  #' sidecar and can be retrieved with `$networkCaptureGet()`.
-  #'
-  #' @return Invisible `TRUE` on success.
-  #' @noRd
+  # Enable CDP Network domain event capture.
+  #
+  # Tells the sidecar to start listening for network events
+  # (requests, responses) over CDP. Events are stored in the
+  # sidecar and can be retrieved with `$networkCaptureGet()`.
+  #
+  # @return Invisible `TRUE` on success.
+  # @noRd
   backend$networkCaptureEnable <- function() {
     if (!state$connected) {
       stop(.rx_error_cdp("Backend not connected. Call connect() first."))
@@ -249,15 +249,15 @@ NULL
     invisible(TRUE)
   }
 
-  #' Get captured network events and clear the buffer.
-  #'
-  #' Returns all network events captured since the last call,
-  #' then clears the internal buffer so subsequent calls only
-  #' return events captured after this point.
-  #'
-  #' @return A list of network event records, each with
-  #'   `requestId`, `url`, `method`, `resourceType`, `status`, etc.
-  #' @noRd
+  # Get captured network events and clear the buffer.
+  #
+  # Returns all network events captured since the last call,
+  # then clears the internal buffer so subsequent calls only
+  # return events captured after this point.
+  #
+  # @return A list of network event records, each with
+  #   `requestId`, `url`, `method`, `resourceType`, `status`, etc.
+  # @noRd
   backend$networkCaptureGet <- function() {
     if (!state$connected) {
       stop(.rx_error_cdp("Backend not connected. Call connect() first."))
@@ -277,10 +277,10 @@ NULL
     resp$result$events
   }
 
-  #' Clear captured network events (internal housekeeping).
-  #'
-  #' @return Invisible `TRUE`.
-  #' @noRd
+  # Clear captured network events (internal housekeeping).
+  #
+  # @return Invisible `TRUE`.
+  # @noRd
   backend$networkCaptureClear <- function() {
     if (!state$connected) {
       return(invisible(TRUE))
@@ -297,22 +297,22 @@ NULL
     invisible(TRUE)
   }
 
-  #' Get the response body for a captured network event.
-  #'
-  #' Uses the CDP \code{Network.getResponseBody} method to retrieve the
-  #' full response body for a specific \code{requestId}.  For JSON responses,
-  #' the body is returned as a parsed R list (via jsonlite).  For other
-  #' content types, the raw decoded string is returned.
-  #'
-  #' @param requestId Character string, the CDP request ID to retrieve.
-  #' @return A list with:
-  #'   \itemize{
-  #'     \item \code{requestId} — the request ID
-  #'     \item \code{body} — parsed JSON list / decoded string, or \code{NULL} on error
-  #'     \item \code{contentType} — the response content type
-  #'     \item \code{error} — error code string, or \code{NULL} on success
-  #'   }
-  #' @noRd
+  # Get the response body for a captured network event.
+  #
+  # Uses the CDP \code{Network.getResponseBody} method to retrieve the
+  # full response body for a specific \code{requestId}.  For JSON responses,
+  # the body is returned as a parsed R list (via jsonlite).  For other
+  # content types, the raw decoded string is returned.
+  #
+  # @param requestId Character string, the CDP request ID to retrieve.
+  # @return A list with:
+  #   \itemize{
+  #     \item \code{requestId} — the request ID
+  #     \item \code{body} — parsed JSON list / decoded string, or \code{NULL} on error
+  #     \item \code{contentType} — the response content type
+  #     \item \code{error} — error code string, or \code{NULL} on success
+  #   }
+  # @noRd
   backend$networkCaptureGetBody <- function(requestId) {
     if (!state$connected) {
       stop(.rx_error_cdp("Backend not connected. Call connect() first."))
@@ -334,11 +334,11 @@ NULL
     )
   }
 
-  #' Close the browser session and stop the sidecar.
-  #'
-  #' First sends a `close` request to the sidecar to cleanly release
-  #' the CDP connection. Then stops the sidecar process.
-  #' Safe to call multiple times.
+  # Close the browser session and stop the sidecar.
+  #
+  # First sends a `close` request to the sidecar to cleanly release
+  # the CDP connection. Then stops the sidecar process.
+  # Safe to call multiple times.
   backend$close <- function() {
     # Always attempt browser cleanup — .rx_close_browser is safe when not
     # connected (returns closed=FALSE). This prevents leaking an open browser

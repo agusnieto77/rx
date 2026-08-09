@@ -59,7 +59,7 @@ test_that("write and read back a small tibble preserves data", {
   loaded <- xtweetsR:::.rx_jsonl_read(tmp)
 
   testthat::expect_equal(nrow(loaded), n)
-  testthat::expect_equal(ncol(loaded), 24L)
+  testthat::expect_equal(ncol(loaded), 26L)
   testthat::expect_equal(
     loaded$post_id,
     paste0("post-", 1:n)
@@ -255,9 +255,7 @@ test_that("integer and logical column types are preserved", {
   testthat::expect_true(
     isTRUE(loaded$is_reply)
     )
-  testthat::expect_false(
-    isFALSE(loaded$is_repost)
-    )
+  testthat::expect_false(loaded$is_repost)
 })
 
 # --- Test 8: .rx_checkpoint_from_state creates a valid checkpoint ---

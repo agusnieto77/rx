@@ -104,6 +104,35 @@ NULL
 #'       (e.g. "Bottom" → cursor value, "Top" → cursor value); empty when absent
 #'   }
 #'
+#' Find timeline instructions across supported X response envelopes.
+#'
+#' X responses have used both the `data$timeline` envelope and the
+#' `TimelineResult$result` envelope. Keep the envelope handling in one place
+#' so parsing, cursor extraction, and scroll mocks use the same contract.
+#'
+#' @noRd
+.rx_response_instructions <- function(response) {
+  if (!is.list(response)) return(NULL)
+
+  data_block <- response[["data"]]
+  if (is.list(data_block)) {
+    timeline <- data_block[["timeline"]]
+    if (is.list(timeline) && is.list(timeline[["instructions"]])) {
+      return(timeline[["instructions"]])
+    }
+  }
+
+  timeline_result <- response[["TimelineResult"]]
+  if (is.list(timeline_result)) {
+    result <- timeline_result[["result"]]
+    if (is.list(result) && is.list(result[["timeline_instructions"]])) {
+      return(result[["timeline_instructions"]])
+    }
+  }
+
+  NULL
+}
+
 #' Validate the response schema for known structural changes.
 #'
 #' This function is called early in `.rx_parse_posts()` to detect when
@@ -302,7 +331,7 @@ NULL
   .rx_validate_response_schema(response)
 
   # Navigate to the instructions array.
-  instructions <- response$data$timeline$instructions
+  instructions <- .rx_response_instructions(response)
   if (is.null(instructions) || !is.list(instructions)) {
     return(list(
       post_id = character(0), text = character(0),
@@ -561,6 +590,11 @@ NULL
   result <- tweet_results$result
   if (is.null(result)) return(NULL)
 
+  # Some GraphQL operations wrap the tweet one level deeper.
+  if (is.list(result) && is.null(result$rest_id) && is.list(result$tweet)) {
+    result <- result$tweet
+  }
+
   result
 }
 
@@ -643,7 +677,7 @@ NULL
   # Guard against non-list input.
   if (!is.list(response)) return(character(0))
 
-  instructions <- response$data$timeline$instructions
+  instructions <- .rx_response_instructions(response)
   if (is.null(instructions) || !is.list(instructions)) return(character(0))
 
   result <- character(0)
@@ -661,6 +695,10 @@ NULL
 
     for (item in module_items) {
       cursor <- item$item$cursor
+      # X has returned cursors in both `item$cursor` and
+      # `item$content` shapes across endpoint versions.
+      if (is.null(cursor)) cursor <- item$item$content
+      if (is.null(cursor)) cursor <- item$content
       if (is.null(cursor) || !is.list(cursor)) next
 
       cursor_type <- cursor$cursorType
@@ -825,5 +863,5 @@ NULL
       }
     }
   }
-  setNames(urls, seq_along(urls) - 1L)
+  stats::setNames(urls, seq_along(urls) - 1L)
 }

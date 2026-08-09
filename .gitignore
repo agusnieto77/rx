@@ -9,6 +9,7 @@ inst/secrets.env
 .rvc/
 *.tar.gz
 .Rcheck/
+*.Rcheck/
 
 # CodeGraph local index
 .codegraph/

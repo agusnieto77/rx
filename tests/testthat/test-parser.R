@@ -817,8 +817,8 @@ test_that("hashtags, mentions, and urls are extracted from x-search-response.jso
   testthat::expect_equal(length(result$mentions), 4L)
   testthat::expect_equal(length(result$mentions[[1L]]), 0L)
   testthat::expect_equal(length(result$mentions[[2L]]), 1L)
-  testthat::expect_equal(result$mentions[[2L]][["screen_name"]], "rstudio")
-  testthat::expect_equal(result$mentions[[2L]][["name"]], "RStudio")
+  testthat::expect_equal(result$mentions[[2L]][[1L]][["screen_name"]], "rstudio")
+  testthat::expect_equal(result$mentions[[2L]][[1L]][["name"]], "RStudio")
   testthat::expect_equal(length(result$mentions[[3L]]), 0L)
   testthat::expect_equal(length(result$mentions[[4L]]), 0L)
 

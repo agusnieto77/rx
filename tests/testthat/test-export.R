@@ -39,7 +39,7 @@ test_that(".rx_save_parquet writes a tibble that can be read back", {
   tmp <- tempfile(fileext = ".parquet")
   on.exit(unlink(tmp))
 
-  xtweetsR:::.rx_save_parquet(tmp, tbl)
+  xtweetsR:::.rx_save_parquet(tbl, tmp)
 
   testthat::expect_true(file.exists(tmp))
 
@@ -275,7 +275,7 @@ test_that("Parquet round-trip preserves integer and logical types", {
   testthat::expect_equal(loaded$reply_count, 42L)
   testthat::expect_equal(loaded$like_count, 99L)
   testthat::expect_true(isTRUE(loaded$is_reply))
-  testthat::expect_false(isFALSE(loaded$is_repost))
+  testthat::expect_false(loaded$is_repost)
   testthat::expect_equal(loaded$post_id, "post-type")
 })
 
@@ -893,9 +893,9 @@ test_that(".rx_save_duckdb writes a collections table from provenance attribute"
 
   # Verify collections table was written.
   con <- DBI::dbConnect(duckdb::duckdb(), tmp)
-  on.exit(duckdb::dbDisconnect(con), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  collections <- duckdb::dbGetQuery(con, "SELECT * FROM collections")
+  collections <- DBI::dbGetQuery(con, "SELECT * FROM collections")
   testthat::expect_true(nrow(collections) >= 1L)
   testthat::expect_equal(collections$collection_id, "test-uuid-coll")
   testthat::expect_equal(collections$query, "r programming")
@@ -951,9 +951,9 @@ test_that(".rx_save_duckdb writes post_collection_relations from attribute", {
 
   # Verify post_collection_relations table.
   con <- DBI::dbConnect(duckdb::duckdb(), tmp)
-  on.exit(duckdb::dbDisconnect(con), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  rels <- duckdb::dbGetQuery(con, "SELECT * FROM post_collection_relations")
+  rels <- DBI::dbGetQuery(con, "SELECT * FROM post_collection_relations")
   testthat::expect_equal(nrow(rels), 2L)
   testthat::expect_equal(sort(rels$post_id), c("post-1", "post-2"))
 })
@@ -1178,14 +1178,13 @@ test_that(".rx_save_duckdb zero-row writes collections table when provenance pre
 
   # Verify collections table was written despite zero posts.
   con <- DBI::dbConnect(duckdb::duckdb(), tmp)
-  on.exit(duckdb::dbDisconnect(con), add = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  collections <- duckdb::dbGetQuery(con, "SELECT * FROM collections")
+  collections <- DBI::dbGetQuery(con, "SELECT * FROM collections")
   testthat::expect_true(nrow(collections) >= 1L)
   testthat::expect_equal(collections$collection_id, "test-uuid-empty")
 
   # Posts table should have zero rows.
-  posts <- duckdb::dbGetQuery(con, "SELECT * FROM posts")
+  posts <- DBI::dbGetQuery(con, "SELECT * FROM posts")
   testthat::expect_equal(nrow(posts), 0L)
 })
-

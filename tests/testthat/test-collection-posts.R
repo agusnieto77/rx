@@ -200,7 +200,7 @@ test_that("rx_collection_posts() returns empty tibble for non-relational objects
 
 # --- Test 17: Full pipeline — extract relations from parsed search fixture ---
 test_that("Full pipeline: extract collection posts from a realistic parsed response", {
-  fixture_path <- system.file("tests/fixtures/x-search-response.json", package = "xtweetsR")
+  fixture_path <- rx_fixture_path("x-search-response.json")
   if (nzchar(fixture_path)) {
     data <- jsonlite::fromJSON(fixture_path, simplifyVector = FALSE)
     parsed <- xtweetsR:::.rx_parse_posts(data)

@@ -4,7 +4,7 @@
 # - Input validation for x_replies()
 # - URL construction
 # - Navigation failure handling
-# - Fixture-based extraction (5 posts: 2 replies, 3 non-replies)
+# - Fixture-based extraction (5 posts: 3 replies, 2 non-replies)
 # - Filtering behavior (only replies returned)
 # - Empty response handling
 # - Unparseable response handling
@@ -71,7 +71,7 @@ test_that("x_replies constructs URL with @username", {
 
   x_replies(mock_session, "rstudio")
 
-  expect_true(grepl("@rstudio", captured_url)
+  expect_true(grepl("@rstudio", utils::URLdecode(captured_url))
               )
   expect_true(grepl("f%3Dlive", captured_url, ignore.case = TRUE)
               )
@@ -127,7 +127,7 @@ test_that("x_replies navigation failure returns empty tibble with warning", {
 # --- x_replies() fixture integration tests ---
 
 # --- Test 8: x_replies extracts replies from fixture ---
-test_that("x_replies extracts 2 replies from fixture (5 total posts)", {
+test_that("x_replies extracts 3 replies from fixture (5 total posts)", {
   fixture_path <- file.path(
     testthat::test_path("..", ".."),
     "inst", "tests", "fixtures", "x-replies-response.json"
@@ -152,7 +152,7 @@ test_that("x_replies extracts 2 replies from fixture (5 total posts)", {
   result <- x_replies(mock_session, "rstudio")
 
   expect_true(inherits(result, "tbl_df"))
-  expect_equal(nrow(result), 2L)
+  expect_equal(nrow(result), 3L)
   expect_true("post_id" %in% names(result))
   expect_true("text" %in% names(result))
   expect_true("is_reply" %in% names(result))
@@ -190,8 +190,9 @@ test_that("x_replies filters to only reply posts", {
   # Should not include non-reply posts (200 = regular mention, 203 = mention with URL)
   expect_false("1900000000000000200" %in% result$post_id)
   expect_false("1900000000000000203" %in% result$post_id)
-  # Should include reply posts (201 and 204)
+  # Should include all reply posts (201, 202, and 204)
   expect_true("1900000000000000201" %in% result$post_id)
+  expect_true("1900000000000000202" %in% result$post_id)
   expect_true("1900000000000000204" %in% result$post_id)
 })
 

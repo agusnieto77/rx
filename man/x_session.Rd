@@ -2,12 +2,9 @@
 % Please edit documentation in R/session.R
 \name{x_session}
 \alias{x_session}
-\alias{print.xtweetsR_session}
 \title{Create a new browser session.}
 \usage{
-x_session(endpoint = NULL, sidecar_path = NULL)
-
-\method{print}{xtweetsR_session}(x, ...)
+x_session(endpoint = NULL, sidecar_path = NULL, quiet = FALSE)
 }
 \arguments{
 \item{endpoint}{Optional character string with the CDP endpoint URL
@@ -19,9 +16,8 @@ endpoint is resolved using the same precedence as the internal config module
 directory (the one containing \code{dist/index.js}). If \code{NULL},
 the installed package's sidecar is used.}
 
-\item{x}{The session object.}
-
-\item{...}{Ignored.}
+\item{quiet}{Logical, default \code{FALSE}. When \code{TRUE}, progress messages
+are suppressed.}
 }
 \value{
 An environment with class \code{"xtweetsR_session"} containing:
@@ -31,17 +27,14 @@ An environment with class \code{"xtweetsR_session"} containing:
 \item \code{connected} - logical, whether connected
 \item \code{close} - method to clean up resources
 }
+The object has a \code{print} method that displays backend and
+connection status, and a \code{close} method to clean up resources.
 }
 \description{
 Starts the TypeScript sidecar process, resolves the Lightpanda CDP
 endpoint, and connects the backend. Returns a session object that
 holds the connection state and provides a \code{close()} method for
 cleanup.
-}
-\details{
-The returned session object has a \code{close()} method to release all
-resources, and a \code{print} method that displays backend type,
-resolved endpoint, and connection status.
 }
 \examples{
 \dontrun{
@@ -50,5 +43,5 @@ resolved endpoint, and connection status.
   # ... use the session ...
   sess$close()
 }
+
 }
-\keyword{internal}

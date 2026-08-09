@@ -65,24 +65,15 @@ test_that("lightpanda_connection reports ok or error (not crash)", {
 })
 
 test_that("lightpanda_connection is n/a when sidecar is missing", {
-  # Temporarily hide the sidecar by running in a directory without it.
-  tmp <- tempdir()
-  old_wd <- getwd()
-  tryCatch({
-    setwd(tmp)
-    # Reload to pick up the new working directory.
-    if (requireNamespace("pkgload", quietly = TRUE)) {
-      pkgload::load_all(quiet = TRUE)
-    }
-    out <- x_doctor()
-    expect_equal(out$results[3], "missing")
-    expect_equal(out$results[4], "n/a")
-  }, finally = {
-    setwd(old_wd)
-    if (requireNamespace("pkgload", quietly = TRUE)) {
-      pkgload::load_all(quiet = TRUE)
-    }
-  })
+  # Mock path resolution instead of changing directories and reloading the
+  # package from a directory without DESCRIPTION.
+  testthat::local_mocked_bindings(
+    .rx_resolve_sidecar_path = function(...) NULL,
+    .package = "xtweetsR"
+  )
+  out <- x_doctor()
+  expect_equal(out$results[3], "missing")
+  expect_equal(out$results[4], "n/a")
 })
 
 # -- CDP connection check -----------------------------------------------------
