@@ -17,6 +17,7 @@ Suggests:
     arrow,
     curl,
     DBI,
+    dplyr,
     duckdb,
     knitr,
     pkgload,

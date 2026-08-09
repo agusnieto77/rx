@@ -556,7 +556,7 @@ x_save <- function(posts, path) {
     arrow::write_dataset(
       arrow::as_arrow_table(df),
       path = path,
-      partition = partition_cols
+      partitioning = partition_cols
     ),
     error = function(e) {
       stop(.rx_error(paste0("Failed to write partitioned dataset: ", e$message)))
